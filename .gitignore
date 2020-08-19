@@ -1,0 +1,11 @@
+*.code-workspace
+__pycache__/
+temp/
+*.idea
+*.vscode
+*.ipynb_checkpoints
+*.egg-info
+*temp.*
+*build
+*dist
+*dask-worker-space
