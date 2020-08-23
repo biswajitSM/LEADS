@@ -4,6 +4,7 @@ Single-molecule assay for DNA loop extrusion by SMC. Kymograph and kinetics from
 
 ## Project Details
 
+![image](resources/kymograph_gui.png)
 
 
 ## Installation
