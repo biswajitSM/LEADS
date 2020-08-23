@@ -17,6 +17,8 @@ You can install the LEADS module by
 pip3 install manimlib
 ```
 
+To save videos, install [ffmpeg](https://ffmpeg.org/download.html) and make sure you added it to your path (usable from the command line)
+
 ## Usage
 
 To open the gui of kymograph analysis
