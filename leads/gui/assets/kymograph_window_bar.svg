@@ -16,7 +16,7 @@
    id="svg8"
    inkscape:version="0.92.4 (5da689c313, 2019-01-14)"
    sodipodi:docname="kymograph_window_bar.svg"
-   inkscape:export-filename="C:\Users\biswajitpradha\Reseach\analysis\DNA-loop-Assay\gui\assets\kymograph_window_bar.png"
+   inkscape:export-filename="C:\Users\biswajitpradha\Reseach\analysis\LEADS\leads\gui\assets\kymograph_window_bar.png"
    inkscape:export-xdpi="300"
    inkscape:export-ydpi="300">
   <defs
@@ -29,15 +29,15 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="46.99"
-     inkscape:cx="9.4488189"
-     inkscape:cy="9.4488189"
+     inkscape:cx="5.9906363"
+     inkscape:cy="9.0219489"
      inkscape:document-units="cm"
      inkscape:current-layer="layer1"
      showgrid="true"
      inkscape:window-width="1920"
      inkscape:window-height="1057"
-     inkscape:window-x="-8"
-     inkscape:window-y="1042"
+     inkscape:window-x="1672"
+     inkscape:window-y="-8"
      inkscape:window-maximized="1">
     <inkscape:grid
        type="xygrid"
@@ -53,7 +53,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -90,15 +90,15 @@
          style="stroke-width:0.94483906" /></text>
     <text
        xml:space="preserve"
-       style="font-style:normal;font-weight:normal;font-size:0.70555556px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#ff0000;fill-opacity:1;stroke:none;stroke-width:0.26458332;"
-       x="-216.14043"
-       y="203.80902"
+       style="font-style:normal;font-weight:normal;font-size:0.70555556px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#ffff00;fill-opacity:1;stroke:none;stroke-width:0.26458332;"
+       x="-216.07135"
+       y="204.00653"
        id="text845"
        transform="rotate(-46.915556)"><tspan
          sodipodi:role="line"
          id="tspan843"
-         x="-216.14043"
-         y="203.80902"
-         style="font-size:1.05833328px;stroke-width:0.26458332;fill:#ff0000;fill-opacity:1;">KymoDNA</tspan></text>
+         x="-216.07135"
+         y="204.00653"
+         style="font-size:1.55222213px;fill:#ffff00;fill-opacity:1;stroke-width:0.26458332;">LEADS</tspan></text>
   </g>
 </svg>
