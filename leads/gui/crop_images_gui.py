@@ -1,18 +1,16 @@
 import napari
 import numpy as np
-from .crop_images_ui import Ui_Form
+from . import crop_images_ui
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
 import PySimpleGUI as sg
 
-from ..crop_images import (
-    daskread_img_seq, crop_rect_shapes,
-    addroi_to_shapelayer, save_rectshape_as_imageJroi)
+from .. import crop_images
 
 class NapariTabs(QtWidgets.QWidget):
     def __init__(self, viewer):
         super().__init__()
-        self.ui = Ui_Form()
+        self.ui = crop_images_ui.Ui_Form()
         self.ui.setupUi(self)
         self.viewer = viewer
 
@@ -33,7 +31,7 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui.saveImageJroisBtn.clicked.connect(self.save_imageJ_rois)
 
     def load_img_seq(self):
-        self.image_meta = daskread_img_seq(num_colors=int(self.ui.numColorsCbox.currentText()))
+        self.image_meta = crop_images.daskread_img_seq(num_colors=int(self.ui.numColorsCbox.currentText()))
         for l in reversed(self.viewer.layers[:]):
             self.viewer.layers.remove(l)
         color_list = ['green', 'red', 'blue']
@@ -56,7 +54,7 @@ class NapariTabs(QtWidgets.QWidget):
             if self.frame_end == -1:
                 self.frame_end = None
             shape_layer = self.viewer.layers['rect_roi']
-            crop_rect_shapes(self.image_meta, shape_layer,
+            crop_images.crop_rect_shapes(self.image_meta, shape_layer,
                             frame_start=self.frame_start, frame_end=self.frame_end,
                             )
         except:
@@ -73,14 +71,18 @@ class NapariTabs(QtWidgets.QWidget):
         roi_file_list = sg.tkinter.filedialog.askopenfilenames(
             title = "Select ROI files", 
             filetypes = (("ROI files","*.roi"),("all files","*.*")))
-        _ = addroi_to_shapelayer(viewer.layers['rect_roi'], roi_file_list)
+        _ = crop_images.addroi_to_shapelayer(self.viewer.layers['rect_roi'], roi_file_list)
 
     def save_imageJ_rois(self):
         shape_layer = self.viewer.layers['rect_roi']
-        save_rectshape_as_imageJroi(shape_layer)
+        crop_images.save_rectshape_as_imageJroi(shape_layer)
 
-if __name__ == "__main__":
+def main():
     with napari.gui_qt():
         viewer = napari.Viewer(title="Crop or make Kymograph")
         ui = NapariTabs(viewer)
         viewer.window.add_dock_widget(ui)
+
+if __name__ == "__main__":
+    main()
+    
