@@ -11,10 +11,10 @@ Single-molecule assay for DNA loop extrusion by SMC. Kymograph and kinetics from
 
 It's best to use an isolated environment for this program. But it might just work with your standard/base environment if it has python>=3.7.
 
-You can install the LEADS module by
+You can install the LEADS module by dowloading this [repo](https://github.com/biswajitSM/LEADS/archive/master.zip). Go to the folder containing setup.py in terminal and install by the following command.
 
 ```sh
-pip3 install manimlib
+python setup.py install
 ```
 
 To save videos, install [ffmpeg](https://ffmpeg.org/download.html) and make sure you added it to your path (usable from the command line)
@@ -36,4 +36,5 @@ All the contributors will be acknowledged here and will be included if this ends
 ## Authors & Contributors
 
 List of contributors:
+
 - Biswajit Pradhan (biswajitp145_at_gmail.com)
