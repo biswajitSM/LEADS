@@ -1,5 +1,4 @@
 import numpy as np
-# from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph.Qt as pg_qt #import QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.dockarea as pg_da
@@ -24,6 +23,11 @@ class kymographGui(pg_qt.QtGui.QWidget):
         super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        logopath = os.path.join(os.path.dirname(__file__), 'assets', 'kymograph_window_bar.png')
+        icon = pg_qt.QtGui.QIcon()
+        icon.addPixmap(pg_qt.QtGui.QPixmap(logopath),
+                       pg_qt.QtGui.QIcon.Normal, pg_qt.QtGui.QIcon.Off)
+        self.setWindowIcon(icon)
         self.layout = pg_qt.QtGui.QGridLayout()
         self.dockarea = pg_da.DockArea()
         self.ui.centralWidget.setLayout(self.layout)
@@ -120,7 +124,7 @@ class kymographGui(pg_qt.QtGui.QWidget):
         self.plot_loop_errbar = None
 
     def add_col2_imvs(self):
-        self.imv01 = pg.ImageView()
+        self.imv01 = pg.ImageView(name='color 2')
         self.imv01.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_roi_norm(self.imv01)
         self.roirect_right = pg.LineROI([20, 20], [40, 20], width=11, pen=(3, 9))        
