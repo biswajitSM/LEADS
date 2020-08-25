@@ -11,17 +11,29 @@ Single-molecule assay for DNA loop extrusion by SMC. Kymograph and kinetics from
 
 It's best to use an isolated environment for this program. But it might just work with your standard/base environment if it has python>=3.7.
 
-You can install the LEADS module by dowloading this [repo](https://github.com/biswajitSM/LEADS/archive/master.zip). Go to the folder containing setup.py in terminal and install by the following command.
+You can create an environment in conda by running the following line in a terminal
+
+```sh
+conda create -n leads-env python=3.7
+```
+
+Then activate the environment by
+
+```sh
+conda activate leads-env
+```
+
+You can install the LEADS module by dowloading this [repo](https://github.com/biswajitSM/LEADS/archive/master.zip). Go to the folder containing setup file in terminal and install by the following command.
 
 ```sh
 python setup.py install
 ```
 
-To save videos, install [ffmpeg](https://ffmpeg.org/download.html) and make sure you added it to your path (usable from the command line)
+To save videos, install [ffmpeg](https://ffmpeg.org/download.html) and make sure you added it to your path (you can follow this [link](https://www.wikihow.com/Install-FFmpeg-on-Windows))
 
 ## Usage
 
-To open the gui of kymograph analysis
+To open the gui of kymograph analysis from a terminal
 > python -m leads.gui.kymograph_gui
 
 To open the gui for cropping large files in a folder
