@@ -68,12 +68,14 @@ class kymographGui(pg_qt.QtGui.QWidget):
         self.roirect_left.sigRegionChanged.connect(self.roi_changed)
         self.infline_left.sigPositionChanged.connect(self.infiline_left_update)
         if self.numColors == "2":
+            self.imv00.sigTimeChanged.connect(self.sync_videos)
             self.infline_right.sigPositionChanged.connect(self.infiline_right_update)
         # self.infline_left.sigDragged
     def add_col1_imvs(self):
         self.imv00 = pg.ImageView(name='color 1')
         self.imv00.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_roi_norm(self.imv00)
+        self.imv00.fps = 7
         self.roirect_left = pg.LineROI([20, 20], [40, 20], width=11, pen=(3, 9))
         # self.roirect_left = pg.MultiLineROI([[10, 30], [30, 50], [50, 30]], width=5, pen=(2,9))
         self.imv00.addItem(self.roirect_left)
@@ -127,6 +129,7 @@ class kymographGui(pg_qt.QtGui.QWidget):
         self.imv01 = pg.ImageView(name='color 2')
         self.imv01.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_roi_norm(self.imv01)
+        self.imv01.playRate = 7
         self.roirect_right = pg.LineROI([20, 20], [40, 20], width=11, pen=(3, 9))        
         self.imv01.addItem(self.roirect_right)
 
@@ -175,6 +178,9 @@ class kymographGui(pg_qt.QtGui.QWidget):
 
     def restore_default_dockstate(self):
         self.dockarea.restoreState(self.defaultDockState)
+        self.imv10.showMaximized()
+        if self.numColors == "2":
+            self.imv11.showMaximized()
 
     def set_scalebar(self):
         self.pixelSize = 1e-3 * self.ui.pixelSizeSpinBox.value()
@@ -361,6 +367,10 @@ class kymographGui(pg_qt.QtGui.QWidget):
             else:
                 self.imv11.setImage(self.kymo_right)
 
+    def sync_videos(self):
+        frame_imv00 = self.imv00.currentIndex
+        self.imv01.setCurrentIndex(frame_imv00)
+
     def roi_changed(self):
         # ROIwidth = self.roirect_left.getState()['size'][1]
         # self.ui.roiWidthSpinBox.setValue(ROIwidth)
@@ -509,8 +519,10 @@ class kymographGui(pg_qt.QtGui.QWidget):
         self.dockarea.restoreState(self.defaultDockState)
         
         # setting the docking and plot positions for errorbar and loop kinetics
-        self.plot_loop_errbar = pg.plot(title='Loop error bar')
-        self.plot_loop_kinetics = pg.plot(title='Loop Kinetics')
+        self.plot_loop_errbar = pg.PlotWidget()
+        self.plot_loop_errbar.plotItem.setLabels(left='std(Intensity)', bottom='pixels')
+        x = self.plot_loop_errbar.getPlotItem()
+        self.plot_loop_kinetics = pg.PlotWidget()
         self.d3_left = pg_da.Dock("Loop detections")
         self.d3_left.addWidget(self.plot_loop_errbar, 0, 0)
         self.d3_left.addWidget(self.plot_loop_kinetics, 0, 1)
@@ -518,7 +530,7 @@ class kymographGui(pg_qt.QtGui.QWidget):
         if self.numColors == "2":
             self.d3_right = pg_da.Dock("Single Molecule detections")
             self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
-            self.plot_loop_vs_sm = pg.plot(title='Loop Vs SM')
+            self.plot_loop_vs_sm = pg.PlotWidget()
             self.d3_right.addWidget(self.plot_loop_vs_sm)
             self.plot_loop_vs_sm_smdata = self.plot_loop_vs_sm.plot(title='SM',
                 symbol='o', symbolSize=4, pen=pg.mkPen(None),
@@ -530,18 +542,18 @@ class kymographGui(pg_qt.QtGui.QWidget):
                                     movable=False, angle=0, pen=(3, 9))
             self.plot_loop_vs_sm_linebottom = pg.InfiniteLine(
                                     movable=False, angle=0, pen=(3, 9))
-            self.plot_loop_vs_sm.addItem(self.plot_loop_vs_sm_linetop)
-            self.plot_loop_vs_sm.addItem(self.plot_loop_vs_sm_linebottom)
             self.plot_loop_vs_sm_smdata.getViewBox().invertY(True)
         # adding errorbar plot items for data updating later
         self.errbar_loop = pg.ErrorBarItem(beam=0.5, pen=pg.mkPen('r'))
         self.plot_loop_errbar.addItem(self.errbar_loop)
         self.errdata_loop = self.plot_loop_errbar.plot(symbol='o', symbolSize=2, pen=pg.mkPen('r'))
-        self.plot_loop_errbar.addItem(self.errdata_loop)
         self.errbar_noLoop = pg.ErrorBarItem(beam=0.5, pen=pg.mkPen('b'))
         self.plot_loop_errbar.addItem(self.errbar_noLoop)
         self.errdata_noLoop = self.plot_loop_errbar.plot(symbol='o', symbolSize=2, pen=pg.mkPen('b'))
-        self.plot_loop_errbar.addItem(self.errdata_noLoop)
+        legend = pg.LegendItem((80,60), offset=(70,20))
+        legend.setParentItem(self.plot_loop_errbar.getPlotItem())
+        legend.addItem(self.errdata_loop, 'dna with loop')
+        legend.addItem(self.errdata_noLoop, 'dna with No loop')
 
         self.region_errbar = pg.LinearRegionItem(self.params_yaml['Region Errbar'])
         self.plot_loop_errbar.addItem(self.region_errbar, ignoreBounds=True)
@@ -556,9 +568,15 @@ class kymographGui(pg_qt.QtGui.QWidget):
                 symbol='o', symbolSize=4, pen=pg.mkPen(None),
                 symbolPen=pg.mkPen(None), symbolBrush='b')
         self.plot_sm_dist = self.plot_loop_kinetics.plot(title='Loop Smoothed', pen=[255,0,255, 255])
-        self.plot_data_loop_filt = self.plot_loop_kinetics.plot(title='Loop Smoothed', pen='g')
+        self.plot_data_loop_filt = self.plot_loop_kinetics.plot(title='Loop Smoothed', pen=pg.mkPen('g', width=2))
         self.plot_data_loopUp_filt = self.plot_loop_kinetics.plot(title='Loop Up Smoothed', pen='r')
         self.plot_data_loopDown_filt = self.plot_loop_kinetics.plot(title='Loop Down Smoothed', pen='b')
+        self.plot_loop_kinetics.plotItem.setLabels(left='DNA/kb', bottom='Frame Number')
+        legend = pg.LegendItem((80,60), offset=(150,20))
+        legend.setParentItem(self.plot_loop_kinetics.plotItem)
+        legend.addItem(self.plot_data_loop, 'Loop')
+        legend.addItem(self.plot_data_loopUp, 'Up')
+        legend.addItem(self.plot_data_loopDown, 'Down')
         # loop position in imv21
         self.plotLoopPosData = self.plotLoopPos.scatterPlot(
             symbol='o', symbolSize=5, pen=pg.mkPen('r'))#symbolBrush=pg.mkPen('r')
@@ -570,7 +588,8 @@ class kymographGui(pg_qt.QtGui.QWidget):
         if self.plot_loop_errbar is None:
             self.set_loop_detection_widgets()
         self.d3_left.setStretch(200, 200)
-        self.d3_right.setStretch(200, 200)
+        if self.numColors == "2":
+            self.d3_right.setStretch(200, 200)
         # set errorbars for loop positions
         loop_std = np.std(self.kymo_left_loop, axis=0)
         loop_avg = np.average(self.kymo_left_loop, axis=0)
@@ -589,10 +608,10 @@ class kymographGui(pg_qt.QtGui.QWidget):
         pix_width = 11
         peak_dict = peakfinder_savgol(self.kymo_left_loop.T,
                 loop_region_left, -loop_region_right,
-                prominence_min=1/2, pix_width=pix_width, plotting=False,
+                prominence_min=1/3, pix_width=pix_width, plotting=False,
                 kymo_noLoop=self.kymo_left_noLoop.T, #use this carefully, safe way is to put it none or just comment this line
                 )
-        peak_dict = analyze_maxpeak(peak_dict['Max Peak'], smooth_length=11,
+        peak_dict = analyze_maxpeak(peak_dict['Max Peak'], smooth_length=7,
                 frame_width = loop_region_right-loop_region_left,
                 dna_length=48, pix_width=pix_width,
                 )
@@ -614,7 +633,7 @@ class kymographGui(pg_qt.QtGui.QWidget):
         if self.numColors == "2":
             smpeak_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 loop_region_left, -loop_region_right,
-                prominence_min=1/2, pix_width=pix_width, plotting=False,
+                prominence_min=1/2, pix_width=pix_width, plotting=True,
                 # kymo_noLoop=self.kymo_left_noLoop.T, #use this carefully, safe way is to put it none or just comment this line
                 )
             loop_sm_dict = loop_sm_dist(peak_dict, smpeak_dict, smooth_length=21)
