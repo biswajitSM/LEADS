@@ -5,7 +5,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
 import PySimpleGUI as sg
 
-from .. import crop_images
+from .. import crop_images 
 
 class NapariTabs(QtWidgets.QWidget):
     def __init__(self, viewer):

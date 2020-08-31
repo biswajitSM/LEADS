@@ -8,7 +8,7 @@ from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
 import PySimpleGUI as sg
 import pims
-from tqdm import trange
+from tqdm import trange 
 
 def get_rect_params(rect, printing=False):
     length = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
