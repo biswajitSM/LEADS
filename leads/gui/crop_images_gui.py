@@ -5,7 +5,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
 import PySimpleGUI as sg
 
-from .. import crop_images
+from .. import crop_images 
 
 class NapariTabs(QtWidgets.QWidget):
     def __init__(self, viewer):
@@ -13,6 +13,9 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui = crop_images_ui.Ui_Form()
         self.ui.setupUi(self)
         self.viewer = viewer
+
+        # set defaults
+        self.use_current_image_path = False
 
         # number of colors
         self.ui.numColorsCbox.setCurrentText("2")
@@ -23,6 +26,9 @@ class NapariTabs(QtWidgets.QWidget):
         self.frame_end = self.ui.frameEndBox.value()        
         if self.frame_end == -1:
             self.frame_end = None
+        # image preprocessing
+        #self.subtractBackground = self.ui.bkgSubstractionCheckBox.checkState()        
+        self.ui.bkgSubstractionCheckBox.stateChanged.connect(self.toggle_bkg_subtraction)
         # processing
         self.ui.loadImageBtn.clicked.connect(self.load_img_seq)
         self.ui.defaultFramesBtn.clicked.connect(self.set_default_frame_num)
@@ -30,8 +36,15 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui.loadImageJroisBtn.clicked.connect(self.load_imageJ_rois)
         self.ui.saveImageJroisBtn.clicked.connect(self.save_imageJ_rois)
 
-    def load_img_seq(self):
-        self.image_meta = crop_images.daskread_img_seq(num_colors=int(self.ui.numColorsCbox.currentText()))
+    def load_img_seq(self, path_in=""):
+        if self.use_current_image_path:
+            current_image_path = self.image_meta.get("folderpath")
+            self.image_meta = crop_images.daskread_img_seq(num_colors=int(self.ui.numColorsCbox.currentText()), 
+            bkg_subtraction=bool(self.ui.bkgSubstractionCheckBox.checkState()), path=current_image_path)
+        else:
+            self.image_meta = crop_images.daskread_img_seq(num_colors=int(self.ui.numColorsCbox.currentText()), 
+            bkg_subtraction=bool(self.ui.bkgSubstractionCheckBox.checkState()))
+        self.use_current_image_path = False
         for l in reversed(self.viewer.layers[:]):
             self.viewer.layers.remove(l)
         color_list = ['green', 'red', 'blue']
@@ -76,6 +89,11 @@ class NapariTabs(QtWidgets.QWidget):
     def save_imageJ_rois(self):
         shape_layer = self.viewer.layers['rect_roi']
         crop_images.save_rectshape_as_imageJroi(shape_layer)
+
+    def toggle_bkg_subtraction(self):
+        #current_image_path = self.image_meta.get("folderpath")#self.image_meta["folderpath"]
+        self.use_current_image_path = True
+        self.load_img_seq()      
 
 def main():
     with napari.gui_qt():

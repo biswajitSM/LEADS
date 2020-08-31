@@ -8,7 +8,7 @@ from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
 import PySimpleGUI as sg
 import pims
-from tqdm import trange
+from tqdm import trange 
 
 def get_rect_params(rect, printing=False):
     length = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
@@ -157,7 +157,7 @@ from skimage.io.collection import alphanumeric_key
 from dask import delayed
 import dask.array as da
 folderpath = ''
-def daskread_img_seq(num_colors=1):
+def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
     '''
     Import image sequences (saved individually in a folder)
     num_colors : integer
@@ -165,31 +165,39 @@ def daskread_img_seq(num_colors=1):
     '''
     image_meta = {}
     image_meta['num_colors'] = num_colors
-    filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                    filetypes = (("tif files","*.tif *.tiff"),("all files","*.*")))
     global folderpath
-    folderpath = os.path.dirname(filepath)
+    if path:
+        folderpath = path
+    else:
+        filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
+                                                        filetypes = (("tif files","*.tif"),("all files","*.*")))
+        folderpath = os.path.dirname(filepath)
     image_meta['folderpath'] = folderpath
-    if filepath.endswith('tif'):
-        filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
-    elif filepath.endswith('tiff'):
-        filenames = sorted(glob.glob(folderpath + "/*.tiff"), key=alphanumeric_key)
-    # filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
+    filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
     image_meta['filenames'] = filenames
     # read the first file to get the shape and dtype
     # ASSUMES THAT ALL FILES SHARE THE SAME SHAPE/TYPE
     sample = imread(filenames[0])
+    if bkg_subtraction:
+        sample = bkg_substration(sample)
     print('minimum intensity: {}, maximum intensity: {}'.format(sample.min(), sample.max()))
 
     lazy_imread = delayed(imread)  # lazy reader
-    lazy_arrays = [lazy_imread(fn) for fn in filenames]
+    lazy_arrays = [lazy_imread(fn) for fn in filenames] # read delayed images for all filenames
     dask_arrays = [
         da.from_delayed(delayed_reader, shape=sample.shape, dtype=sample.dtype)
         for delayed_reader in lazy_arrays
     ]
+
     # Stack into one large dask.array
     stack = da.stack(dask_arrays, axis=0)
     print('Whole Stack shape: ', stack.shape)  # (nfiles, nz, ny, nx)
+
+    # background subtraction
+    if bkg_subtraction:
+        stack = stack.map_blocks(bkg_substration)
+   
+
     num_frames = num_colors * (len(filenames)//num_colors)
     image_meta['num_frames'] = num_frames
     for i in range(num_colors):
@@ -200,5 +208,21 @@ def daskread_img_seq(num_colors=1):
         image_meta['max_int_color_'+str(i)] = sample.max()        
     return image_meta
 
-if __name__ == "__main__":
-    daskread_img_seq()
+
+from scipy.ndimage import white_tophat, black_tophat
+def bkg_substration(txy_array, size_bgs=150, light_bg=False):
+    array_processed = np.zeros_like(txy_array)
+    if array_processed.ndim>2:
+        for i in range(txy_array.shape[0]):
+            img = txy_array[i]
+            if light_bg:
+                img_bgs = black_tophat(img, size=size_bgs)
+            else:
+                img_bgs = white_tophat(img, size=size_bgs)
+            array_processed[i, :, :] = img_bgs
+    else:
+        if light_bg:
+            array_processed = black_tophat(txy_array, size=size_bgs)
+        else:
+            array_processed = white_tophat(txy_array, size=size_bgs)
+    return array_processed
