@@ -30,11 +30,14 @@ def read_img_stack(filepath):
 
 def read_img_seq(num_colors=2):
     filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                    filetypes = (("tif files","*.tif"),("all files","*.*")))
+                                                    filetypes = (("tif files","*.tif *.tiff"),("all files","*.*")))
     image_meta = {}
     folderpath = os.path.dirname(filepath)
     image_meta['folderpath'] = folderpath
-    filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
+    if filepath.endswith('tif'):
+        filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
+    elif filepath.endswith('tiff'):
+        filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
     image_meta['filenames'] = filenames
     num_frames = num_colors * (len(filenames)//num_colors)
     image_meta['num_frames'] = num_frames
@@ -192,5 +195,5 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
 
 
 if __name__ == "__main__":
-    image_meta = read_img_stack()
+    print('kymograph module imported')
     
