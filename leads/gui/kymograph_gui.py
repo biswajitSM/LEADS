@@ -1,4 +1,6 @@
 import numpy as np
+from PyQt5 import QtWidgets, QtCore, QtGui
+import qdarkstyle
 import pyqtgraph.Qt as pg_qt #import QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.dockarea as pg_da
@@ -14,20 +16,20 @@ import yaml
 
 DEFAULTS = {
     "ColorMap" : 'plasma',
-}
+    }
+DEFAULT_PARAMETERS = {
+    "Acquisition Time" : 100, # in millisecond
+    "Pixel Size" : 115, # in nanometer
+    "ROI Width" : 11,
+    }
 
 pg.setConfigOption('background', 'k') # 'w' for white and 'k' for black background
 pg.setConfigOption('imageAxisOrder', 'col-major') # the row and cols are reversed
-class kymographGui(pg_qt.QtGui.QWidget):
+class kymographGui(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        logopath = os.path.join(os.path.dirname(__file__), 'assets', 'kymograph_window_bar.png')
-        icon = pg_qt.QtGui.QIcon()
-        icon.addPixmap(pg_qt.QtGui.QPixmap(logopath),
-                       pg_qt.QtGui.QIcon.Normal, pg_qt.QtGui.QIcon.Off)
-        self.setWindowIcon(icon)
         self.layout = pg_qt.QtGui.QGridLayout()
         self.dockarea = pg_da.DockArea()
         self.ui.centralWidget.setLayout(self.layout)
@@ -704,9 +706,97 @@ class kymographGui(pg_qt.QtGui.QWidget):
         print("took %s seconds to reset!" % (time.time() - start_time))
         print("DONE:Changing the frames.")
 
+class ParametersDialog(QtWidgets.QDialog):
+    """ The dialog showing analysis parameters """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Parameters")
+        self.resize(300, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        general_groupbox = QtWidgets.QGroupBox("General")
+        vbox.addWidget(general_groupbox)
+        general_grid = QtWidgets.QGridLayout(general_groupbox)
+
+        # Pixel Size
+        general_grid.addWidget(QtWidgets.QLabel("Pixel Size:"), 0, 0)
+        self.pix_spinbox = QtWidgets.QSpinBox()
+        self.pix_spinbox.setRange(0, 1e3)
+        self.pix_spinbox.setSuffix(" nm")
+        self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
+        self.pix_spinbox.setKeyboardTracking(False)
+        # self.pix_spinbox.valueChanged.connect()
+        general_grid.addWidget(self.pix_spinbox, 0, 1)
+
+        # ROI Width
+        general_grid.addWidget(QtWidgets.QLabel("ROI Size:"), 1, 0)
+        self.roi_spinbox = QtWidgets.QSpinBox()
+        self.roi_spinbox.setRange(0, 1e3)
+        self.roi_spinbox.setSuffix(" pixels")
+        self.roi_spinbox.setValue(DEFAULT_PARAMETERS["ROI Width"])
+        self.roi_spinbox.setKeyboardTracking(False)
+        # self.roi_spinbox.valueChanged.connect()
+        general_grid.addWidget(self.roi_spinbox, 1, 1)
+
+        # Acquisition Time
+        general_grid.addWidget(QtWidgets.QLabel("Acquisition time:"), 2, 0)
+        self.aqt_spinbox = QtWidgets.QSpinBox()
+        self.aqt_spinbox.setRange(0, 1e5)
+        self.aqt_spinbox.setSuffix(" ms")
+        self.aqt_spinbox.setValue(DEFAULT_PARAMETERS["Acquisition Time"])
+        # self.aqt_spinbox.valueChanged.connect()
+        general_grid.addWidget(self.aqt_spinbox, 2, 1)
+
+
+class Window(QtWidgets.QMainWindow):
+    """ The main window """
+
+    def __init__(self):
+        super().__init__()
+        # Init GUI
+        self.setWindowTitle("LEADS : Kymograph Analysis")
+        this_directory = os.path.dirname(os.path.realpath(__file__))
+        icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar.png")
+        icon = QtGui.QIcon(icon_path)
+        self.setWindowIcon(icon)
+        self.view = kymographGui()
+        self.setCentralWidget(self.view)
+        self.parameters_dialog = ParametersDialog(self)
+        self.init_menu_bar()
+
+    def init_menu_bar(self):
+        menu_bar = self.menuBar()
+
+        """ File """
+        file_menu = menu_bar.addMenu("File")
+        open_action = file_menu.addAction("Open image stack")
+        open_action.setShortcut("Ctrl+O")
+        """ View """
+        view_menu = menu_bar.addMenu("View")
+        default_view_state = view_menu.addAction("Default View State")
+
+        """ Analyze """
+        analyze_menu = menu_bar.addMenu("Analyze")
+        parameters_action = analyze_menu.addAction("Parameters")
+        parameters_action.setShortcut("Ctrl+P")
+        parameters_action.triggered.connect(self.parameters_dialog.show)
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+    win = Window()
+    app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+    win.show()
+    sys.exit(app.exec_())
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtWidgets.QApplication.instance().exec_()
+
 if __name__ == '__main__':
-    app = pg_qt.QtGui.QApplication([])
-    ui = kymographGui()
-    ui.show()
-    if (sys.flags.interactive != 1) or not hasattr(pg_qt.QtCore, 'PYQT_VERSION'):
-        pg_qt.QtGui.QApplication.instance().exec_()
+    main()
+    # app = pg_qt.QtGui.QApplication([])
+    # ui = kymographGui()
+    # ui.show()
+    # if (sys.flags.interactive != 1) or not hasattr(pg_qt.QtCore, 'PYQT_VERSION'):
+    #     pg_qt.QtGui.QApplication.instance().exec_()
