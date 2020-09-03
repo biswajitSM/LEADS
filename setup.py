@@ -32,7 +32,8 @@ setuptools.setup(
         "tqdm",
         "tifffile==2020.6.3",
         "roifile==2020.5.28",
-        "PyYAML"
+        "PyYAML",
+        "qdarkstyle"
     ],
     dependency_links = ["git+https://github.com/pyqtgraph/pyqtgraph@master"]
 )
