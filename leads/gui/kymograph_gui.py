@@ -24,36 +24,211 @@ DEFAULT_PARAMETERS = {
 
 pg.setConfigOption('background', 'k') # 'w' for white and 'k' for black background
 pg.setConfigOption('imageAxisOrder', 'col-major') # the row and cols are reversed
-class kymographGui(QtWidgets.QWidget):
+
+class ParametersDialog(QtWidgets.QDialog):
+    """ The dialog showing parameters """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Parameters")
+        self.resize(300, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        general_groupbox = QtWidgets.QGroupBox("General")
+        vbox.addWidget(general_groupbox)
+        general_grid = QtWidgets.QGridLayout(general_groupbox)
+
+        # Pixel Size
+        general_grid.addWidget(QtWidgets.QLabel("Pixel Size:"), 0, 0)
+        self.pix_spinbox = QtWidgets.QSpinBox()
+        self.pix_spinbox.setRange(0, 1e3)
+        self.pix_spinbox.setSuffix(" nm")
+        self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
+        self.pix_spinbox.setKeyboardTracking(False)
+        # self.pix_spinbox.valueChanged.connect()
+        general_grid.addWidget(self.pix_spinbox, 0, 1)
+
+        # ROI Width
+        general_grid.addWidget(QtWidgets.QLabel("ROI Size:"), 1, 0)
+        self.roi_spinbox = QtWidgets.QSpinBox()
+        self.roi_spinbox.setRange(0, 1e3)
+        self.roi_spinbox.setSuffix(" pixels")
+        self.roi_spinbox.setValue(DEFAULT_PARAMETERS["ROI Width"])
+        self.roi_spinbox.setKeyboardTracking(False)
+        # self.roi_spinbox.valueChanged.connect()
+        general_grid.addWidget(self.roi_spinbox, 1, 1)
+
+        # Acquisition Time
+        general_grid.addWidget(QtWidgets.QLabel("Acquisition time:"), 2, 0)
+        self.aqt_spinbox = QtWidgets.QSpinBox()
+        self.aqt_spinbox.setRange(0, 1e5)
+        self.aqt_spinbox.setSuffix(" ms")
+        self.aqt_spinbox.setValue(DEFAULT_PARAMETERS["Acquisition Time"])
+        # self.aqt_spinbox.valueChanged.connect()
+        general_grid.addWidget(self.aqt_spinbox, 2, 1)
+
+class MultiPeakDialog(QtWidgets.QDialog):
+    """ The dialog showing Multipeak analysis """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Parameters")
+        self.resize(300, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        general_groupbox = QtWidgets.QGroupBox("Parameters")
+        vbox.addWidget(general_groupbox)
+        general_grid = QtWidgets.QGridLayout(general_groupbox)
+        # prominence
+        general_grid.addWidget(QtWidgets.QLabel("Peak Prominence:"), 0, 0)
+        self.prominence_spinbox = QtWidgets.QDoubleSpinBox()
+        self.prominence_spinbox.setRange(0, 1)
+        self.prominence_spinbox.setSingleStep(0.1)
+        self.prominence_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.prominence_spinbox, 0, 0)
+
+class MainWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.ui = Ui_Form()
-        self.ui.setupUi(self)
-        self.layout = QtWidgets.QGridLayout()
+        self.layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.layout)
+        # dockwidget home
         self.dockarea = pg_da.DockArea()
-        self.ui.centralWidget.setLayout(self.layout)
         self.layout.addWidget(self.dockarea)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.dockarea.sizePolicy().hasHeightForWidth())
+        self.dockarea.setSizePolicy(sizePolicy)
+        self.dockarea.setBaseSize(QtCore.QSize(0, 2))
+        ## bottom bar
+        self.bottomwidget = QtWidgets.QWidget()
+        self.layout.addWidget(self.bottomwidget)
+        self.bottomlayout = QtWidgets.QGridLayout()
+        self.bottomwidget.setLayout(self.bottomlayout)
+        # Num colors
+        grid_numc = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_numc, 0, 0)
+        grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
+        self.numColorsComboBox = QtWidgets.QComboBox()
+        self.numColorsComboBox.addItems(["2", "1"])
+        grid_numc.addWidget(self.numColorsComboBox, 0, 1)
+        # Current ROI width
+        grid_roi = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_roi, 1, 0)
+        grid_numc.addWidget(QtWidgets.QLabel("CurrROIwidth"), 1, 0)
+        self.currROIWidthLabel = QtWidgets.QLabel(
+            str(DEFAULT_PARAMETERS["ROI Width"]) + " pixels")
+        grid_numc.addWidget(self.currROIWidthLabel, 1, 1)
+        # detect loops
+        grid_btn1 = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_btn1, 0, 1)
+        self.detectLoopsBtn = QtWidgets.QPushButton("Detect loops")
+        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0)
+        self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
+        self.processImageCheckBox.setChecked(True)
+        grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
 
-        # initiate some parameters
-        self.numColors = self.ui.numColorsComboBox_3.currentText()
-        self.ui.numColorsComboBox_3.currentIndexChanged.connect(self.change_num_colors)
-        self.LineROIwidth = self.ui.roiWidthSpinBox.value()
-        self.pixelSize = 1e-3 * self.ui.pixelSizeSpinBox.value() # converted to um from nm
-        self.acquisitionTime = 1e-3 * self.ui.AcquisitionTimeSpinBox_2.value() # converted to sec from ms
-        if self.numColors == "2": self.acquisitionTime = 2 * self.acquisitionTime
-        self.scalebar_img = None
-        # add plotting widgets
+        # Frame number: start and end
+        grid_frame = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_frame, 0, 2)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameStart:"), 0, 0)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameEnd:"), 1, 0)
+        self.frameStartSpinBox = QtWidgets.QSpinBox()
+        self.frameStartSpinBox.setRange(0, 1e5)
+        self.frameStartSpinBox.setValue(0)
+        self.frameEndSpinBox = QtWidgets.QSpinBox()
+        self.frameEndSpinBox.setRange(-1, 1e5)
+        self.frameEndSpinBox.setValue(-1)
+        grid_frame.addWidget(self.frameStartSpinBox, 0, 1)
+        grid_frame.addWidget(self.frameEndSpinBox, 1, 1)
+
+        # Kymograph
+        grid_kymo = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_kymo, 0, 4)
+        self.RealTimeKymoCheckBox = QtWidgets.QCheckBox("RealTimeKymo")
+        self.RealTimeKymoCheckBox.setChecked(True)
+        self.updateKymoBtn = QtWidgets.QPushButton("UpdateKymo")
+        grid_kymo.addWidget(self.RealTimeKymoCheckBox, 0, 0)
+        grid_kymo.addWidget(self.updateKymoBtn, 1, 0)
+
+        # save section
+        grid_save = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_save, 0, 5)
+        self.saveSectionBtn = QtWidgets.QPushButton("Save section")
+        self.saveSectionComboBox = QtWidgets.QComboBox()
+        self.saveSectionComboBox.addItems(["d0left", "d0right",
+                                           "d1left", "d1right",
+                                           "d2left", "d2right",
+                                           ])
+        grid_save.addWidget(self.saveSectionBtn, 0, 0)
+        grid_save.addWidget(self.saveSectionComboBox, 1, 0)
+        
+        # swap or merge colors
+        grid_colors = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_colors, 0, 6)
+        self.swapColorsCheckBox = QtWidgets.QCheckBox("Swap colors")
+        self.mergeColorsCheckBox = QtWidgets.QCheckBox("Merge colors")
+        grid_colors.addWidget(self.swapColorsCheckBox, 0, 0)
+        grid_colors.addWidget(self.mergeColorsCheckBox, 1, 0)
+
+class Window(QtWidgets.QMainWindow):
+    """ The main window """
+
+    def __init__(self):
+        super().__init__()
+        # Init GUI
+        self.setWindowTitle("LEADS : Kymograph Analysis")
+        this_directory = os.path.dirname(os.path.realpath(__file__))
+        icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar.png")
+        icon = QtGui.QIcon(icon_path)
+        self.setWindowIcon(icon)
+        self.resize(1200, 900)
+        self.ui = MainWidget()
+        self.setCentralWidget(self.ui)
+        self.dockarea = self.ui.dockarea
+        self.parameters_dialog = ParametersDialog(self)
+        self.multipeak_dialog = MultiPeakDialog(self)
+        self.init_menu_bar()
+        # load params
+        self.load_parameters()
+        # add figures
         self.add_col1_imvs()
         if self.numColors == "2":
             self.add_col2_imvs()
-        # connect the signals
-        self.connect_signals()
-        self.ui.loadImageStackButton.clicked.connect(self.load_img_stack)
-        self.ui.loadImageSeqButton.clicked.connect(self.restore_default_dockstate)
         self.defaultDockState = self.dockarea.saveState()
-        self.ui.saveParamsBtn.clicked.connect(self.save_yaml_params)
-        self.ui.pixelSizeSpinBox.valueChanged.connect(self.set_scalebar)
-        self.ui.AcquisitionTimeSpinBox_2.valueChanged.connect(self.set_scalebar)
+        self.connect_signals()
+
+    def init_menu_bar(self):
+        menu_bar = self.menuBar()
+
+        """ File """
+        file_menu = menu_bar.addMenu("File")
+        open_action = file_menu.addAction("Open image stack")
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.load_img_stack)
+        save_action = file_menu.addAction("Save")
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.save)
+        """ View """
+        view_menu = menu_bar.addMenu("View")
+        default_action = view_menu.addAction("Default View State")
+        default_action.setShortcut("Ctrl+A")
+        default_action.triggered.connect(self.restore_default_dockstate)
+        """ Analyze """
+        analyze_menu = menu_bar.addMenu("Analyze")
+        parameters_action = analyze_menu.addAction("Parameters")
+        parameters_action.setShortcut("Ctrl+P")
+        parameters_action.triggered.connect(self.parameters_dialog.show)
+        multipeak_action = analyze_menu.addAction("Multi Peak Analysis")
+        multipeak_action.setShortcut("Ctrl+M")
+        multipeak_action.triggered.connect(self.multipeak_dialog.show)
+
+    def connect_signals(self):
         self.ui.processImageCheckBox.stateChanged.connect(self.processed_image_check)
         self.ui.mergeColorsCheckBox.stateChanged.connect(self.merge_colors)
         self.ui.swapColorsCheckBox.stateChanged.connect(self.swap_colors)
@@ -64,14 +239,20 @@ class kymographGui(QtWidgets.QWidget):
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
 
-    def connect_signals(self):
-        self.ui.roiWidthSpinBox.valueChanged.connect(self.set_roi_width)
         self.roirect_left.sigRegionChanged.connect(self.roi_changed)
         self.infline_left.sigPositionChanged.connect(self.infiline_left_update)
         if self.numColors == "2":
             self.imv00.sigTimeChanged.connect(self.sync_videos)
             self.infline_right.sigPositionChanged.connect(self.infiline_right_update)
         # self.infline_left.sigDragged
+
+    def load_parameters(self):
+        self.numColors = self.ui.numColorsComboBox.currentText()
+        self.LineROIwidth = self.parameters_dialog.roi_spinbox.value()
+        self.pixelSize = 1e-3 * self.parameters_dialog.pix_spinbox.value()
+        self.acquisitionTime = 1e-3 * self.parameters_dialog.aqt_spinbox.value()
+        self.scalebar_img = None
+
     def add_col1_imvs(self):
         self.imv00 = pg.ImageView(name='color 1')
         self.imv00.setPredefinedGradient(DEFAULTS["ColorMap"])
@@ -184,8 +365,8 @@ class kymographGui(QtWidgets.QWidget):
             self.imv11.showMaximized()
 
     def set_scalebar(self):
-        self.pixelSize = 1e-3 * self.ui.pixelSizeSpinBox.value()
-        self.acquisitionTime = 1e-3 * self.ui.AcquisitionTimeSpinBox_2.value() # converted to sec from ms
+        # self.pixelSize = 1e-3 * self.ui.pixelSizeSpinBox.value()
+        # self.acquisitionTime = 1e-3 * self.ui.AcquisitionTimeSpinBox_2.value() # converted to sec from ms
         if self.scalebar_img is not None:
             self.scalebar_img.size = 2/self.pixelSize
             self.scalebar_img.updateBar()
@@ -282,7 +463,7 @@ class kymographGui(QtWidgets.QWidget):
                 self.params_yaml = {
                     'filepath' : self.filepath,
                     'folderpath' : self.folderpath,
-                    'Pixel Size' : self.ui.pixelSizeSpinBox.value(),
+                    'Pixel Size' : self.parameters_dialog.pix_spinbox.value(),
                     'ROI width' : None,
                     'Region Errbar': [10, 30],
                 }
@@ -291,8 +472,8 @@ class kymographGui(QtWidgets.QWidget):
     
     def save_yaml_params(self):
         self.params_yaml = self.load_yaml_params()
-        self.params_yaml['Pixel Size'] = self.ui.pixelSizeSpinBox.value()
-        self.params_yaml['ROI width'] = self.ui.currROIWidthLabel.text()
+        self.params_yaml['Pixel Size'] = self.parameters_dialog.pix_spinbox.value()
+        self.params_yaml['ROI width'] = self.parameters_dialog.roi_spinbox.text()
         self.params_yaml['roi1 state'] = {}
         self.params_yaml['roi1 state']['position'] = list(self.roirect_left.pos()) #[self.roirect_left.pos()[0], self.roirect_left.pos()[1]]
         self.params_yaml['roi1 state']['size'] = list(self.roirect_left.size())
@@ -304,6 +485,10 @@ class kymographGui(QtWidgets.QWidget):
 
         with open(self.filepath_yaml, 'w') as f:
             yaml.dump(self.params_yaml, f)
+
+    def save(self):
+        self.save_yaml_params()
+        print("Parameters saved to yaml file")
 
     def set_yaml_params(self):
         if self.params_yaml['ROI width'] is not None:
@@ -704,162 +889,6 @@ class kymographGui(QtWidgets.QWidget):
         self.set_img_stack()
         print("took %s seconds to reset!" % (time.time() - start_time))
         print("DONE:Changing the frames.")
-
-class ParametersDialog(QtWidgets.QDialog):
-    """ The dialog showing analysis parameters """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.window = parent
-        self.setWindowTitle("Parameters")
-        self.resize(300, 0)
-        self.setModal(False)
-
-        vbox = QtWidgets.QVBoxLayout(self)
-        general_groupbox = QtWidgets.QGroupBox("General")
-        vbox.addWidget(general_groupbox)
-        general_grid = QtWidgets.QGridLayout(general_groupbox)
-
-        # Pixel Size
-        general_grid.addWidget(QtWidgets.QLabel("Pixel Size:"), 0, 0)
-        self.pix_spinbox = QtWidgets.QSpinBox()
-        self.pix_spinbox.setRange(0, 1e3)
-        self.pix_spinbox.setSuffix(" nm")
-        self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
-        self.pix_spinbox.setKeyboardTracking(False)
-        # self.pix_spinbox.valueChanged.connect()
-        general_grid.addWidget(self.pix_spinbox, 0, 1)
-
-        # ROI Width
-        general_grid.addWidget(QtWidgets.QLabel("ROI Size:"), 1, 0)
-        self.roi_spinbox = QtWidgets.QSpinBox()
-        self.roi_spinbox.setRange(0, 1e3)
-        self.roi_spinbox.setSuffix(" pixels")
-        self.roi_spinbox.setValue(DEFAULT_PARAMETERS["ROI Width"])
-        self.roi_spinbox.setKeyboardTracking(False)
-        # self.roi_spinbox.valueChanged.connect()
-        general_grid.addWidget(self.roi_spinbox, 1, 1)
-
-        # Acquisition Time
-        general_grid.addWidget(QtWidgets.QLabel("Acquisition time:"), 2, 0)
-        self.aqt_spinbox = QtWidgets.QSpinBox()
-        self.aqt_spinbox.setRange(0, 1e5)
-        self.aqt_spinbox.setSuffix(" ms")
-        self.aqt_spinbox.setValue(DEFAULT_PARAMETERS["Acquisition Time"])
-        # self.aqt_spinbox.valueChanged.connect()
-        general_grid.addWidget(self.aqt_spinbox, 2, 1)
-
-class MainWidget(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        self.layout = QtWidgets.QVBoxLayout()
-        self.setLayout(self.layout)
-        # dockwidget home
-        self.dockarea = pg_da.DockArea()
-        self.layout.addWidget(self.dockarea)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.dockarea.sizePolicy().hasHeightForWidth())
-        self.dockarea.setSizePolicy(sizePolicy)
-        self.dockarea.setBaseSize(QtCore.QSize(0, 2))
-        ## bottom bar
-        self.bottomwidget = QtWidgets.QWidget()
-        self.layout.addWidget(self.bottomwidget)
-        self.bottomlayout = QtWidgets.QGridLayout()
-        self.bottomwidget.setLayout(self.bottomlayout)
-        # Num colors
-        grid_numc = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_numc, 0, 0)
-        grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
-        self.numColorsComboBox = QtWidgets.QComboBox()
-        self.numColorsComboBox.addItems(["2", "1"])
-        grid_numc.addWidget(self.numColorsComboBox, 0, 1)
-        # Current ROI width
-        grid_roi = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_roi, 1, 0)
-        grid_numc.addWidget(QtWidgets.QLabel("CurrROIwidth"), 1, 0)
-        self.currROIWidthLabel = QtWidgets.QLabel(
-            str(DEFAULT_PARAMETERS["ROI Width"]) + " pixels")
-        grid_numc.addWidget(self.currROIWidthLabel, 1, 1)
-        # detect loops
-        grid_btn1 = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_btn1, 0, 1)
-        self.detectLoopsBtn = QtWidgets.QPushButton("Detect loops")
-        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0)
-        self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
-        self.processImageCheckBox.setChecked(True)
-        grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
-
-        # Frame number: start and end
-        grid_frame = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_frame, 0, 2)
-        grid_frame.addWidget(QtWidgets.QLabel("FrameStart:"), 0, 0)
-        grid_frame.addWidget(QtWidgets.QLabel("FrameEnd:"), 1, 0)
-        self.frameStartSpinBox = QtWidgets.QSpinBox()
-        self.frameStartSpinBox.setRange(0, 1e5)
-        self.frameStartSpinBox.setValue(0)
-        self.frameEndSpinBox = QtWidgets.QSpinBox()
-        self.frameEndSpinBox.setRange(-1, 1e5)
-        self.frameEndSpinBox.setValue(-1)
-        grid_frame.addWidget(self.frameStartSpinBox, 0, 1)
-        grid_frame.addWidget(self.frameEndSpinBox, 1, 1)
-
-        # Kymograph
-        grid_kymo = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_kymo, 0, 4)
-        self.RealTimeKymoCheckBox = QtWidgets.QCheckBox("RealTimeKymo")
-        self.RealTimeKymoCheckBox.setChecked(True)
-        self.updateKymoBtn = QtWidgets.QPushButton("UpdateKymo")
-        grid_kymo.addWidget(self.RealTimeKymoCheckBox, 0, 0)
-        grid_kymo.addWidget(self.updateKymoBtn, 1, 0)
-
-        # save section
-        grid_save = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_save, 0, 5)
-        self.saveSectionBtn = QtWidgets.QPushButton("Save section")
-        self.saveSectionComboBox = QtWidgets.QComboBox()
-        self.saveSectionComboBox.addItems(["d0left", "d0right",
-                                           "d1left", "d1right",
-                                           "d2left", "d2right",
-                                           ])
-        grid_save.addWidget(self.saveSectionBtn, 0, 0)
-        grid_save.addWidget(self.saveSectionComboBox, 1, 0)
-
-
-class Window(QtWidgets.QMainWindow):
-    """ The main window """
-
-    def __init__(self):
-        super().__init__()
-        # Init GUI
-        self.setWindowTitle("LEADS : Kymograph Analysis")
-        this_directory = os.path.dirname(os.path.realpath(__file__))
-        icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar.png")
-        icon = QtGui.QIcon(icon_path)
-        self.setWindowIcon(icon)
-        self.resize(1200, 900)
-        self.ui = MainWidget()
-        self.setCentralWidget(self.ui)
-        self.parameters_dialog = ParametersDialog(self)
-        self.init_menu_bar()
-
-    def init_menu_bar(self):
-        menu_bar = self.menuBar()
-
-        """ File """
-        file_menu = menu_bar.addMenu("File")
-        open_action = file_menu.addAction("Open image stack")
-        open_action.setShortcut("Ctrl+O")
-        """ View """
-        view_menu = menu_bar.addMenu("View")
-        default_view_state = view_menu.addAction("Default View State")
-
-        """ Analyze """
-        analyze_menu = menu_bar.addMenu("Analyze")
-        parameters_action = analyze_menu.addAction("Parameters")
-        parameters_action.setShortcut("Ctrl+P")
-        parameters_action.triggered.connect(self.parameters_dialog.show)
 
 
 def main():
