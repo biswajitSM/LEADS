@@ -18,7 +18,7 @@
     <normaloff>assets/kymograph_window_bar.png</normaloff>assets/kymograph_window_bar.png</iconset>
   </property>
   <property name="styleSheet">
-   <string notr="true">background-color: rgba(38, 41, 48, 108);</string>
+   <string notr="true"/>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
@@ -58,8 +58,7 @@
           </font>
          </property>
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>LoadImageStack</string>
@@ -74,8 +73,7 @@ background-color: rgb(90, 98, 108);</string>
           </font>
          </property>
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>DefaultViewState</string>
@@ -96,8 +94,7 @@ background-color: rgb(90, 98, 108);</string>
             </font>
            </property>
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgba(255, 255, 255, 0);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>NumColors:</string>
@@ -107,8 +104,7 @@ background-color: rgba(255, 255, 255, 0);</string>
          <item>
           <widget class="QComboBox" name="numColorsComboBox_3">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="currentText">
             <string>2</string>
@@ -137,8 +133,7 @@ background-color: rgb(90, 98, 108);</string>
             </font>
            </property>
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(255, 255, 108, 0);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>Pixel size:</string>
@@ -148,8 +143,7 @@ background-color: rgb(255, 255, 108, 0);</string>
          <item>
           <widget class="QSpinBox" name="pixelSizeSpinBox">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="suffix">
             <string> nm</string>
@@ -180,8 +174,7 @@ background-color: rgb(90, 98, 108);</string>
               </font>
              </property>
              <property name="styleSheet">
-              <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108, 0);</string>
+              <string notr="true"/>
              </property>
              <property name="text">
               <string>ROIwidth:</string>
@@ -191,8 +184,7 @@ background-color: rgb(90, 98, 108, 0);</string>
            <item>
             <widget class="QSpinBox" name="roiWidthSpinBox">
              <property name="styleSheet">
-              <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+              <string notr="true"/>
              </property>
              <property name="suffix">
               <string> pixels</string>
@@ -223,8 +215,7 @@ background-color: rgb(90, 98, 108);</string>
               </font>
              </property>
              <property name="styleSheet">
-              <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108, 0);</string>
+              <string notr="true"/>
              </property>
              <property name="text">
               <string>Curr ROIwidth:</string>
@@ -265,8 +256,7 @@ background-color: rgb(90, 98, 108, 0);</string>
             </font>
            </property>
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(255, 255, 108, 0);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>Acquisition time</string>
@@ -276,8 +266,7 @@ background-color: rgb(255, 255, 108, 0);</string>
          <item>
           <widget class="QSpinBox" name="AcquisitionTimeSpinBox_2">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="suffix">
             <string> ms</string>
@@ -295,8 +284,7 @@ background-color: rgb(90, 98, 108);</string>
        <item row="1" column="0">
         <widget class="QCheckBox" name="swapColorsCheckBox">
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108, 0);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>Swap Colors</string>
@@ -309,8 +297,7 @@ background-color: rgb(90, 98, 108, 0);</string>
        <item row="1" column="1">
         <widget class="QCheckBox" name="mergeColorsCheckBox">
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108, 0);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>Merge Colors</string>
@@ -329,8 +316,7 @@ background-color: rgb(90, 98, 108, 0);</string>
          <item>
           <widget class="QPushButton" name="detectLoopsBtn">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>Detect loops</string>
@@ -340,8 +326,7 @@ background-color: rgb(90, 98, 108);</string>
          <item>
           <widget class="QPushButton" name="detectsMolBtn">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>Detect sMol</string>
@@ -355,8 +340,7 @@ background-color: rgb(90, 98, 108);</string>
          <item>
           <widget class="QPushButton" name="saveSectionBtn">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>save section:</string>
@@ -366,8 +350,7 @@ background-color: rgb(90, 98, 108);</string>
          <item>
           <widget class="QComboBox" name="saveSectionComboBox">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <item>
             <property name="text">
@@ -410,8 +393,7 @@ background-color: rgb(90, 98, 108);</string>
        <item>
         <widget class="QCheckBox" name="processImageCheckBox">
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108, 0);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>Process Image</string>
@@ -424,8 +406,7 @@ background-color: rgb(90, 98, 108, 0);</string>
        <item>
         <widget class="QPushButton" name="saveParamsBtn">
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>Save params</string>
@@ -439,8 +420,7 @@ background-color: rgb(90, 98, 108);</string>
        <item row="0" column="0">
         <widget class="QCheckBox" name="RealTimeKymoCheckBox">
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108, 0);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>RealTimeKymo</string>
@@ -453,8 +433,7 @@ background-color: rgb(90, 98, 108, 0);</string>
        <item row="1" column="0">
         <widget class="QPushButton" name="updateKymoBtn">
          <property name="styleSheet">
-          <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+          <string notr="true"/>
          </property>
          <property name="text">
           <string>UpdateKymo</string>
@@ -475,8 +454,7 @@ background-color: rgb(90, 98, 108);</string>
             </font>
            </property>
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(255, 255, 108, 0);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>FrameStart</string>
@@ -486,8 +464,7 @@ background-color: rgb(255, 255, 108, 0);</string>
          <item>
           <widget class="QSpinBox" name="frameStartSpinBox">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
@@ -515,8 +492,7 @@ background-color: rgb(90, 98, 108);</string>
             </font>
            </property>
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(255, 255, 108, 0);</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>FrameEnd</string>
@@ -526,8 +502,7 @@ background-color: rgb(255, 255, 108, 0);</string>
          <item>
           <widget class="QSpinBox" name="frameEndSpinBox">
            <property name="styleSheet">
-            <string notr="true">color: rgba(255, 255, 255, 255);
-background-color: rgb(90, 98, 108);</string>
+            <string notr="true"/>
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
