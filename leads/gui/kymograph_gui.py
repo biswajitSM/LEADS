@@ -1,7 +1,6 @@
 import numpy as np
 from PyQt5 import QtWidgets, QtCore, QtGui
 import qdarkstyle
-import pyqtgraph.Qt as pg_qt #import QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.dockarea as pg_da
 import pyqtgraph.exporters
@@ -30,7 +29,7 @@ class kymographGui(QtWidgets.QWidget):
         super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        self.layout = pg_qt.QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.dockarea = pg_da.DockArea()
         self.ui.centralWidget.setLayout(self.layout)
         self.layout.addWidget(self.dockarea)
@@ -91,7 +90,7 @@ class kymographGui(QtWidgets.QWidget):
         self.imv10.addItem(self.region3_noLoop, ignoreBounds=True)
         label = pg.InfLineLabel(self.region3_noLoop.lines[1], "Non loop region",
                                 position=0.75, rotateAxis=(1,0), anchor=(1, 1))
-        self.region3_Loop = pg.LinearRegionItem((120, 200), brush=pg_qt.QtGui.QBrush(pg_qt.QtGui.QColor(255, 0, 0, 50)))
+        self.region3_Loop = pg.LinearRegionItem((120, 200), brush=QtGui.QBrush(QtGui.QColor(255, 0, 0, 50)))
         self.imv10.addItem(self.region3_Loop, ignoreBounds=True)
         label = pg.InfLineLabel(self.region3_Loop.lines[1], "Loop region",
                                 position=0.75, rotateAxis=(1,0), anchor=(1, 1))        
@@ -750,6 +749,83 @@ class ParametersDialog(QtWidgets.QDialog):
         # self.aqt_spinbox.valueChanged.connect()
         general_grid.addWidget(self.aqt_spinbox, 2, 1)
 
+class MainWidget(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
+        self.layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.layout)
+        # dockwidget home
+        self.dockarea = pg_da.DockArea()
+        self.layout.addWidget(self.dockarea)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.dockarea.sizePolicy().hasHeightForWidth())
+        self.dockarea.setSizePolicy(sizePolicy)
+        self.dockarea.setBaseSize(QtCore.QSize(0, 2))
+        ## bottom bar
+        self.bottomwidget = QtWidgets.QWidget()
+        self.layout.addWidget(self.bottomwidget)
+        self.bottomlayout = QtWidgets.QGridLayout()
+        self.bottomwidget.setLayout(self.bottomlayout)
+        # Num colors
+        grid_numc = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_numc, 0, 0)
+        grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
+        self.numColorsComboBox = QtWidgets.QComboBox()
+        self.numColorsComboBox.addItems(["2", "1"])
+        grid_numc.addWidget(self.numColorsComboBox, 0, 1)
+        # Current ROI width
+        grid_roi = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_roi, 1, 0)
+        grid_numc.addWidget(QtWidgets.QLabel("CurrROIwidth"), 1, 0)
+        self.currROIWidthLabel = QtWidgets.QLabel(
+            str(DEFAULT_PARAMETERS["ROI Width"]) + " pixels")
+        grid_numc.addWidget(self.currROIWidthLabel, 1, 1)
+        # detect loops
+        grid_btn1 = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_btn1, 0, 1)
+        self.detectLoopsBtn = QtWidgets.QPushButton("Detect loops")
+        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0)
+        self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
+        self.processImageCheckBox.setChecked(True)
+        grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
+
+        # Frame number: start and end
+        grid_frame = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_frame, 0, 2)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameStart:"), 0, 0)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameEnd:"), 1, 0)
+        self.frameStartSpinBox = QtWidgets.QSpinBox()
+        self.frameStartSpinBox.setRange(0, 1e5)
+        self.frameStartSpinBox.setValue(0)
+        self.frameEndSpinBox = QtWidgets.QSpinBox()
+        self.frameEndSpinBox.setRange(-1, 1e5)
+        self.frameEndSpinBox.setValue(-1)
+        grid_frame.addWidget(self.frameStartSpinBox, 0, 1)
+        grid_frame.addWidget(self.frameEndSpinBox, 1, 1)
+
+        # Kymograph
+        grid_kymo = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_kymo, 0, 4)
+        self.RealTimeKymoCheckBox = QtWidgets.QCheckBox("RealTimeKymo")
+        self.RealTimeKymoCheckBox.setChecked(True)
+        self.updateKymoBtn = QtWidgets.QPushButton("UpdateKymo")
+        grid_kymo.addWidget(self.RealTimeKymoCheckBox, 0, 0)
+        grid_kymo.addWidget(self.updateKymoBtn, 1, 0)
+
+        # save section
+        grid_save = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_save, 0, 5)
+        self.saveSectionBtn = QtWidgets.QPushButton("Save section")
+        self.saveSectionComboBox = QtWidgets.QComboBox()
+        self.saveSectionComboBox.addItems(["d0left", "d0right",
+                                           "d1left", "d1right",
+                                           "d2left", "d2right",
+                                           ])
+        grid_save.addWidget(self.saveSectionBtn, 0, 0)
+        grid_save.addWidget(self.saveSectionComboBox, 1, 0)
+
 
 class Window(QtWidgets.QMainWindow):
     """ The main window """
@@ -762,8 +838,9 @@ class Window(QtWidgets.QMainWindow):
         icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar.png")
         icon = QtGui.QIcon(icon_path)
         self.setWindowIcon(icon)
-        self.view = kymographGui()
-        self.setCentralWidget(self.view)
+        self.resize(1200, 900)
+        self.ui = MainWidget()
+        self.setCentralWidget(self.ui)
         self.parameters_dialog = ParametersDialog(self)
         self.init_menu_bar()
 
@@ -784,6 +861,7 @@ class Window(QtWidgets.QMainWindow):
         parameters_action.setShortcut("Ctrl+P")
         parameters_action.triggered.connect(self.parameters_dialog.show)
 
+
 def main():
     app = QtWidgets.QApplication(sys.argv)
     win = Window()
@@ -795,8 +873,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # app = pg_qt.QtGui.QApplication([])
-    # ui = kymographGui()
-    # ui.show()
-    # if (sys.flags.interactive != 1) or not hasattr(pg_qt.QtCore, 'PYQT_VERSION'):
-    #     pg_qt.QtGui.QApplication.instance().exec_()
