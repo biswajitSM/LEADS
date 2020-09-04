@@ -8,7 +8,6 @@ from tifffile import imwrite
 from ..kymograph import (read_img_seq, read_img_stack,
                 median_bkg_substration, peakfinder_savgol,
                 analyze_maxpeak, loop_sm_dist)
-from .kymograph_ui import Ui_Form
 import PySimpleGUI as sg
 import os, sys, glob, time, subprocess
 import yaml
