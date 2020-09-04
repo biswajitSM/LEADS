@@ -221,9 +221,9 @@ class MainWidget(QtWidgets.QWidget):
         self.bottomlayout.addLayout(grid_save, 0, 5)
         self.saveSectionBtn = QtWidgets.QPushButton("Save section")
         self.saveSectionComboBox = QtWidgets.QComboBox()
-        self.saveSectionComboBox.addItems(["d0left", "d0right",
-                                           "d1left", "d1right",
-                                           "d2left", "d2right",
+        self.saveSectionComboBox.addItems(["d0left:video", "d0right:video",
+                                           "d1left:tif", "d1right:tif",
+                                           "d2left:tif", "d2right:tif",
                                            ])
         grid_save.addWidget(self.saveSectionBtn, 0, 0)
         grid_save.addWidget(self.saveSectionComboBox, 1, 0)
@@ -598,20 +598,20 @@ class Window(QtWidgets.QMainWindow):
         roi1_data = self.roirect_left.getArrayRegion(self.imgarr_left,
                                             self.imv00.imageItem, axes=(1, 2))
         self.kymo_left = np.sum(roi1_data, axis=2)
-        self.kymo_left = self.kymo_left / np.max(self.kymo_left)
+        # self.kymo_left = self.kymo_left / np.max(self.kymo_left)
         self.imv10.setImage(self.kymo_left)
         if self.numColors == "2":
             self.roirect_right.setState(self.roirect_left.getState())
             roi2_data = self.roirect_right.getArrayRegion(self.imgarr_right,
                                                 self.imv01.imageItem, axes=(1, 2))                                                       
             self.kymo_right = np.sum(roi2_data, axis=2)
-            self.kymo_right = self.kymo_right / np.max(self.kymo_right)
+            # self.kymo_right = self.kymo_right / np.max(self.kymo_right)
             if self.ui.mergeColorsCheckBox.isChecked():
-                kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
-                                        self.kymo_left[:, :, np.newaxis],
-                                        np.zeros_like(self.kymo_right[:, :, np.newaxis])),
-                                        axis=2)
-                self.imv11.setImage(kymo_comb, levelMode='rgba')
+                self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+                                    self.kymo_left[:, :, np.newaxis],
+                                    np.zeros_like(self.kymo_right[:, :, np.newaxis])),
+                                    axis=2)
+                self.imv11.setImage(self.kymo_comb, levelMode='rgba')
                 self.imv11.ui.histogram.show()
             else:
                 self.imv11.setImage(self.kymo_right)
@@ -729,13 +729,13 @@ class Window(QtWidgets.QMainWindow):
                                         axis=3)
             self.imv01.setImage(arr_combined, levelMode='rgba')
             self.imv01.showMaximized()
-            kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+            self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
                                     self.kymo_left[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right[:, :, np.newaxis])),
                                     axis=2)
-            self.imv11.setImage(kymo_comb, levelMode='rgba')
+            self.imv11.setImage(self.kymo_comb, levelMode='rgba')
             self.imv11.ui.histogram.show()
-            kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
+            self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
                                     self.kymo_left_loop[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
                                     axis=2)
@@ -744,7 +744,7 @@ class Window(QtWidgets.QMainWindow):
                                     np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
                                     axis=2)
             self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
-            self.imv23.setImage(kymo_loop_comb, levelMode='rgba')
+            self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
         else:
             # set back the imagedata
             self.imv01.setImage(self.imgarr_right, levelMode='mono')
@@ -901,10 +901,10 @@ class Window(QtWidgets.QMainWindow):
 
     def save_section(self):
         temp_folder = os.path.abspath(os.path.join(self.folderpath, 'temp'))
-        print(temp_folder)
         if not os.path.isdir(temp_folder):
             os.mkdir(temp_folder)
-        if self.ui.saveSectionComboBox.currentText() == "d0left":
+        # save left video : d0left
+        if self.ui.saveSectionComboBox.currentText() == "d0left:video":
             roi_state = self.roirect_left.getState()
             self.roirect_left.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
@@ -917,13 +917,14 @@ class Window(QtWidgets.QMainWindow):
                 i += 1
             self.roirect_left.setState(roi_state) #set back to its previous state
             filelist = glob.glob(temp_folder+'/temp_*.png')
-            filename = self.folderpath+'/'+self.filename_base + 'left.avi'
+            filename = self.folderpath+'/'+self.filename_base + '_left.avi'
             os.chdir(temp_folder)
             subprocess.call(['ffmpeg', '-y', '-r', '10', '-i', 'temp_%d0.png', filename])
             for file in filelist:
                 os.remove(file)
             print("Video conversion FINISHED")
-        elif self.ui.saveSectionComboBox.currentText() == "d0right":
+        # save left video : d0right
+        elif self.ui.saveSectionComboBox.currentText() == "d0right:video":
             roi_state = self.roirect_right.getState()
             self.roirect_right.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
@@ -936,13 +937,40 @@ class Window(QtWidgets.QMainWindow):
                 i += 1
             self.roirect_right.setState(roi_state) #set back to its previous state
             filelist = glob.glob(temp_folder+'/temp_*.png')
-            filename = self.folderpath+'/'+self.filename_base + 'left.avi'
+            filename = self.folderpath+'/'+self.filename_base + '_right.avi'
             os.chdir(temp_folder)
             subprocess.call(['ffmpeg', '-y', '-r', '10', '-i', 'temp_%d0.png', filename])
             for file in filelist:
                 os.remove(file)
             print("Video conversion FINISHED")
-
+        # save left full kymo : d1left
+        elif self.ui.saveSectionComboBox.currentText() == "d1left:tif":
+            filename = self.folderpath+'/'+self.filename_base + '_left_kymo.tif'
+            imwrite(filename, self.kymo_left.T.astype(np.uint16), imagej=True,
+                    metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+        # save right full kymo : d1right
+        elif self.ui.saveSectionComboBox.currentText() == "d1right:tif":
+            filename = self.folderpath+'/'+self.filename_base + '_right_kymo.tif'
+            if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
+                imwrite(filename, self.kymo_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+            else:
+                imwrite(filename, self.kymo_right.T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+        # save left selected kymo : d2left
+        elif self.ui.saveSectionComboBox.currentText() == "d2left:tif":
+            filename = self.folderpath+'/'+self.filename_base + 'left_selected_kymo.tif'
+            imwrite(filename, self.kymo_left_loop.T.astype(np.uint16), imagej=True,
+                    metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+        # save right selected kymo : d2right
+        elif self.ui.saveSectionComboBox.currentText() == "d2right:tif":
+            filename = self.folderpath+'/'+self.filename_base + 'right_selected_kymo.tif'
+            if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
+                imwrite(filename, self.kymo_loop_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+            else:
+                imwrite(filename, self.kymo_right_loop.T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
 
     def frames_changed(self):
         print("Changing the frames and resetting plts...")
