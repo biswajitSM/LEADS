@@ -20,6 +20,7 @@ DEFAULT_PARAMETERS = {
     "Acquisition Time" : 100, # in millisecond
     "Pixel Size" : 115, # in nanometer
     "ROI Width" : 11,
+    "Peak Prominence": 0.25,
     }
 
 pg.setConfigOption('background', 'k') # 'w' for white and 'k' for black background
@@ -80,7 +81,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.setModal(False)
 
         vbox = QtWidgets.QVBoxLayout(self)
-        general_groupbox = QtWidgets.QGroupBox("Parameters")
+        general_groupbox = QtWidgets.QGroupBox("Peak Finding Parameters")
         vbox.addWidget(general_groupbox)
         general_grid = QtWidgets.QGridLayout(general_groupbox)
         # prominence
@@ -88,8 +89,68 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.prominence_spinbox = QtWidgets.QDoubleSpinBox()
         self.prominence_spinbox.setRange(0, 1)
         self.prominence_spinbox.setSingleStep(0.1)
+        self.prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.prominence_spinbox.setKeyboardTracking(False)
+        self.prominence_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         general_grid.addWidget(self.prominence_spinbox, 0, 0)
+        # Slider
+        self.prominence_slider = DoubleSlider()
+        self.prominence_slider.setOrientation(QtCore.Qt.Horizontal)
+        self.prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
+        self.prominence_slider.setSingleStep(0.01)
+        self.prominence_slider.valueChanged.connect(self.on_prominence_slider_changed)
+        general_grid.addWidget(self.prominence_slider, 1, 0, 1, 2)
+    
+    def on_prominence_slider_changed(self):
+        value = self.prominence_slider.value()
+        self.prominence_spinbox.setValue(value)
+    
+    def on_prominence_spinbox_changed(self):
+        value = self.prominence_spinbox.value()
+        self.prominence_slider.setValue(value)
+
+class DoubleSlider(QtWidgets.QSlider):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.decimals = 5
+        self._max_int = 10 ** self.decimals
+
+        super().setMinimum(0)
+        super().setMaximum(self._max_int)
+
+        self._min_value = 0.0
+        self._max_value = 1.0
+
+    @property
+    def _value_range(self):
+        return self._max_value - self._min_value
+
+    def value(self):
+        return float(super().value()) / self._max_int * self._value_range + self._min_value
+
+    def setValue(self, value):
+        super().setValue(int((value - self._min_value) / self._value_range * self._max_int))
+
+    def setMinimum(self, value):
+        if value > self._max_value:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._min_value = value
+        self.setValue(self.value())
+
+    def setMaximum(self, value):
+        if value < self._min_value:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._max_value = value
+        self.setValue(self.value())
+
+    def minimum(self):
+        return self._min_value
+
+    def maximum(self):
+        return self._max_value
 
 class MainWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -201,6 +262,7 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2":
             self.add_col2_imvs()
         self.defaultDockState = self.dockarea.saveState()
+        self.connect_signals_init()
         self.connect_signals()
 
     def init_menu_bar(self):
@@ -228,7 +290,8 @@ class Window(QtWidgets.QMainWindow):
         multipeak_action.setShortcut("Ctrl+M")
         multipeak_action.triggered.connect(self.multipeak_dialog.show)
 
-    def connect_signals(self):
+    def connect_signals_init(self):
+        self.ui.numColorsComboBox.currentIndexChanged.connect(self.change_num_colors)
         self.ui.processImageCheckBox.stateChanged.connect(self.processed_image_check)
         self.ui.mergeColorsCheckBox.stateChanged.connect(self.merge_colors)
         self.ui.swapColorsCheckBox.stateChanged.connect(self.swap_colors)
@@ -239,6 +302,7 @@ class Window(QtWidgets.QMainWindow):
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
 
+    def connect_signals(self):
         self.roirect_left.sigRegionChanged.connect(self.roi_changed)
         self.infline_left.sigPositionChanged.connect(self.infiline_left_update)
         if self.numColors == "2":
@@ -612,14 +676,14 @@ class Window(QtWidgets.QMainWindow):
         # self.imv00.ui.histogram.
 
     def change_num_colors(self):
-        self.numColors = self.ui.numColorsComboBox_3.currentText()
+        self.numColors = self.ui.numColorsComboBox.currentText()
         if self.numColors == "1":
             self.remove_all_widgets()
             self.add_col1_imvs()
             self.connect_signals()
         elif self.numColors == "2":
-            # self.remove_all_widgets()
-            # self.add_col1_imvs()
+            self.remove_all_widgets()
+            self.add_col1_imvs()
             self.add_col2_imvs()
             self.connect_signals()
         self.defaultDockState = self.dockarea.saveState()
