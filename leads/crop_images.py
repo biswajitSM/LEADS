@@ -170,10 +170,13 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
         folderpath = path
     else:
         filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                        filetypes = (("tif files","*.tif"),("all files","*.*")))
+                                                        filetypes = (("tif files","*.tif *.tiff"),("all files","*.*")))
         folderpath = os.path.dirname(filepath)
     image_meta['folderpath'] = folderpath
-    filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
+    if filepath.endswith('tif'):
+        filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
+    elif filepath.endswith('tiff'):
+        filenames = sorted(glob.glob(folderpath + "/*.tiff"), key=alphanumeric_key)
     image_meta['filenames'] = filenames
     # read the first file to get the shape and dtype
     # ASSUMES THAT ALL FILES SHARE THE SAME SHAPE/TYPE
