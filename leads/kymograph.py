@@ -1,12 +1,14 @@
 import os, glob
 import numpy as np
 import pandas as pd
+import h5py
 from scipy.ndimage import median_filter, white_tophat, black_tophat
 from scipy.signal import find_peaks, savgol_filter, peak_prominences
 import PySimpleGUI as sg
 import tifffile
 from skimage.io.collection import alphanumeric_key
 import pims
+import trackpy
 import matplotlib.pyplot as plt
 
 def read_img_stack(filepath):
@@ -61,7 +63,8 @@ def median_bkg_substration(txy_array, size_med=5, size_bgs=10, light_bg=False):
 
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
-                      prominence_min=1/2, pix_width=11, plotting=False, kymo_noLoop=None):
+                      prominence_min=1/2, pix_width=11, plotting=False,
+                      kymo_noLoop=None, correction_noLoop=True):
     '''
     prominence_min : minimum peak height with respect to max
     signal in the kymo.
@@ -70,7 +73,7 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     '''
     if skip_left is None: skip_left = 0
     if skip_right is 0 or None: skip_right = 1
-    if kymo_noLoop is not None:
+    if kymo_noLoop is not None and correction_noLoop:
         kymo_noLoop_avg = np.sum(kymo_noLoop, axis=1)
         kym_arr = kym_arr / kymo_noLoop_avg[:, None]
     kym_arr_cropped = kym_arr[skip_left:-skip_right, :]
@@ -157,6 +160,10 @@ def analyze_maxpeak(df_maxpeak, smooth_length=11, fitting=False, fit_lim=[0, 30]
 
 
 def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
+    '''
+    Compares the positions (frame numbers) of two colors and 
+    returns the values where both colors have the same frame numbers
+    '''
     df_loop = maxpeak_dict["Max Peak"]
     df_sm = smpeak_dict['Max Peak']
     df_sm = df_sm.loc[df_sm['FrameNumber'].isin(df_loop['FrameNumber'])]
@@ -174,8 +181,8 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     peak_diff_filt = savgol_filter(peak_diff, window_length=smooth_length, polyorder=2)
     loop_sm_dict = {
         "FrameNumver": frame_number,
-        "PeakDiff" : peak_diff,
-        "PeakDiffFiltered" : peak_diff_filt,
+        "PeakDiff" : peak_diff, # difference in peak position in kilobases
+        "PeakDiffFiltered" : peak_diff_filt, #smoothed peaks
     }
     if plotting:
         frame_no = maxpeak_dict["Max Peak"]["FrameNumber"]
@@ -193,6 +200,21 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
         plt.legend()
     return loop_sm_dict
 
+def link_peaks(df_peaks, search_range=10, memory=5, filter_length=10):
+    df_peaks["x"] = df_peaks["PeakPosition"]
+    df_peaks["y"] = df_peaks["FrameNumber"]
+    df_peaks["frame"] = df_peaks["FrameNumber"]
+    t = trackpy.link(df_tolink, search_range=search_range,
+                memory=memory, pos_columns=['y', 'x'])
+    t_filt = trackpy.filter_stubs(t, filter_length)
+    t_filt_gb = t_filt.groupby("particle")
+    gb_names = list(t_filt_gb.groups.keys())
+    peaks_linked = t_filt.copy(deep=True)
+    particle_index = 1
+    for name in gb_names:
+        peaks_linked[peaks_linked['particle']==name] = particle_index
+        particle_index += 1
+    return peaks_linked
 
 if __name__ == "__main__":
     print('kymograph module imported')
