@@ -8,6 +8,7 @@ from tifffile import imwrite
 from ..kymograph import (read_img_seq, read_img_stack,
                 median_bkg_substration, peakfinder_savgol,
                 analyze_maxpeak, loop_sm_dist)
+from  .. import kymograph
 import PySimpleGUI as sg
 import os, sys, glob, time, subprocess
 import yaml
@@ -20,7 +21,7 @@ DEFAULT_PARAMETERS = {
     "Pixel Size" : 115, # in nanometer
     "ROI Width" : 11,
     "Peak Prominence" : 0.25,
-    "DNA Length" : 48, # in kilo bases
+    "DNA Length" : 48.5, # in kilo bases
     "DNA Puncta Diameter" : 9,
     "Search Range" : 10,
     "Memory" : 5,
@@ -117,7 +118,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         general_grid.addWidget(self.preview_checkbox, 2, 0, 1, 2)
         # DNA length
         general_grid.addWidget(QtWidgets.QLabel("DNA length:"), 3, 0)
-        self.DNAlength_spinbox = QtWidgets.QSpinBox()
+        self.DNAlength_spinbox = QtWidgets.QDoubleSpinBox()
         self.DNAlength_spinbox.setRange(1, 1e3)
         self.DNAlength_spinbox.setValue(DEFAULT_PARAMETERS["DNA Length"])
         self.DNAlength_spinbox.setSuffix(" kb")
@@ -165,6 +166,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         linking_grid.addWidget(self.filterlen_spinbox, 2, 1)
         # plot all peaks
         self.linkplot_pushbutton = QtWidgets.QPushButton("Link and Plot All Peaks")
+        self.linkplot_pushbutton.clicked.connect(self.on_clicking_linkplot_pushbutton)
         linking_grid.addWidget(self.linkplot_pushbutton, 3, 0, 1, 2)
         ## Kinetics ##
         plot_groupbox = QtWidgets.QGroupBox("Plotting Kinetics")
@@ -195,6 +197,10 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.prominence_slider.setValue(value)
         self.window.params_change_loop_detection()
 
+    def on_clicking_linkplot_pushbutton(self):
+        self.window.plot_all_peaks()
+
+        
 class DoubleSlider(QtWidgets.QSlider):
 
     def __init__(self, *args, **kwargs):
@@ -325,6 +331,7 @@ class MainWidget(QtWidgets.QWidget):
         grid_colors.addWidget(self.swapColorsCheckBox, 0, 0)
         grid_colors.addWidget(self.mergeColorsCheckBox, 1, 0)
 
+
 class Window(QtWidgets.QMainWindow):
     """ The main window """
 
@@ -408,6 +415,10 @@ class Window(QtWidgets.QMainWindow):
         self.dna_length_kb = self.multipeak_dialog.DNAlength_spinbox.value()
         self.dna_puncta_size = self.multipeak_dialog.DNApuncta_spinbox.value()
         self.correction_with_no_loop = self.multipeak_dialog.loopcorrection_checkbox.isChecked()
+        # multi peak paramters from analyze/peak analysis dialog
+        self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
+        self.memory_link = self.multipeak_dialog.memory_spinbox.value()
+        self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
         # initialize parameters that don't exist yet
         self.scalebar_img = None
         self.kymo_left = None
@@ -950,8 +961,13 @@ class Window(QtWidgets.QMainWindow):
                 correction_noLoop=self.correction_with_no_loop
                 )
         self.max_peak_dict = analyze_maxpeak(self.all_peaks_dict['Max Peak'], smooth_length=7,
-                frame_width = self.loop_region_right-self.loop_region_left,
+                frame_width = self.loop_region_right - self.loop_region_left,
                 dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
+                )
+        if self.numColors == "2":
+            self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
+                self.loop_region_left, -self.loop_region_right,
+                prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size, plotting=False,
                 )
         self.plotLoopPosData.setData(self.max_peak_dict["Max Peak"]["FrameNumber"],
                                      self.max_peak_dict["Max Peak"]["PeakPosition"])
@@ -1014,6 +1030,22 @@ class Window(QtWidgets.QMainWindow):
             self.plot_loop_vs_sm.setYRange(self.loop_region_left-5, self.loop_region_right+5)
             self.plot_loop_vs_sm_linetop.setValue(self.loop_region_left)
             self.plot_loop_vs_sm_linebottom.setValue(self.loop_region_right)
+
+    def plot_all_peaks(self):
+        self.preview_maxpeak_on_params_change()
+        self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
+        self.memory_link = self.multipeak_dialog.memory_spinbox.value()
+        self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
+        if self.numColors == "2":
+            _ = kymograph.link_and_plot_two_color(
+                    self.all_peaks_dict, self.all_smpeaks_dict,
+                    search_range=self.search_range_link, memory=self.memory_link,
+                    filter_length=self.filter_length_link, plotting=True,)
+        else:
+            _ = kymograph.link_peaks(
+                    self.all_peaks_dict["All Peaks"],
+                    search_range=self.search_range_link, memory=self.memory_link,
+                    filter_length=self.filter_length_link, plotting=True,)
 
     def save_hdf5(self):
         filepath_hdf5 = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'

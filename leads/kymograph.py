@@ -10,6 +10,8 @@ from skimage.io.collection import alphanumeric_key
 import pims
 import trackpy
 import matplotlib.pyplot as plt
+plt.style.use('seaborn')
+
 
 def read_img_stack(filepath):
     # filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
@@ -113,6 +115,7 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
         "Peak Prominences": prominence_list,
         "skip_left" : skip_left,
         "skip_right" : skip_right,
+        "shape_kymo" : kym_arr.shape
     }
     if plotting:
         plt.figure(figsize=(15,5))
@@ -200,11 +203,16 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
         plt.legend()
     return loop_sm_dict
 
-def link_peaks(df_peaks, search_range=10, memory=5, filter_length=10):
+def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
+               plotting=True, axis=None):
+    plt.style.use('seaborn')
     df_peaks["x"] = df_peaks["PeakPosition"]
-    df_peaks["y"] = df_peaks["FrameNumber"]
+    if df_peaks_sm is None:
+        df_peaks["y"] = df_peaks["FrameNumber"]
+    else:
+        df_peaks["y"] = df_peaks_sm["PeakPosition"]
     df_peaks["frame"] = df_peaks["FrameNumber"]
-    t = trackpy.link(df_tolink, search_range=search_range,
+    t = trackpy.link(df_peaks, search_range=search_range,
                 memory=memory, pos_columns=['y', 'x'])
     t_filt = trackpy.filter_stubs(t, filter_length)
     t_filt_gb = t_filt.groupby("particle")
@@ -212,9 +220,60 @@ def link_peaks(df_peaks, search_range=10, memory=5, filter_length=10):
     peaks_linked = t_filt.copy(deep=True)
     particle_index = 1
     for name in gb_names:
-        peaks_linked[peaks_linked['particle']==name] = particle_index
+        peaks_linked['particle'][t_filt['particle']==name] = particle_index
         particle_index += 1
+    peaks_linked_gb = peaks_linked.groupby("particle")
+    gb_names = list(peaks_linked_gb.groups.keys())
+    if plotting:
+        if axis is None:
+            fig, axis = plt.subplots()
+        for name in gb_names:
+            gp_sel = peaks_linked_gb.get_group(name)
+            axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
+        axis.legend(bbox_to_anchor=(1.02, 1), borderaxespad=0)
+    peaks_linked = peaks_linked.reset_index(drop=True)
     return peaks_linked
+
+
+def link_and_plot_two_color(peak_dict, peak_dict_sm,
+            search_range=10, memory=5, filter_length=10,
+            plotting=True):
+    df_peaks = peak_dict["All Peaks"]
+    df_peaks_sm = peak_dict_sm["All Peaks"]
+    # set axes and figsize
+    fig = plt.figure()
+    gs = fig.add_gridspec(3, 3)
+    ax1 = fig.add_subplot(gs[0, :])
+    ax1.set_xticks([]); 
+    ax2 = fig.add_subplot(gs[1, :])
+    ax2.set_xticks([]);
+    ax3 = fig.add_subplot(gs[2, :])
+    # link and plot data to it
+    df_peaks_linked = link_peaks(df_peaks, search_range=search_range,
+                          memory=memory, filter_length=filter_length,
+                          plotting=plotting, axis=ax1)
+    df_peaks_linked_sm = link_peaks(df_peaks_sm, search_range=search_range,
+                          memory=memory, filter_length=filter_length,
+                          plotting=plotting, axis=ax2)
+    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], 'g', alpha=0.8, label='DNA')
+    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], 'm', alpha=0.8, label='SM')
+    ax3.legend(loc=4)
+    dna_height = peak_dict["shape_kymo"][0]
+    kymo_length = peak_dict["shape_kymo"][1]
+    ax_list = [ax1, ax2, ax3]
+    for ax in ax_list:
+        ax.hlines([0, dna_height], 0, kymo_length, 'g', alpha=0.5)
+        ax.set_ylim([0 - 0.05*dna_height, dna_height + 0.05*dna_height])
+        ax.set_xlim(0, kymo_length)
+        ax.set_ylabel('pixels')
+    ax3.set_xlabel('Frame Numbers')
+    ax1.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'DNA punctas')
+    ax2.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'Single molecules')
+    ax3.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'DNA punctas and SM')
+    fig.tight_layout()
+    plt.show()
+    return df_peaks_linked, df_peaks_linked_sm
+
 
 if __name__ == "__main__":
     print('kymograph module imported')
