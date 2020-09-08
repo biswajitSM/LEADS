@@ -64,11 +64,17 @@ class NapariTabs(QtWidgets.QWidget):
             self.image_meta
             self.frame_start = self.ui.frameStartSbox.value()
             self.frame_end = self.ui.frameEndBox.value()
+            self.shift_bool = self.ui.shiftImageCheckBox.isChecked()
+            self.shift_x = self.ui.xShiftSpinBox.value()
+            self.shift_y = self.ui.yShiftSpinBox.value()
+            self.angle = self.ui.angleSpinBox.value()
             if self.frame_end == -1:
                 self.frame_end = None
             shape_layer = self.viewer.layers['rect_roi']
             crop_images.crop_rect_shapes(self.image_meta, shape_layer,
                             frame_start=self.frame_start, frame_end=self.frame_end,
+                            geometric_transform=self.shift_bool,
+                            shift_x=self.shift_x, shift_y=self.shift_y, angle=self.angle
                             )
         except:
             self.load_img_seq()

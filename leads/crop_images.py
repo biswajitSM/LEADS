@@ -86,7 +86,9 @@ def addroi_to_shapelayer(shape_layer, roi_file_list):
     return roi_arr_list
 
 def crop_rect_shapes(image_meta, shape_layer, dir_to_save=None,
-                     frame_start=None, frame_end=None):
+                     frame_start=None, frame_end=None,
+                     geometric_transform=False,
+                     shift_x=0, shift_y=0, angle=0):
     '''
     shape_layer should be a shape object from napari viewer 
     '''
@@ -126,19 +128,27 @@ def crop_rect_shapes(image_meta, shape_layer, dir_to_save=None,
         rect_0 = rect[0].astype(int)
         if i < 10: sl_no = str(0) + str(i)
         else: sl_no = str(i)
+        shift_text = ''
+        if geometric_transform:
+            shift_text = shift_text + '_shifted_' + str(shift_x) + 'dx_' + str(shift_y) + 'dy'
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + 'd-f' + str(frame_start) + '-f' +\
-              str(frame_end)
+              str(frame_end) + shift_text
         names_roi_tosave.append(nam)
     rect_keys = list(img_array_all.keys())   
     for col in range(image_meta['num_colors']):
-        print('Corpping color: {} ...'.format(col))
+        print('Cropping color: {} ...'.format(col))
         imgseq = pims.ImageSequence(image_meta['filenames_color_'+str(col)])[frame_start:frame_end]
         for i in trange(num_frames_update, desc='cropping images'):
             img = np.array(imgseq[i], dtype=np.uint16)
             for j in range(len(rect_shape)):
                 img_croped = crop_rect(img, rect_shape[j])
+                # shift image if true. col=1 corresponds to 2nd color
+                if col == 1 and geometric_transform:
+                    img_croped = geometric_shift(img_croped, angle=angle,
+                                    shift_x=shift_x, shift_y=shift_y)
+                # append the image to the stack
                 img_array_all[rect_keys[j]][i, col, :, :] = img_croped
 
     for i in range(len(rect_shape)):
@@ -229,3 +239,8 @@ def bkg_substration(txy_array, size_bgs=150, light_bg=False):
         else:
             array_processed = white_tophat(txy_array, size=size_bgs)
     return array_processed
+
+def geometric_shift(image2d, angle, shift_x, shift_y):
+    image_rotated = ndimage.rotate(image2d, angle, reshape=False)
+    image_shifted = ndimage.shift(image_rotated, (float(shift_x), float(shift_y)))
+    return image_shifted
