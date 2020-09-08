@@ -93,7 +93,10 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
         peaks_sel = peaks[prom_bool]
         if len(peaks_sel) != 0:
             for peak_pos in peaks_sel:
-                pos_list.append([i, peak_pos, line1d_smth[peak_pos]])
+                peak_int = np.sum(line1d_smth[peak_pos-pix_rad : peak_pos+pix_rad])
+                peak_up_int = np.sum(line1d_smth[:peak_pos-pix_rad])
+                peak_down_int = np.sum(line1d_smth[peak_pos+pix_rad:])
+                pos_list.append([i, peak_pos, peak_int, peak_up_int, peak_down_int])
             prominence_list.append(prominences)
             # max peak pos and val
             max_prominence = max(prominences) #max(line1d_smth[peaks])
@@ -106,7 +109,8 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     pos_list[:, 1] = pos_list[:, 1] + skip_left
     maxpeak_pos_list = np.array(maxpeak_pos_list)
     maxpeak_pos_list[:, 1] = maxpeak_pos_list[:, 1] + skip_left
-    df_pks = pd.DataFrame(pos_list, columns=["FrameNumber", "PeakPosition", "Intensity"])
+    df_pks = pd.DataFrame(pos_list,
+            columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
     df_max_pks = pd.DataFrame(maxpeak_pos_list,
             columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
     peak_dict = {
@@ -244,9 +248,9 @@ def link_and_plot_two_color(peak_dict, peak_dict_sm,
     fig = plt.figure()
     gs = fig.add_gridspec(3, 3)
     ax1 = fig.add_subplot(gs[0, :])
-    ax1.set_xticks([]); 
+    ax1.set_xticks([])
     ax2 = fig.add_subplot(gs[1, :])
-    ax2.set_xticks([]);
+    ax2.set_xticks([])
     ax3 = fig.add_subplot(gs[2, :])
     # link and plot data to it
     df_peaks_linked = link_peaks(df_peaks, search_range=search_range,

@@ -12,6 +12,9 @@ from  .. import kymograph
 import PySimpleGUI as sg
 import os, sys, glob, time, subprocess
 import yaml
+import matplotlib.pyplot as plt
+plt.style.use('seaborn')
+
 
 DEFAULTS = {
     "ColorMap" : 'plasma',
@@ -184,7 +187,9 @@ class MultiPeakDialog(QtWidgets.QDialog):
         plot_grid.addWidget(self.rightpeak_num_combobox, 1, 1)
         # plot kinetics
         self.loopkinetics_pushbutton = QtWidgets.QPushButton("Plot Loop Kinetics")
+        self.loopkinetics_pushbutton.clicked.connect(self.on_clicking_loopkinetics_pushbutton)
         self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loov Vs Mol")
+        self.loopVsmol_pushbutton.clicked.connect(self.on_clicking_loopVsmol_pushbutton)
         plot_grid.addWidget(self.loopkinetics_pushbutton, 2, 0)
         plot_grid.addWidget(self.loopVsmol_pushbutton, 2, 1)
 
@@ -198,7 +203,13 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.window.params_change_loop_detection()
 
     def on_clicking_linkplot_pushbutton(self):
-        self.window.plot_all_peaks()
+        self.window.matplot_all_peaks()
+    
+    def on_clicking_loopkinetics_pushbutton(self):
+        self.window.matplot_loop_kinetics()
+
+    def on_clicking_loopVsmol_pushbutton(self):
+        self.window.matplot_loop_vs_sm()
 
         
 class DoubleSlider(QtWidgets.QSlider):
@@ -1031,21 +1042,65 @@ class Window(QtWidgets.QMainWindow):
             self.plot_loop_vs_sm_linetop.setValue(self.loop_region_left)
             self.plot_loop_vs_sm_linebottom.setValue(self.loop_region_right)
 
-    def plot_all_peaks(self):
+    def matplot_all_peaks(self):
         self.preview_maxpeak_on_params_change()
         self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
         self.memory_link = self.multipeak_dialog.memory_spinbox.value()
         self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
         if self.numColors == "2":
-            _ = kymograph.link_and_plot_two_color(
+            self.df_peaks_linked, self.df_peaks_linked_sm = kymograph.link_and_plot_two_color(
                     self.all_peaks_dict, self.all_smpeaks_dict,
                     search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True,)
+            df_gb = self.df_peaks_linked.groupby("particle")
+            gb_names = list(df_gb.groups.keys())
+            for i in range(len(gb_names)):
+                gb_names[i] = str(gb_names[i])
+            self.multipeak_dialog.leftpeak_num_combobox.clear()
+            self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
+            df_gb = self.df_peaks_linked_sm.groupby("particle")
+            gb_names = list(df_gb.groups.keys())
+            for i in range(len(gb_names)):
+                gb_names[i] = str(gb_names[i])
+            self.multipeak_dialog.rightpeak_num_combobox.clear()
+            self.multipeak_dialog.rightpeak_num_combobox.addItems(gb_names)
         else:
-            _ = kymograph.link_peaks(
+            self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True,)
+            df_gb = self.df_peaks_linked.groupby("particle")
+            gb_names = list(df_gb.groups.keys())
+            for i in range(len(gb_names)):
+                gb_names[i] = str(gb_names[i])
+            self.multipeak_dialog.leftpeak_num_combobox.clear()
+            self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
+
+    def matplot_loop_kinetics(self):
+        left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
+        self.loop_region_left = int(self.region_errbar.getRegion()[0])
+        self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        df_gb = self.df_peaks_linked.groupby("particle")
+        group_sel = df_gb.get_group(left_peak_no)
+        group_sel = group_sel.reset_index(drop=True)
+        peak_analyzed_dict = analyze_maxpeak(group_sel, smooth_length=7,
+                frame_width = self.loop_region_right - self.loop_region_left,
+                dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+        _, ax = plt.subplots()
+        df_peak_analyzed = peak_analyzed_dict["Max Peak"]
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                df_peak_analyzed["PeakIntensity"], 'g', label='Peak')
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                df_peak_analyzed["PeakUpIntensity"], 'r', label='Peak Up')
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                df_peak_analyzed["PeakDownIntensity"], 'b', label='Peak down')
+        ax.set_xlabel('Frame Number')
+        ax.set_ylabel('DNA/kb')
+        ax.legend()
+        plt.show()
+
+    def matplot_loop_vs_sm(self):
+        pass
 
     def save_hdf5(self):
         filepath_hdf5 = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'
