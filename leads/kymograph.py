@@ -4,19 +4,16 @@ import pandas as pd
 import h5py
 from scipy.ndimage import median_filter, white_tophat, black_tophat
 from scipy.signal import find_peaks, savgol_filter, peak_prominences
-import PySimpleGUI as sg
 import tifffile
 from skimage.io.collection import alphanumeric_key
 import pims
 import trackpy
 import matplotlib.pyplot as plt
+from . import io
 plt.style.use('seaborn')
 
 
 def read_img_stack(filepath):
-    # filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-    #                                                 filetypes = (("tif files","*.tif"),("all files","*.*")))
-
     image_meta = {}
     image_meta['filepath'] = os.path.abspath(filepath)
     with tifffile.TiffFile(filepath) as tif:
@@ -35,8 +32,7 @@ def read_img_stack(filepath):
 
 
 def read_img_seq(num_colors=2):
-    filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                    filetypes = (("tif files","*.tif *.tiff"),("all files","*.*")))
+    filepath = io.FileDialog(None, 'Open Tif File', "Tif File (*.tif *.tiff)").openFileNameDialog()
     image_meta = {}
     folderpath = os.path.dirname(filepath)
     image_meta['folderpath'] = folderpath

@@ -27,7 +27,7 @@ setuptools.setup(
         "napari",
         "pyqtgraph",
         "dask",
-        "PySimpleGUI",
+        # "PySimpleGUI",
         "pims",
         "trackpy",
         "tqdm",
