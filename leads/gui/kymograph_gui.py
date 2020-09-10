@@ -112,13 +112,13 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.prominence_slider.setOrientation(QtCore.Qt.Horizontal)
         self.prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.prominence_slider.setSingleStep(0.01)
-        self.prominence_slider.valueChanged.connect(self.on_prominence_slider_changed)
-        general_grid.addWidget(self.prominence_slider, 1, 0, 1, 2)
+        self.prominence_slider.sliderReleased.connect(self.on_prominence_slider_changed)
+        general_grid.addWidget(self.prominence_slider, 1, 0)
         # Preview
-        self.preview_checkbox = QtWidgets.QCheckBox("Preview of Peak Maximums")
+        self.preview_checkbox = QtWidgets.QCheckBox("Preview")
         self.preview_checkbox.setChecked(True)
         self.preview_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
-        general_grid.addWidget(self.preview_checkbox, 2, 0, 1, 2)
+        general_grid.addWidget(self.preview_checkbox, 1, 1)
         # DNA length
         general_grid.addWidget(QtWidgets.QLabel("DNA length:"), 3, 0)
         self.DNAlength_spinbox = QtWidgets.QDoubleSpinBox()
@@ -142,6 +142,32 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.loopcorrection_checkbox.setChecked(True)
         self.loopcorrection_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
         general_grid.addWidget(self.loopcorrection_checkbox, 5, 0, 1, 2)
+        ## Single molecule peak detection parameters
+        singlemolecule_groupbox = QtWidgets.QGroupBox("Single Molecule Parameters")
+        vbox.addWidget(singlemolecule_groupbox)
+        smol_grid = QtWidgets.QGridLayout(singlemolecule_groupbox)
+        # smol Prominence
+        smol_grid.addWidget(QtWidgets.QLabel("Peak Prominence:"), 0, 0)
+        self.smol_prominence_spinbox = QtWidgets.QDoubleSpinBox()
+        self.smol_prominence_spinbox.setRange(0, 1)
+        self.smol_prominence_spinbox.setSingleStep(0.1)
+        self.smol_prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
+        self.smol_prominence_spinbox.setKeyboardTracking(False)
+        self.smol_prominence_spinbox.valueChanged.connect(self.on_smol_prominence_spinbox_changed)
+        smol_grid.addWidget(self.smol_prominence_spinbox, 0, 1)
+        # smol Slider
+        self.smol_prominence_slider = DoubleSlider()
+        self.smol_prominence_slider.setOrientation(QtCore.Qt.Horizontal)
+        self.smol_prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
+        self.smol_prominence_slider.setSingleStep(0.01)
+        self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
+        smol_grid.addWidget(self.smol_prominence_slider, 1, 0)
+        # smol Preview
+        self.smol_preview_checkbox = QtWidgets.QCheckBox("Preview")
+        self.smol_preview_checkbox.setChecked(True)
+        self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
+        smol_grid.addWidget(self.smol_preview_checkbox, 1, 1)
+
         ## linking paramters ##
         linking_groupbox = QtWidgets.QGroupBox("Multi Peaks Linking Parameters")
         vbox.addWidget(linking_groupbox)
@@ -193,14 +219,23 @@ class MultiPeakDialog(QtWidgets.QDialog):
         plot_grid.addWidget(self.loopkinetics_pushbutton, 2, 0)
         plot_grid.addWidget(self.loopVsmol_pushbutton, 2, 1)
 
-    def on_prominence_slider_changed(self):
-        value = self.prominence_slider.value()
-        self.prominence_spinbox.setValue(value)
-    
     def on_prominence_spinbox_changed(self):
         value = self.prominence_spinbox.value()
         self.prominence_slider.setValue(value)
         self.window.params_change_loop_detection()
+
+    def on_prominence_slider_changed(self):
+        value = self.prominence_slider.value()
+        self.prominence_spinbox.setValue(value)
+
+    def on_smol_prominence_spinbox_changed(self):
+        value = self.smol_prominence_spinbox.value()
+        self.smol_prominence_slider.setValue(value)
+        self.window.params_change_smol_detection()
+
+    def on_smol_prominence_slider_changed(self):
+        value = self.smol_prominence_slider.value()
+        self.smol_prominence_spinbox.setValue(value)
 
     def on_clicking_linkplot_pushbutton(self):
         self.window.matplot_all_peaks()
@@ -409,7 +444,8 @@ class Window(QtWidgets.QMainWindow):
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
 
     def connect_signals(self):
-        self.roirect_left.sigRegionChanged.connect(self.roi_changed)
+        # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
+        self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed)
         self.infline_left.sigPositionChanged.connect(self.infiline_left_update)
         if self.numColors == "2":
             self.imv00.sigTimeChanged.connect(self.sync_videos)
@@ -605,6 +641,8 @@ class Window(QtWidgets.QMainWindow):
     def set_img_stack(self):
         print("Loading and processing the image ...")
         start_time = time.time()
+        if self.image_meta["num_colors"] == 1 and self.numColors == "2":
+            self.ui.numColorsComboBox.setCurrentText("1")
         if self.numColors == "2":
             self.imgarr_left = self.image_meta['img_arr_color_0'][self.frame_start:self.frame_end, ...]
             self.imgarr_right = self.image_meta['img_arr_color_1'][self.frame_start:self.frame_end, ...]
@@ -649,6 +687,8 @@ class Window(QtWidgets.QMainWindow):
                     'ROI width' : None,
                     'Region Errbar': [10, 30],
                 }
+                shape = list(self.imgarr_left[0, ...].shape)
+                self.params_yaml["Region Errbar"] = [1, max(shape)]
                 yaml.dump(self.params_yaml, f)
         return self.params_yaml
     
@@ -679,7 +719,7 @@ class Window(QtWidgets.QMainWindow):
             self.roirect_left.setAngle(self.params_yaml['roi1 state']['angle'])
 
             self.region3_Loop.setRegion(self.params_yaml['region3_Loop'])
-            self.region3_Loop.setRegion(self.params_yaml['region3_Loop'])
+            self.region3_noLoop.setRegion(self.params_yaml['region3_noLoop'])
 
     def processed_image_check(self):
         if self.ui.processImageCheckBox.isChecked():
@@ -898,8 +938,12 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2":
             self.d3_right = pg_da.Dock("Single Molecule detections")
             self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
-            self.plot_loop_vs_sm = pg.PlotWidget()
-            self.d3_right.addWidget(self.plot_loop_vs_sm)
+            self.plot_loop_vs_sm = pg.PlotItem()
+            self.imv31 = pg.ImageView(view=self.plot_loop_vs_sm)
+            self.imv31.setPredefinedGradient(DEFAULTS["ColorMap"])
+            self.hide_imgv_cmap(self.imv31)
+            self.d3_right.addWidget(self.imv31)
+            # self.d3_right.addWidget(self.plot_loop_vs_sm)
             self.plot_loop_vs_sm_smdata = self.plot_loop_vs_sm.plot(title='SM',
                 symbol='o', symbolSize=4, pen=pg.mkPen(None),
                 symbolPen=pg.mkPen(None), symbolBrush='r')
@@ -911,6 +955,9 @@ class Window(QtWidgets.QMainWindow):
             self.plot_loop_vs_sm_linebottom = pg.InfiniteLine(
                                     movable=False, angle=0, pen=(3, 9))
             self.plot_loop_vs_sm_smdata.getViewBox().invertY(True)
+            self.plotSmolPosData = self.plot_loop_vs_sm.scatterPlot(
+                    symbol='o', symbolSize=3, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
+
         # adding errorbar plot items for data updating later
         self.errbar_loop = pg.ErrorBarItem(beam=0.5, pen=pg.mkPen('r'))
         self.plot_loop_errbar.addItem(self.errbar_loop)
@@ -947,7 +994,7 @@ class Window(QtWidgets.QMainWindow):
         legend.addItem(self.plot_data_loopDown, 'Down')
         # loop position in imv21
         self.plotLoopPosData = self.plotLoopPos.scatterPlot(
-            symbol='o', symbolSize=5, pen=pg.mkPen('r'))#symbolBrush=pg.mkPen('r')
+            symbol='o', symbolSize=3, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))#symbolBrush=pg.mkPen('r')
         # change the default docking positions to the new one
         self.defaultDockState = self.dockarea.saveState()
         self.dockarea.restoreState(self.defaultDockState)
@@ -978,10 +1025,31 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
-                prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size, plotting=False,
+                prominence_min=self.peak_prominence_smol, pix_width=self.dna_puncta_size, plotting=False,
                 )
-        self.plotLoopPosData.setData(self.max_peak_dict["Max Peak"]["FrameNumber"],
-                                     self.max_peak_dict["Max Peak"]["PeakPosition"])
+        self.plotLoopPosData.setData(self.all_peaks_dict["All Peaks"]["FrameNumber"],
+                                     self.all_peaks_dict["All Peaks"]["PeakPosition"])
+
+    def params_change_smol_detection(self):
+        self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
+        if self.multipeak_dialog.smol_preview_checkbox.isChecked():
+            self.preview_smol_peaks_on_params_change()
+
+    def preview_smol_peaks_on_params_change(self):
+        if self.plot_loop_errbar is None:
+            self.set_loop_detection_widgets()
+        self.loop_region_left = int(self.region_errbar.getRegion()[0])
+        self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        if self.numColors == "2":
+            self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
+                self.loop_region_left, -self.loop_region_right,
+                prominence_min=self.peak_prominence_smol, 
+                pix_width=self.dna_puncta_size, plotting=False,)
+            self.plot_loop_vs_sm_smdata.clear()
+            self.plot_loop_vs_sm_loopdata.clear()
+            self.imv31.setImage(self.kymo_right_loop)
+            self.plotSmolPosData.setData(self.all_smpeaks_dict["All Peaks"]["FrameNumber"],
+                                     self.all_smpeaks_dict["All Peaks"]["PeakPosition"])
 
     def detect_loops(self):
         if self.plot_loop_errbar is None:
@@ -1019,17 +1087,19 @@ class Window(QtWidgets.QMainWindow):
         self.plot_data_loopDown_filt.setData(frame_no,
                         self.max_peak_dict["Max Peak"]["PeakIntDownFiltered"])
         if self.numColors == "2":
-            self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
-                self.loop_region_left, -self.loop_region_right,
-                prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size, plotting=False,
-                # kymo_noLoop=self.kymo_left_noLoop.T, #use this carefully, safe way is to put it none or just comment this line
-                )
+            # self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
+            #     self.loop_region_left, -self.loop_region_right,
+            #     prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size, plotting=False,
+            #     # kymo_noLoop=self.kymo_left_noLoop.T, #use this carefully, safe way is to put it none or just comment this line
+            #     )
+            self.imv31.clear()
+            self.plotSmolPosData.clear()
             self.max_smpeak_dict = analyze_maxpeak(self.all_smpeaks_dict['Max Peak'], smooth_length=7,
                     frame_width = self.loop_region_right-self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
                     )
             max_loop_sm_dict = loop_sm_dist(self.max_peak_dict, self.max_smpeak_dict, smooth_length=21)
-            self.plot_sm_dist.setData(max_loop_sm_dict['FrameNumver'],
+            self.plot_sm_dist.setData(max_loop_sm_dict['FrameNumber'],
                                       max_loop_sm_dict['PeakDiffFiltered'])
             # update data in smVsLoop plot
             self.plot_loop_vs_sm_smdata.setData(
@@ -1069,6 +1139,7 @@ class Window(QtWidgets.QMainWindow):
                     self.all_peaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True,)
+            plt.ylim(self.loop_region_left, self.loop_region_right)
             df_gb = self.df_peaks_linked.groupby("particle")
             gb_names = list(df_gb.groups.keys())
             for i in range(len(gb_names)):
@@ -1078,6 +1149,7 @@ class Window(QtWidgets.QMainWindow):
 
     def matplot_loop_kinetics(self):
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
+        right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
         self.loop_region_left = int(self.region_errbar.getRegion()[0])
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
         df_gb = self.df_peaks_linked.groupby("particle")
@@ -1094,6 +1166,16 @@ class Window(QtWidgets.QMainWindow):
                 df_peak_analyzed["PeakUpIntensity"], 'r', label='Peak Up')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 df_peak_analyzed["PeakDownIntensity"], 'b', label='Peak down')
+        if self.numColors == '2':
+            df_gb = self.df_peaks_linked_sm.groupby("particle")
+            group_sel = df_gb.get_group(right_peak_no)
+            group_sel = group_sel.reset_index(drop=True)
+            peak_analyzed_dict_sm = analyze_maxpeak(group_sel, smooth_length=7,
+                    frame_width = self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+            sel_loop_sm_dict = loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=11)
+            ax.plot(sel_loop_sm_dict["FrameNumber"],
+                    sel_loop_sm_dict["PeakDiffFiltered"], 'm', label='SMol')
         ax.set_xlabel('Frame Number')
         ax.set_ylabel('DNA/kb')
         ax.legend()
