@@ -24,9 +24,11 @@ def read_img_stack(filepath):
         imagej_metadata = tif.imagej_metadata
     if imagej_hyperstack.ndim == 3:
         num_colors = 1
+        image_meta["num_colors"] = num_colors
         image_meta['img_arr_color_' + str(0)] = imagej_hyperstack
     elif imagej_hyperstack.ndim == 4:
         num_colors = imagej_metadata['channels']
+        image_meta["num_colors"] = num_colors
         for i in range(num_colors):
             image_meta['img_arr_color_' + str(i)] = imagej_hyperstack[:, i, :, :]
     return image_meta
@@ -77,8 +79,9 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     if skip_right is 0 or None: skip_right = 1
     if kymo_noLoop is not None and correction_noLoop:
         kymo_noLoop_avg = np.sum(kymo_noLoop, axis=1)
+        kymo_noLoop_avg = 1 + (kymo_noLoop_avg/max(kymo_noLoop_avg))
         kym_arr = kym_arr / kymo_noLoop_avg[:, None]
-    kym_arr_cropped = kym_arr[skip_left:-skip_right, :]
+    kym_arr_cropped = kym_arr[skip_left : -skip_right, :]
     pix_rad = int(pix_width/2)
     maxpeak_pos_list = []
     pos_list = []
@@ -187,7 +190,7 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     peak_diff = pos_diff_kb_shift.values
     peak_diff_filt = savgol_filter(peak_diff, window_length=smooth_length, polyorder=2)
     loop_sm_dict = {
-        "FrameNumver": frame_number,
+        "FrameNumber": frame_number,
         "PeakDiff" : peak_diff, # difference in peak position in kilobases
         "PeakDiffFiltered" : peak_diff_filt, #smoothed peaks
     }
@@ -208,7 +211,7 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     return loop_sm_dict
 
 def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
-               plotting=True, axis=None):
+               plotting=True, axis=None,):
     plt.style.use('seaborn')
     df_peaks["x"] = df_peaks["PeakPosition"]
     if df_peaks_sm is None:
@@ -234,7 +237,8 @@ def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_len
         for name in gb_names:
             gp_sel = peaks_linked_gb.get_group(name)
             axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
-        axis.legend(bbox_to_anchor=(1.02, 1), borderaxespad=0)
+            axis.text(gp_sel["frame"].values[0], gp_sel["x"].values[0], str(name))
+        plt.show()
     peaks_linked = peaks_linked.reset_index(drop=True)
     return peaks_linked
 
@@ -259,8 +263,8 @@ def link_and_plot_two_color(peak_dict, peak_dict_sm,
     df_peaks_linked_sm = link_peaks(df_peaks_sm, search_range=search_range,
                           memory=memory, filter_length=filter_length,
                           plotting=plotting, axis=ax2)
-    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], 'g', alpha=0.8, label='DNA')
-    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], 'm', alpha=0.8, label='SM')
+    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.8, label='DNA')
+    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.8, label='SM')
     ax3.legend(loc=4)
     dna_height = peak_dict["shape_kymo"][0]
     kymo_length = peak_dict["shape_kymo"][1]
