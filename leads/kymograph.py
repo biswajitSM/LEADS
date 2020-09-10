@@ -234,10 +234,12 @@ def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_len
     if plotting:
         if axis is None:
             fig, axis = plt.subplots()
+            axis.set_xlabel('Frames')
+            axis.set_ylabel('Pixels')
         for name in gb_names:
             gp_sel = peaks_linked_gb.get_group(name)
             axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
-            axis.text(gp_sel["frame"].values[0], gp_sel["x"].values[0], str(name))
+            axis.text(gp_sel["frame"].values[0], np.average(gp_sel["x"].values), str(name))
         plt.show()
     peaks_linked = peaks_linked.reset_index(drop=True)
     return peaks_linked
