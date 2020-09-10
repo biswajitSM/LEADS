@@ -1317,6 +1317,8 @@ class Window(QtWidgets.QMainWindow):
         except Exception as e:
             print(e)
             pass
+        if len(self.folderpath) == 0:
+            self.folderpath = None
 
 
 def main():
