@@ -3,7 +3,7 @@ import numpy as np
 from . import crop_images_ui
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
-import PySimpleGUI as sg
+from .. import io
 
 from .. import crop_images 
 
@@ -16,6 +16,7 @@ class NapariTabs(QtWidgets.QWidget):
 
         # set defaults
         self.use_current_image_path = False
+        self.current_image_path = None
 
         # number of colors
         self.ui.numColorsCbox.setCurrentText("2")
@@ -45,6 +46,7 @@ class NapariTabs(QtWidgets.QWidget):
             self.image_meta = crop_images.daskread_img_seq(num_colors=int(self.ui.numColorsCbox.currentText()), 
             bkg_subtraction=bool(self.ui.bkgSubstractionCheckBox.checkState()))
         self.use_current_image_path = False
+        self.current_image_path = self.image_meta["folderpath"]
         for l in reversed(self.viewer.layers[:]):
             self.viewer.layers.remove(l)
         color_list = ['green', 'red', 'blue']
@@ -87,9 +89,8 @@ class NapariTabs(QtWidgets.QWidget):
         self.num_colors = self.ui.numColorsCbox.currentText()
 
     def load_imageJ_rois(self):
-        roi_file_list = sg.tkinter.filedialog.askopenfilenames(
-            title = "Select ROI files", 
-            filetypes = (("ROI files","*.roi"),("all files","*.*")))
+        roi_file_list = io.FileDialog(self.current_image_path, "Select ROI files",
+                            "ROI files *.roi").openFileNamesDialog()
         _ = crop_images.addroi_to_shapelayer(self.viewer.layers['rect_roi'], roi_file_list)
 
     def save_imageJ_rois(self):
@@ -99,7 +100,23 @@ class NapariTabs(QtWidgets.QWidget):
     def toggle_bkg_subtraction(self):
         #current_image_path = self.image_meta.get("folderpath")#self.image_meta["folderpath"]
         self.use_current_image_path = True
-        self.load_img_seq()      
+        self.load_img_seq()
+
+    def closeEvent(self, event):
+        settings = io.load_user_settings()
+        if self.folderpath is not None:
+            settings["crop"]["PWD"] = self.current_image_path
+        io.save_user_settings(settings)
+        QtWidgets.qApp.closeAllWindows()
+
+    def load_user_settings(self):
+        settings = io.load_user_settings()
+        try:
+            self.current_image_path = settings["crop"]["PWD"]
+        except Exception as e:
+            print(e)
+            pass
+
 
 def main():
     with napari.gui_qt():

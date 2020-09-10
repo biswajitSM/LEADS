@@ -6,9 +6,9 @@ import skimage as sk
 from skimage.transform import rotate
 from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
-import PySimpleGUI as sg
 import pims
-from tqdm import trange 
+from tqdm import trange
+from . import io
 
 def get_rect_params(rect, printing=False):
     length = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
@@ -53,7 +53,7 @@ def rect_shape_to_roi(arr_from_napari):
     return roi_coord
 
 def save_rectshape_as_imageJroi(shape_layer):
-    folder_to_save = sg.tkinter.filedialog.askdirectory(title="give the name of the folder to save")
+    folder_to_save = io.FileDialog().openDirectoryDialog()
     if not os.path.isdir(folder_to_save):
         print("folder to save doesn't exist")
     rect_shape = np.rint(shape_layer.data)
@@ -179,8 +179,16 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
     if path:
         folderpath = path
     else:
-        filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                        filetypes = (("tif files","*.tif *.tiff"),("all files","*.*")))
+        settings = io.load_user_settings()
+        try:
+            folderpath = settings["crop"]["PWD"]
+            filepath = io.FileDialog(folderpath, "open a tif file stack",
+                                 "Tif File (*.tif *.tiff)").openFileNameDialog()
+        except Exception as e:
+            print(e)
+            filepath = io.FileDialog(None, "open a tif file stack",
+                                 "Tif File (*.tif *.tiff)").openFileNameDialog()
+            pass
         folderpath = os.path.dirname(filepath)
     image_meta['folderpath'] = folderpath
     if filepath.endswith('tif'):
@@ -218,7 +226,11 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
         image_meta['stack_color_'+str(i)] = stack[i:num_frames:num_colors]        
         sample = imread(filenames[i])
         image_meta['min_int_color_'+str(i)] = sample.min()
-        image_meta['max_int_color_'+str(i)] = sample.max()        
+        image_meta['max_int_color_'+str(i)] = sample.max()
+    settings = io.load_user_settings()
+    if folderpath is not None:
+        settings["crop"]["PWD"] = folderpath
+    io.save_user_settings(settings)
     return image_meta
 
 

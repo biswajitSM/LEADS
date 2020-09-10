@@ -37,6 +37,10 @@ class FileDialog(QWidget):
                                                   options=options)
         return filename
 
+    def openDirectoryDialog(self):
+        dirname = QFileDialog.getExistingDirectory(directory=self.directory)
+        return dirname
+
 
 def user_settings_filename():
     home = os.path.expanduser("~")
