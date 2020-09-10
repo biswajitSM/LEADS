@@ -8,8 +8,8 @@ from tifffile import imwrite
 from ..kymograph import (read_img_seq, read_img_stack,
                 median_bkg_substration, peakfinder_savgol,
                 analyze_maxpeak, loop_sm_dist)
-from  .. import kymograph
-import PySimpleGUI as sg
+from .. import kymograph
+from .. import io
 import os, sys, glob, time, subprocess
 import yaml
 import matplotlib.pyplot as plt
@@ -105,19 +105,16 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.prominence_spinbox.setSingleStep(0.1)
         self.prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.prominence_spinbox.setKeyboardTracking(False)
-        self.prominence_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         general_grid.addWidget(self.prominence_spinbox, 0, 1)
         # Slider
         self.prominence_slider = DoubleSlider()
         self.prominence_slider.setOrientation(QtCore.Qt.Horizontal)
         self.prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.prominence_slider.setSingleStep(0.01)
-        self.prominence_slider.sliderReleased.connect(self.on_prominence_slider_changed)
         general_grid.addWidget(self.prominence_slider, 1, 0)
         # Preview
         self.preview_checkbox = QtWidgets.QCheckBox("Preview")
         self.preview_checkbox.setChecked(True)
-        self.preview_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
         general_grid.addWidget(self.preview_checkbox, 1, 1)
         # DNA length
         general_grid.addWidget(QtWidgets.QLabel("DNA length:"), 3, 0)
@@ -126,7 +123,6 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.DNAlength_spinbox.setValue(DEFAULT_PARAMETERS["DNA Length"])
         self.DNAlength_spinbox.setSuffix(" kb")
         self.DNAlength_spinbox.setKeyboardTracking(False)
-        self.DNAlength_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         general_grid.addWidget(self.DNAlength_spinbox, 3, 1)
         # Puncta size
         general_grid.addWidget(QtWidgets.QLabel("Puncta diameter:"), 4, 0)
@@ -135,12 +131,10 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.DNApuncta_spinbox.setValue(DEFAULT_PARAMETERS["DNA Puncta Diameter"])
         self.DNApuncta_spinbox.setSuffix(" pixels")
         self.DNApuncta_spinbox.setKeyboardTracking(False)
-        self.DNApuncta_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         general_grid.addWidget(self.DNApuncta_spinbox, 4, 1)
         # normalize/correction with no-loop data
         self.loopcorrection_checkbox = QtWidgets.QCheckBox("Correction with No loop region")
         self.loopcorrection_checkbox.setChecked(True)
-        self.loopcorrection_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
         general_grid.addWidget(self.loopcorrection_checkbox, 5, 0, 1, 2)
         ## Single molecule peak detection parameters
         singlemolecule_groupbox = QtWidgets.QGroupBox("Single Molecule Parameters")
@@ -153,19 +147,16 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.smol_prominence_spinbox.setSingleStep(0.1)
         self.smol_prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.smol_prominence_spinbox.setKeyboardTracking(False)
-        self.smol_prominence_spinbox.valueChanged.connect(self.on_smol_prominence_spinbox_changed)
         smol_grid.addWidget(self.smol_prominence_spinbox, 0, 1)
         # smol Slider
         self.smol_prominence_slider = DoubleSlider()
         self.smol_prominence_slider.setOrientation(QtCore.Qt.Horizontal)
         self.smol_prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.smol_prominence_slider.setSingleStep(0.01)
-        self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
         smol_grid.addWidget(self.smol_prominence_slider, 1, 0)
         # smol Preview
         self.smol_preview_checkbox = QtWidgets.QCheckBox("Preview")
         self.smol_preview_checkbox.setChecked(True)
-        self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
         smol_grid.addWidget(self.smol_preview_checkbox, 1, 1)
 
         ## linking paramters ##
@@ -195,7 +186,6 @@ class MultiPeakDialog(QtWidgets.QDialog):
         linking_grid.addWidget(self.filterlen_spinbox, 2, 1)
         # plot all peaks
         self.linkplot_pushbutton = QtWidgets.QPushButton("Link and Plot All Peaks")
-        self.linkplot_pushbutton.clicked.connect(self.on_clicking_linkplot_pushbutton)
         linking_grid.addWidget(self.linkplot_pushbutton, 3, 0, 1, 2)
         ## Kinetics ##
         plot_groupbox = QtWidgets.QGroupBox("Plotting Kinetics")
@@ -213,11 +203,24 @@ class MultiPeakDialog(QtWidgets.QDialog):
         plot_grid.addWidget(self.rightpeak_num_combobox, 1, 1)
         # plot kinetics
         self.loopkinetics_pushbutton = QtWidgets.QPushButton("Plot Loop Kinetics")
-        self.loopkinetics_pushbutton.clicked.connect(self.on_clicking_loopkinetics_pushbutton)
         self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loov Vs Mol")
-        self.loopVsmol_pushbutton.clicked.connect(self.on_clicking_loopVsmol_pushbutton)
         plot_grid.addWidget(self.loopkinetics_pushbutton, 2, 0)
         plot_grid.addWidget(self.loopVsmol_pushbutton, 2, 1)
+
+    def connect_signals(self):
+        self.prominence_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
+        self.prominence_slider.sliderReleased.connect(self.on_prominence_slider_changed)
+        self.preview_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
+        self.DNAlength_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
+        self.DNApuncta_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
+        self.loopcorrection_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
+        self.smol_prominence_spinbox.valueChanged.connect(self.on_smol_prominence_spinbox_changed)
+        self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
+        self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
+        self.linkplot_pushbutton.clicked.connect(self.on_clicking_linkplot_pushbutton)
+        self.loopVsmol_pushbutton.clicked.connect(self.on_clicking_loopVsmol_pushbutton)
+        self.loopkinetics_pushbutton.clicked.connect(self.on_clicking_loopkinetics_pushbutton)
+
 
     def on_prominence_spinbox_changed(self):
         value = self.prominence_spinbox.value()
@@ -403,8 +406,10 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2":
             self.add_col2_imvs()
         self.defaultDockState = self.dockarea.saveState()
+        self.load_user_settings()
         self.connect_signals_init()
         self.connect_signals()
+        self.multipeak_dialog.connect_signals()
 
     def init_menu_bar(self):
         menu_bar = self.menuBar()
@@ -462,11 +467,14 @@ class Window(QtWidgets.QMainWindow):
         self.dna_length_kb = self.multipeak_dialog.DNAlength_spinbox.value()
         self.dna_puncta_size = self.multipeak_dialog.DNApuncta_spinbox.value()
         self.correction_with_no_loop = self.multipeak_dialog.loopcorrection_checkbox.isChecked()
+        # parameters for smol (2nd color)
+        self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
         # multi peak paramters from analyze/peak analysis dialog
         self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
         self.memory_link = self.multipeak_dialog.memory_spinbox.value()
         self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
         # initialize parameters that don't exist yet
+        self.folderpath = None
         self.scalebar_img = None
         self.kymo_left = None
 
@@ -625,8 +633,8 @@ class Window(QtWidgets.QMainWindow):
                 self.scalebar_kymoloop_right.anchor((1, 1), (1, 1), offset=(-40, -40))
 
     def load_img_stack(self):
-        filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                        filetypes = (("tif files","*.tif"),("all files","*.*")))
+        filepath = io.FileDialog(self.folderpath, "open a tif file stack",
+                                 "Tif File (*.tif)").openFileNameDialog()
         self.filepath = filepath
         self.image_meta = read_img_stack(self.filepath)
         self.frame_start = 0
@@ -1139,7 +1147,9 @@ class Window(QtWidgets.QMainWindow):
                     self.all_peaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True,)
-            plt.ylim(self.loop_region_left, self.loop_region_right)
+            plt.hlines([0, self.loop_region_left], 0, self.all_peaks_dict["shape_kymo"][1], 'g', alpha=0.5)
+            plt.hlines([0, self.loop_region_right], 0, self.all_peaks_dict["shape_kymo"][1], 'g', alpha=0.5)
+            plt.ylim(0, self.all_peaks_dict["shape_kymo"][0])
             df_gb = self.df_peaks_linked.groupby("particle")
             gb_names = list(df_gb.groups.keys())
             for i in range(len(gb_names)):
@@ -1272,6 +1282,41 @@ class Window(QtWidgets.QMainWindow):
         self.set_img_stack()
         print("took %s seconds to reset!" % (time.time() - start_time))
         print("DONE:Changing the frames.")
+
+    def closeEvent(self, event):
+        settings = io.load_user_settings()
+        if self.folderpath is not None:
+            settings["kymograph"]["PWD"] = self.folderpath
+            settings["kymograph"]["Acquisiton Time"] = self.parameters_dialog.aqt_spinbox.value()
+            settings["kymograph"]["Pixel Size"] = self.parameters_dialog.pix_spinbox.value()
+            settings["kymograph"]['ROI width'] = self.LineROIwidth
+            settings["kymograph"]["Peak Prominence"] = self.peak_prominence
+            settings["kymograph"]["DNA Length"] = self.dna_length_kb
+            settings["kymograph"]["Puncta Size"] = self.dna_puncta_size
+            settings["kymograph"]["Peak Prominence Right"] = self.peak_prominence_smol
+            settings["kymograph"]["Search Range"] = self.search_range_link
+            settings["kymograph"]["Memory"] = self.memory_link
+            settings["kymograph"]["Filter Length"] = self.filter_length_link
+        io.save_user_settings(settings)
+        QtWidgets.qApp.closeAllWindows()
+
+    def load_user_settings(self):
+        settings = io.load_user_settings()
+        try:
+            self.folderpath = settings["kymograph"]["PWD"]
+            self.parameters_dialog.aqt_spinbox.setValue(settings["kymograph"]["Acquisiton Time"])
+            self.parameters_dialog.pix_spinbox.setValue(settings["kymograph"]["Pixel Size"])
+            self.parameters_dialog.roi_spinbox.setValue(settings["kymograph"]['ROI width'])
+            self.multipeak_dialog.prominence_spinbox.setValue(settings["kymograph"]["Peak Prominence"])
+            self.multipeak_dialog.DNAlength_spinbox.setValue(settings["kymograph"]["DNA Length"])
+            self.multipeak_dialog.DNApuncta_spinbox.setValue(settings["kymograph"]["Puncta Size"])
+            self.multipeak_dialog.smol_prominence_spinbox.setValue(settings["kymograph"]["Peak Prominence Right"])
+            self.multipeak_dialog.searchrange_spinbox.setValue(settings["kymograph"]["Search Range"])
+            self.multipeak_dialog.memory_spinbox.setValue(settings["kymograph"]["Memory"])
+            self.multipeak_dialog.filterlen_spinbox.setValue(settings["kymograph"]["Filter Length"])
+        except Exception as e:
+            print(e)
+            pass
 
 
 def main():
