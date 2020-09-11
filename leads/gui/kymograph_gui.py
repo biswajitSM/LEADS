@@ -15,7 +15,7 @@ import yaml
 import matplotlib.pyplot as plt
 plt.style.use('seaborn')
 
-
+    
 DEFAULTS = {
     "ColorMap" : 'plasma',
     }
@@ -31,7 +31,7 @@ DEFAULT_PARAMETERS = {
     "Filter Length": 10,
     }
 
-pg.setConfigOption('background', 'k') # 'w' for white and 'k' for black background
+pg.setConfigOption('background', pg.mkColor((0, 0, 0, 0))) # 'w' for white and 'k' for black background
 pg.setConfigOption('imageAxisOrder', 'col-major') # the row and cols are reversed
 
 class ParametersDialog(QtWidgets.QDialog):
@@ -249,7 +249,56 @@ class MultiPeakDialog(QtWidgets.QDialog):
     def on_clicking_loopVsmol_pushbutton(self):
         self.window.matplot_loop_vs_sm()
 
-        
+
+class ROIDialog(QtWidgets.QDialog):
+    """
+    ROI analysis and manipulation
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("ROI Analysis / Control")
+        # self.resize(300, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        ## ROI analysis
+        analysis_groupbox = QtWidgets.QGroupBox("ROI Analysis")
+        vbox.addWidget(analysis_groupbox)
+        analysis_grid = QtWidgets.QGridLayout(analysis_groupbox)
+        # set left and right labels
+        label_L = QtWidgets.QLabel("Left ROI Rect")
+        label_L.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        label_R = QtWidgets.QLabel("Right ROI Rect")
+        label_R.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        analysis_grid.addWidget(label_L, 0, 0)
+        analysis_grid.addWidget(label_R, 0, 1)
+        # extract left images
+        self.L_roiextract_pushbutton = QtWidgets.QPushButton("Extract Images(L)")
+        analysis_grid.addWidget(self.L_roiextract_pushbutton, 1, 0)
+        self.L_roiextract_pushbutton.clicked.connect(lambda: self.window.extract_rectROI('left'))
+        # extract right images
+        self.R_roiextract_pushbutton = QtWidgets.QPushButton("Extract Images(R)")
+        self.R_roiextract_pushbutton.clicked.connect(lambda: self.window.extract_rectROI('right'))
+        analysis_grid.addWidget(self.R_roiextract_pushbutton, 1, 1)
+        # extract merged images
+        self.merged_roiextract_pushbutton = QtWidgets.QPushButton("Extract and Merge Two colors")
+        self.merged_roiextract_pushbutton.clicked.connect(lambda: self.window.extract_rectROI('both'))
+        analysis_grid.addWidget(self.merged_roiextract_pushbutton, 2, 0, 1, 2)
+        # plot time trace : left
+        self.L_roitrace_pushbutton = QtWidgets.QPushButton("Time Trace(L)")
+        self.L_roitrace_pushbutton.clicked.connect(lambda: self.window.timetrace_rectROI('left'))
+        analysis_grid.addWidget(self.L_roitrace_pushbutton, 3, 0)
+        # plot time trace: right
+        self.R_roitrace_pushbutton = QtWidgets.QPushButton("Time Trace(R)")
+        self.R_roitrace_pushbutton.clicked.connect(lambda: self.window.timetrace_rectROI('right'))
+        analysis_grid.addWidget(self.R_roitrace_pushbutton, 3, 1)
+        ## ROI setting / control
+        control_groupbox = QtWidgets.QGroupBox("ROI Control")
+        vbox.addWidget(control_groupbox)
+        control_grid = QtWidgets.QGridLayout(control_groupbox)
+
 class DoubleSlider(QtWidgets.QSlider):
 
     def __init__(self, *args, **kwargs):
@@ -398,6 +447,7 @@ class Window(QtWidgets.QMainWindow):
         self.dockarea = self.ui.dockarea
         self.parameters_dialog = ParametersDialog(self)
         self.multipeak_dialog = MultiPeakDialog(self)
+        self.roi_dialog = ROIDialog(self)
         self.init_menu_bar()
         # load params
         self.load_parameters()
@@ -435,6 +485,9 @@ class Window(QtWidgets.QMainWindow):
         multipeak_action = analyze_menu.addAction("Multi Peak Analysis")
         multipeak_action.setShortcut("Ctrl+M")
         multipeak_action.triggered.connect(self.multipeak_dialog.show)
+        roi_action = analyze_menu.addAction("ROI Analysis / Control")
+        roi_action.setShortcut("Ctrl+R")
+        roi_action.triggered.connect(self.roi_dialog.show)
 
     def connect_signals_init(self):
         self.ui.numColorsComboBox.currentIndexChanged.connect(self.change_num_colors)
@@ -811,6 +864,46 @@ class Window(QtWidgets.QMainWindow):
         roi1_state_update = self.roirect_left.getState()
         roi1_state_update['size'][1] = self.parameters_dialog.roi_spinbox.value()
         self.roirect_left.setState(roi1_state_update)
+
+    def timetrace_rectROI(self, side='left'):
+        if side == 'left':
+            roi1_data = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+        elif side == 'right' and self.numColors == "2":
+            roi1_data = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+        else:
+            roi1_data = None
+        win = pg.plot()
+        win.setWindowTitle('Time trace of ROI: ' + str(side))
+        if roi1_data is not None:
+            timetrace = np.average(roi1_data, axis=(1,2))
+            win.plot(timetrace)
+            win.setYRange(0, np.max(timetrace))
+
+    def extract_rectROI(self, side='left'):
+        roi_data = None
+        win = pg.image(title='Extracted images of ROI: ' + str(side))
+        if side == 'left':
+            roi_data = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+            win.setPredefinedGradient(DEFAULTS["ColorMap"])
+            win.setImage(roi_data)
+        elif side == 'right' and self.numColors == "2":
+            roi_data = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+            win.setPredefinedGradient(DEFAULTS["ColorMap"])
+            win.setImage(roi_data)
+        elif side == 'both' and self.numColors == "2":
+            roi_data_1 = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+            roi2_data_2 = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+            roi_data = np.concatenate((roi2_data_2[:, :, :, np.newaxis],
+                                        roi_data_1[:, :, :, np.newaxis],
+                                        np.zeros_like(roi2_data_2[:, :, :, np.newaxis])),
+                                        axis=3)
+            win.setImage(roi_data, levelMode='rgba')        
 
     def infiline_left_update(self):
         frame_numer = int(self.infline_left.value())
