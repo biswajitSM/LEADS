@@ -281,6 +281,75 @@ def link_and_plot_two_color(peak_dict, peak_dict_sm,
     return df_peaks_linked, df_peaks_linked_sm
 
 
+def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
+                      dna_length=48.5, dna_length_um=16, pix_width=11, pix_size=0.115,
+                     interpolation=True):
+    '''
+    frame_width: same as the DA end to end distance
+    pix_size: in micrometer
+    '''
+    if frame_width is None: frame_width = df_linked["PeakPosition"].max() - df_linked["PeakPosition"].min()
+    pix_rad = pix_width/2
+    df_linked["TotalIntensity"] = df_linked["PeakIntensity"] + df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
+    df_linked["NonPeakIntensity"] = df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
+    df_linked_gb = df_linked.groupby("FrameNumber")
+    gb_names = df_linked_gb.groups.keys()
+    def calc_nonpeak(gb_sel):
+        num_peaks = len(gb_sel)
+        if num_peaks > 1:
+            gb_sel_sum = gb_sel.sum(axis=0)
+            total_avg_int = gb_sel_sum["TotalIntensity"] / num_peaks
+            non_peak_int = total_avg_int - gb_sel_sum["PeakIntensity"]
+            gb_sel["NonPeakIntensity"] = non_peak_int
+        return gb_sel
+    df_linked_gb = df_linked_gb.transform(calc_nonpeak)
+    df_linked_gb["FrameNumber"] = df_linked["FrameNumber"]
+    df_linked_gb = df_linked_gb.reset_index(drop=True)
+    if convert_to_kb:
+        avg_int_pix = df_linked_gb["TotalIntensity"] / frame_width
+        df_linked_gb['PeakIntensity'] = dna_length * (df_linked_gb['PeakIntensity'] - 2*pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
+        df_linked_gb['PeakUpIntensity'] = dna_length * (df_linked_gb['PeakUpIntensity'] + pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
+        df_linked_gb['PeakDownIntensity'] = dna_length * (df_linked_gb['PeakDownIntensity'] + pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
+        df_linked_gb['TotalIntensity'] = dna_length * df_linked_gb['TotalIntensity'] / df_linked["TotalIntensity"]
+        df_linked_gb['NonPeakIntensity'] = dna_length * (df_linked_gb['NonPeakIntensity'] + 2*pix_rad*avg_int_pix) / df_linked["TotalIntensity"]
+    kb_per_um = dna_length_um/dna_length
+    non_peak_dna_um = kb_per_um * df_linked_gb['NonPeakIntensity'].values
+    nonpeak_rel_ext = frame_width * pix_size / non_peak_dna_um
+    df_linked_gb["NonPeakRelativeExtension"] = nonpeak_rel_ext
+    if interpolation:
+        F = np.interp(nonpeak_rel_ext, RELATIVE_EXTENSION, FORCE)
+    else:
+        F = force_wlc(nonpeak_rel_ext, Plen=50)
+    df_linked_gb["Force"] = F
+    return df_linked_gb
+
+
+def force_wlc(rel_ext, Plen=50):
+    '''
+    rel_ext : relative extension
+    Plen : Persistence Length in nm
+    '''
+    kbT = 4.114 # unit: pN⋅nm
+    sqt = 1 / (4 * (1 - rel_ext)**2)
+    F = (kbT/Plen)*(sqt - 0.25 + rel_ext)
+    return F
+
+
+RELATIVE_EXTENSION = np.array([0.23753, 0.26408, 0.37554, 0.49173, 0.63215, 0.70054, 0.73801,
+                               0.76414, 0.77522, 0.78494, 0.79982, 0.81246, 0.82065, 0.82519,
+                               0.83706, 0.84505, 0.84763, 0.85419, 0.86057, 0.8663 , 0.8697 ,
+                               0.87641, 0.87783, 0.87796, 0.88391, 0.88784, 0.88949, 0.8944 ,
+                               0.89656, 0.89834, 0.89997, 0.90261, 0.90348, 0.90675, 0.90767,
+                               0.91085, 0.91311, 0.9126 , 0.91601, 0.91726, 0.91791, 0.91901,
+                               0.92   , 0.92409, 0.92469, 0.92648, 0.92733, 0.92774, 0.92833,
+                               0.93037])
+
+FORCE = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1. , 1.1, 1.2, 1.3,
+                  1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2. , 2.1, 2.2, 2.3, 2.4, 2.5, 2.6,
+                  2.7, 2.8, 2.9, 3. , 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9,
+                  4. , 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5. ])
+
+
 if __name__ == "__main__":
     print('kymograph module imported')
     

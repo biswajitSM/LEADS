@@ -14,6 +14,7 @@ import os, sys, glob, time, subprocess
 import yaml
 import matplotlib.pyplot as plt
 plt.style.use('seaborn')
+from scipy.signal import savgol_filter
 
     
 DEFAULTS = {
@@ -206,6 +207,12 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loov Vs Mol")
         plot_grid.addWidget(self.loopkinetics_pushbutton, 2, 0)
         plot_grid.addWidget(self.loopVsmol_pushbutton, 2, 1)
+        # include Force
+        self.force_checkbox = QtWidgets.QCheckBox("Include Force")
+        self.force_combobox = QtWidgets.QComboBox()
+        self.force_combobox.addItems(["Analytical", "Interpolation"])
+        plot_grid.addWidget(self.force_checkbox, 3, 0)
+        plot_grid.addWidget(self.force_combobox, 3, 1)
 
     def connect_signals(self):
         self.prominence_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
@@ -466,12 +473,15 @@ class Window(QtWidgets.QMainWindow):
 
         """ File """
         file_menu = menu_bar.addMenu("File")
-        open_action = file_menu.addAction("Open image stack")
+        open_action = file_menu.addAction("Open image stack (.tif/.tiff)")
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.load_img_stack)
-        save_action = file_menu.addAction("Save")
+        save_action = file_menu.addAction("Save (yaml and hdf5)")
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save)
+        loadyaml_action = file_menu.addAction("Load .yaml params")
+        loadyaml_action.setShortcut("Ctrl+Y")
+        loadyaml_action.triggered.connect(self.load_yaml_params_external)
         """ View """
         view_menu = menu_bar.addMenu("View")
         default_action = view_menu.addAction("Default View State")
@@ -752,7 +762,15 @@ class Window(QtWidgets.QMainWindow):
                 self.params_yaml["Region Errbar"] = [1, max(shape)]
                 yaml.dump(self.params_yaml, f)
         return self.params_yaml
-    
+
+    def load_yaml_params_external(self):
+        filepath_yaml = io.FileDialog(self.folderpath, "open yaml parameter file",
+                                 "yaml (*.yaml)").openFileNameDialog()
+        if os.path.isfile(filepath_yaml):
+            with open(filepath_yaml) as f:
+                self.params_yaml = yaml.load(f)
+        self.set_yaml_params()
+
     def save_yaml_params(self):
         self.params_yaml = self.load_yaml_params()
         self.params_yaml['Pixel Size'] = self.parameters_dialog.pix_spinbox.value()
@@ -1057,7 +1075,7 @@ class Window(QtWidgets.QMainWindow):
                                     movable=False, angle=0, pen=(3, 9))
             self.plot_loop_vs_sm_smdata.getViewBox().invertY(True)
             self.plotSmolPosData = self.plot_loop_vs_sm.scatterPlot(
-                    symbol='o', symbolSize=3, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
+                    symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
 
         # adding errorbar plot items for data updating later
         self.errbar_loop = pg.ErrorBarItem(beam=0.5, pen=pg.mkPen('r'))
@@ -1095,7 +1113,7 @@ class Window(QtWidgets.QMainWindow):
         legend.addItem(self.plot_data_loopDown, 'Down')
         # loop position in imv21
         self.plotLoopPosData = self.plotLoopPos.scatterPlot(
-            symbol='o', symbolSize=3, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))#symbolBrush=pg.mkPen('r')
+            symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))#symbolBrush=pg.mkPen('r')
         # change the default docking positions to the new one
         self.defaultDockState = self.dockarea.saveState()
         self.dockarea.restoreState(self.defaultDockState)
@@ -1279,6 +1297,21 @@ class Window(QtWidgets.QMainWindow):
             sel_loop_sm_dict = loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=11)
             ax.plot(sel_loop_sm_dict["FrameNumber"],
                     sel_loop_sm_dict["PeakDiffFiltered"], 'm', label='SMol')
+        if self.multipeak_dialog.force_checkbox.isChecked():
+            if self.multipeak_dialog.force_combobox.currentText() == "Interpolation":
+                interpolation_bool = True
+            else: interpolation_bool = False
+            linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
+                    frame_width=self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, dna_length_um=16,
+                    pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
+                    interpolation=interpolation_bool)
+            ax_f = ax.twinx()
+            ax_f.plot(linkedpeaks_analyzed["FrameNumber"],
+                      savgol_filter(linkedpeaks_analyzed["Force"].values, window_length=11, polyorder=2),
+                      '.', label='Force')
+            ax_f.set_ylabel('Force / pN')
+            ax_f.legend()
         ax.set_xlabel('Frame Number')
         ax.set_ylabel('DNA/kb')
         ax.legend()
