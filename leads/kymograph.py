@@ -290,28 +290,27 @@ def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
     '''
     if frame_width is None: frame_width = df_linked["PeakPosition"].max() - df_linked["PeakPosition"].min()
     pix_rad = pix_width/2
-    df_linked["TotalIntensity"] = df_linked["PeakIntensity"] + df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
-    df_linked["NonPeakIntensity"] = df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
-    df_linked_gb = df_linked.groupby("FrameNumber")
+    df_linked_cp = df_linked.copy(deep=True)
+    df_linked_cp["TotalIntensity"] = df_linked["PeakIntensity"] + df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
+    df_linked_cp["NonPeakIntensity"] = df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
+    df_linked_gb = df_linked_cp.groupby("FrameNumber")
     gb_names = df_linked_gb.groups.keys()
-    def calc_nonpeak(gb_sel):
+    for name in gb_names:
+        gb_sel = df_linked_gb.get_group(name)
+        # gb_sel.apply(lambda x: x)
         num_peaks = len(gb_sel)
         if num_peaks > 1:
-            gb_sel_sum = gb_sel.sum(axis=0)
-            total_avg_int = gb_sel_sum["TotalIntensity"] / num_peaks
-            non_peak_int = total_avg_int - gb_sel_sum["PeakIntensity"]
-            gb_sel["NonPeakIntensity"] = non_peak_int
-        return gb_sel
-    df_linked_gb = df_linked_gb.transform(calc_nonpeak)
-    df_linked_gb["FrameNumber"] = df_linked["FrameNumber"]
-    df_linked_gb = df_linked_gb.reset_index(drop=True)
+            total_avg_int = np.sum(gb_sel["TotalIntensity"][...]) / num_peaks
+            non_peak_int = total_avg_int - np.sum(gb_sel["PeakIntensity"][...])
+            df_linked_cp["NonPeakIntensity"][df_linked_cp["FrameNumber"]==name] = non_peak_int
+    df_linked_gb = df_linked_cp.copy(deep=True)
     if convert_to_kb:
         avg_int_pix = df_linked_gb["TotalIntensity"] / frame_width
         df_linked_gb['PeakIntensity'] = dna_length * (df_linked_gb['PeakIntensity'] - 2*pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
         df_linked_gb['PeakUpIntensity'] = dna_length * (df_linked_gb['PeakUpIntensity'] + pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
         df_linked_gb['PeakDownIntensity'] = dna_length * (df_linked_gb['PeakDownIntensity'] + pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
-        df_linked_gb['TotalIntensity'] = dna_length * df_linked_gb['TotalIntensity'] / df_linked["TotalIntensity"]
-        df_linked_gb['NonPeakIntensity'] = dna_length * (df_linked_gb['NonPeakIntensity'] + 2*pix_rad*avg_int_pix) / df_linked["TotalIntensity"]
+        df_linked_gb['TotalIntensity'] = dna_length * df_linked_gb['TotalIntensity'] / df_linked_gb["TotalIntensity"]
+        df_linked_gb['NonPeakIntensity'] = dna_length * (df_linked_gb['NonPeakIntensity'] + 2*pix_rad*avg_int_pix) / df_linked_cp["TotalIntensity"]
     kb_per_um = dna_length_um/dna_length
     non_peak_dna_um = kb_per_um * df_linked_gb['NonPeakIntensity'].values
     nonpeak_rel_ext = frame_width * pix_size / non_peak_dna_um

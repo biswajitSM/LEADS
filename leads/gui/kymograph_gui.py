@@ -210,7 +210,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # include Force
         self.force_checkbox = QtWidgets.QCheckBox("Include Force")
         self.force_combobox = QtWidgets.QComboBox()
-        self.force_combobox.addItems(["Analytical", "Interpolation"])
+        self.force_combobox.addItems(["Interpolation", "Analytical"])
         plot_grid.addWidget(self.force_checkbox, 3, 0)
         plot_grid.addWidget(self.force_combobox, 3, 1)
 
@@ -1306,12 +1306,16 @@ class Window(QtWidgets.QMainWindow):
                     dna_length=self.dna_length_kb, dna_length_um=16,
                     pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
                     interpolation=interpolation_bool)
+            df_gb = linkedpeaks_analyzed.groupby("particle")
+            group_sel = df_gb.get_group(left_peak_no)
+            group_sel = group_sel.reset_index(drop=True)
+            print(group_sel)
             ax_f = ax.twinx()
-            ax_f.plot(linkedpeaks_analyzed["FrameNumber"],
-                      savgol_filter(linkedpeaks_analyzed["Force"].values, window_length=11, polyorder=2),
+            ax_f.plot(group_sel["FrameNumber"],
+                      savgol_filter(group_sel["Force"].values, window_length=11, polyorder=2),
                       '.', label='Force')
             ax_f.set_ylabel('Force / pN')
-            ax_f.legend()
+            ax_f.legend(loc='lower right')
         ax.set_xlabel('Frame Number')
         ax.set_ylabel('DNA/kb')
         ax.legend()
