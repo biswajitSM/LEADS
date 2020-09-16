@@ -15,7 +15,7 @@ import yaml
 import matplotlib.pyplot as plt
 plt.style.use('seaborn')
 from scipy.signal import savgol_filter
-
+import h5py
     
 DEFAULTS = {
     "ColorMap" : 'plasma',
@@ -540,6 +540,9 @@ class Window(QtWidgets.QMainWindow):
         self.folderpath = None
         self.scalebar_img = None
         self.kymo_left = None
+        self.max_peak_dict = None
+        self.df_peaks_linked = None
+        self.linkedpeaks_analyzed = None
 
     def add_col1_imvs(self):
         self.imv00 = pg.ImageView(name='color 1')
@@ -638,11 +641,12 @@ class Window(QtWidgets.QMainWindow):
             self.d0_left.close()
             self.d1_left.close()
             self.d2_left.close()
+            if self.plot_loop_errbar is not None:
+                self.d3_left.close()
             self.d0_right.close()
             self.d1_right.close()
             self.d2_right.close()
             if self.plot_loop_errbar is not None:
-                self.d3_left.close()
                 self.d3_right.close()
         except: print('already removed')
 
@@ -790,6 +794,8 @@ class Window(QtWidgets.QMainWindow):
     def save(self):
         self.save_yaml_params()
         print("Parameters saved to yaml file")
+        self.save_hdf5()
+        print("output and metadata saved to hdf5 file")
 
     def set_yaml_params(self):
         if self.params_yaml['ROI width'] is not None:
@@ -1301,12 +1307,12 @@ class Window(QtWidgets.QMainWindow):
             if self.multipeak_dialog.force_combobox.currentText() == "Interpolation":
                 interpolation_bool = True
             else: interpolation_bool = False
-            linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
+            self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
                     frame_width=self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, dna_length_um=16,
                     pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
                     interpolation=interpolation_bool)
-            df_gb = linkedpeaks_analyzed.groupby("particle")
+            df_gb = self.linkedpeaks_analyzed.groupby("particle")
             group_sel = df_gb.get_group(left_peak_no)
             group_sel = group_sel.reset_index(drop=True)
             print(group_sel)
@@ -1326,10 +1332,39 @@ class Window(QtWidgets.QMainWindow):
 
     def save_hdf5(self):
         filepath_hdf5 = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'
-        if not os.path.isfile(filepath_hdf5):
-            h5_analysis = h5py.File(filepath_hdf5, 'w')
-        else:
-            h5_analysis = h5py.File(filepath_hdf5, 'r+')
+        h5_analysis = h5py.File(filepath_hdf5, 'w')
+        # save parameters
+        params_group = h5_analysis.create_group("parameters")
+        params_group['Acquisition Time'] = self.acquisitionTime
+        params_group['Pixel Size'] = self.pixelSize
+        if self.plot_loop_errbar is not None:
+            params_group['region3_noLoop'] = list(self.region3_noLoop.getRegion())
+            params_group['region3_Loop'] = list(self.region3_Loop.getRegion())
+            params_group["DNA ends"] = list(self.region_errbar.getRegion())
+        roi1_group = params_group.create_group("roi1")
+        roi1_group['position'] = list(self.roirect_left.pos())
+        roi1_group['size'] = list(self.roirect_left.size())
+        roi1_group['angle'] = float(self.roirect_left.angle())
+        # save analyzed data
+        if self.kymo_left is not None:
+            h5_analysis["Left Kymograph"] = self.kymo_left.T
+            h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
+            h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
+            if self.numColors == "2":
+                h5_analysis["Right Kymograph"] = self.kymo_right.T
+                h5_analysis["Right Kymograph Loop"] = self.kymo_right_loop.T
+                h5_analysis["Right Kymograph No Loop"] = self.kymo_right_noLoop.T
+        if self.max_peak_dict is not None:
+            h5_analysis["Left Max Peaks"] = self.max_peak_dict["Max Peak"].to_records()
+            if self.numColors == "2":
+                h5_analysis["Right Max Peaks"] = self.max_smpeak_dict["Max Peak"].to_records()
+        if self.df_peaks_linked is not None:
+            h5_analysis["Left Linked Peaks"] = self.df_peaks_linked.to_records()
+            if self.numColors == "2":
+                h5_analysis["Right Linked Peaks"] = self.df_peaks_linked_sm.to_records()
+        if self.linkedpeaks_analyzed is not None:
+            h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
+        h5_analysis.close()
 
     def save_section(self):
         temp_folder = os.path.abspath(os.path.join(self.folderpath, 'temp'))
