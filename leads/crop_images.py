@@ -3,6 +3,7 @@ import glob
 import numpy as np
 from scipy import ndimage, misc
 import skimage as sk
+from skimage.filters import threshold_otsu
 from skimage.transform import rotate
 from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
@@ -192,7 +193,6 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
     # Stack into one large dask.array
     stack = da.stack(dask_arrays, axis=0)
     print('Whole Stack shape: ', stack.shape)  # (nfiles, nz, ny, nx)
-    
 
     # background subtraction
     if bkg_subtraction:
@@ -207,11 +207,42 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
         sample = imread(filenames[i])
         image_meta['min_int_color_'+str(i)] = sample.min()
         image_meta['max_int_color_'+str(i)] = sample.max()
-        image_meta['min_contrast_color_'+str(i)] = sample.min()
-        image_meta['max_contrast_color_'+str(i)] = sk.filters.threshold_otsu(sample)
-        print('adjusted max value: {}'.format(sk.filters.threshold_otsu(sample)))
+        minVal, maxVal = AutoAdjustContrast(sample)
+        image_meta['min_contrast_color_'+str(i)] = minVal
+        image_meta['max_contrast_color_'+str(i)] = maxVal
+        print('Channel {}: adjusted min intensity {}, adjusted max intensity {}'.format(i, round(minVal), round(maxVal)))    
     return image_meta
 
+def AutoAdjustContrast(img):
+    size = img.shape
+    pixelCount = size[0]*size[1]
+    limit = pixelCount/10
+    AUTO_THRESHOLD = 5000/2
+    threshold = pixelCount/AUTO_THRESHOLD
+    hist = np.histogram(img, bins=255, range=(img.min(), img.max()))
+    i = -1
+    found = False
+    while (not found) and (i<255):
+        i = i+1
+        count = hist[0][i] #hist[0] are histogram counts
+        if count>limit: count = 0
+        found = count>threshold
+    hmin = i
+    found = False
+    i = 255
+    while (not found) and (i>0):
+        i = i-1
+        count = hist[0][i]
+        if (count>limit): count = 0
+        found = count > threshold
+    hmax = i
+    if (hmax<hmin):
+        hmin = img.min()
+        hmax = img.max()
+    else: # map back to real pixel values
+        hmin = hist[1][hmin]
+        hmax = hist[1][hmax]
+    return hmin, hmax
 
 from scipy.ndimage import white_tophat, black_tophat
 def bkg_substration(txy_array, size_bgs=150, light_bg=False):
