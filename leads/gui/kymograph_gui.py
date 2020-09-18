@@ -1,5 +1,6 @@
 import numpy as np
-import pyqtgraph.Qt as pg_qt #import QtCore, QtGui
+from PyQt5 import QtWidgets, QtCore, QtGui
+import qdarkstyle
 import pyqtgraph as pg
 import pyqtgraph.dockarea as pg_da
 import pyqtgraph.exporters
@@ -7,52 +8,499 @@ from tifffile import imwrite
 from ..kymograph import (read_img_seq, read_img_stack,
                 median_bkg_substration, peakfinder_savgol,
                 analyze_maxpeak, loop_sm_dist)
-from .kymograph_ui import Ui_Form
-import PySimpleGUI as sg
+from .. import kymograph
+from .. import io
 import os, sys, glob, time, subprocess
 import yaml
-
+import matplotlib.pyplot as plt
+plt.style.use('seaborn')
+from scipy.signal import savgol_filter
+import h5py
+    
 DEFAULTS = {
     "ColorMap" : 'plasma',
-}
+    }
+DEFAULT_PARAMETERS = {
+    "Acquisition Time" : 100, # in millisecond
+    "Pixel Size" : 115, # in nanometer
+    "ROI Width" : 11,
+    "Peak Prominence" : 0.25,
+    "DNA Length" : 48.5, # in kilo bases
+    "DNA Puncta Diameter" : 9,
+    "Search Range" : 10,
+    "Memory" : 5,
+    "Filter Length": 10,
+    }
 
-pg.setConfigOption('background', 'k') # 'w' for white and 'k' for black background
+pg.setConfigOption('background', pg.mkColor((0, 0, 0, 0))) # 'w' for white and 'k' for black background
 pg.setConfigOption('imageAxisOrder', 'col-major') # the row and cols are reversed
-class kymographGui(pg_qt.QtGui.QWidget):
+
+class ParametersDialog(QtWidgets.QDialog):
+    """ The dialog showing parameters """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Parameters")
+        self.resize(300, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        general_groupbox = QtWidgets.QGroupBox("General")
+        vbox.addWidget(general_groupbox)
+        general_grid = QtWidgets.QGridLayout(general_groupbox)
+
+        # Pixel Size
+        general_grid.addWidget(QtWidgets.QLabel("Pixel Size:"), 0, 0)
+        self.pix_spinbox = QtWidgets.QSpinBox()
+        self.pix_spinbox.setRange(0, 1e3)
+        self.pix_spinbox.setSuffix(" nm")
+        self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
+        self.pix_spinbox.setKeyboardTracking(False)
+        self.pix_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.pix_spinbox, 0, 1)
+
+        # ROI Width
+        general_grid.addWidget(QtWidgets.QLabel("ROI Size:"), 1, 0)
+        self.roi_spinbox = QtWidgets.QSpinBox()
+        self.roi_spinbox.setRange(0, 1e3)
+        self.roi_spinbox.setSuffix(" pixels")
+        self.roi_spinbox.setValue(DEFAULT_PARAMETERS["ROI Width"])
+        self.roi_spinbox.setKeyboardTracking(False)
+        self.roi_spinbox.valueChanged.connect(self.on_roi_change)
+        general_grid.addWidget(self.roi_spinbox, 1, 1)
+
+        # Acquisition Time
+        general_grid.addWidget(QtWidgets.QLabel("Acquisition time:"), 2, 0)
+        self.aqt_spinbox = QtWidgets.QSpinBox()
+        self.aqt_spinbox.setRange(0, 1e5)
+        self.aqt_spinbox.setSuffix(" ms")
+        self.aqt_spinbox.setValue(DEFAULT_PARAMETERS["Acquisition Time"])
+        self.aqt_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.aqt_spinbox, 2, 1)
+
+    def on_paramter_change(self):
+        self.window.set_scalebar()
+
+    def on_roi_change(self):
+        self.window.set_roi_width()
+
+class MultiPeakDialog(QtWidgets.QDialog):
+    """ The dialog showing Multipeak analysis """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Peak Analysis")
+        self.resize(300, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        general_groupbox = QtWidgets.QGroupBox("Peak Finding Parameters")
+        vbox.addWidget(general_groupbox)
+        general_grid = QtWidgets.QGridLayout(general_groupbox)
+        ## prominence ##
+        general_grid.addWidget(QtWidgets.QLabel("Peak Prominence:"), 0, 0)
+        self.prominence_spinbox = QtWidgets.QDoubleSpinBox()
+        self.prominence_spinbox.setRange(0, 1)
+        self.prominence_spinbox.setSingleStep(0.1)
+        self.prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
+        self.prominence_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.prominence_spinbox, 0, 1)
+        # Slider
+        self.prominence_slider = DoubleSlider()
+        self.prominence_slider.setOrientation(QtCore.Qt.Horizontal)
+        self.prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
+        self.prominence_slider.setSingleStep(0.01)
+        general_grid.addWidget(self.prominence_slider, 1, 0)
+        # Preview
+        self.preview_checkbox = QtWidgets.QCheckBox("Preview")
+        self.preview_checkbox.setChecked(True)
+        general_grid.addWidget(self.preview_checkbox, 1, 1)
+        # DNA length
+        general_grid.addWidget(QtWidgets.QLabel("DNA length:"), 3, 0)
+        self.DNAlength_spinbox = QtWidgets.QDoubleSpinBox()
+        self.DNAlength_spinbox.setRange(1, 1e3)
+        self.DNAlength_spinbox.setValue(DEFAULT_PARAMETERS["DNA Length"])
+        self.DNAlength_spinbox.setSuffix(" kb")
+        self.DNAlength_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.DNAlength_spinbox, 3, 1)
+        # Puncta size
+        general_grid.addWidget(QtWidgets.QLabel("Puncta diameter:"), 4, 0)
+        self.DNApuncta_spinbox = QtWidgets.QSpinBox()
+        self.DNApuncta_spinbox.setRange(1, 1e3)
+        self.DNApuncta_spinbox.setValue(DEFAULT_PARAMETERS["DNA Puncta Diameter"])
+        self.DNApuncta_spinbox.setSuffix(" pixels")
+        self.DNApuncta_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.DNApuncta_spinbox, 4, 1)
+        # normalize/correction with no-loop data
+        self.loopcorrection_checkbox = QtWidgets.QCheckBox("Correction with No loop region")
+        self.loopcorrection_checkbox.setChecked(True)
+        general_grid.addWidget(self.loopcorrection_checkbox, 5, 0, 1, 2)
+        ## Single molecule peak detection parameters
+        singlemolecule_groupbox = QtWidgets.QGroupBox("Single Molecule Parameters")
+        vbox.addWidget(singlemolecule_groupbox)
+        smol_grid = QtWidgets.QGridLayout(singlemolecule_groupbox)
+        # smol Prominence
+        smol_grid.addWidget(QtWidgets.QLabel("Peak Prominence:"), 0, 0)
+        self.smol_prominence_spinbox = QtWidgets.QDoubleSpinBox()
+        self.smol_prominence_spinbox.setRange(0, 1)
+        self.smol_prominence_spinbox.setSingleStep(0.1)
+        self.smol_prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
+        self.smol_prominence_spinbox.setKeyboardTracking(False)
+        smol_grid.addWidget(self.smol_prominence_spinbox, 0, 1)
+        # smol Slider
+        self.smol_prominence_slider = DoubleSlider()
+        self.smol_prominence_slider.setOrientation(QtCore.Qt.Horizontal)
+        self.smol_prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
+        self.smol_prominence_slider.setSingleStep(0.01)
+        smol_grid.addWidget(self.smol_prominence_slider, 1, 0)
+        # smol Preview
+        self.smol_preview_checkbox = QtWidgets.QCheckBox("Preview")
+        self.smol_preview_checkbox.setChecked(True)
+        smol_grid.addWidget(self.smol_preview_checkbox, 1, 1)
+
+        ## linking paramters ##
+        linking_groupbox = QtWidgets.QGroupBox("Multi Peaks Linking Parameters")
+        vbox.addWidget(linking_groupbox)
+        linking_grid = QtWidgets.QGridLayout(linking_groupbox)
+        # search range
+        linking_grid.addWidget(QtWidgets.QLabel("Search Range:"), 0, 0)
+        self.searchrange_spinbox = QtWidgets.QSpinBox()
+        self.searchrange_spinbox.setRange(1, 1e3)
+        self.searchrange_spinbox.setValue(DEFAULT_PARAMETERS["Search Range"])
+        self.searchrange_spinbox.setKeyboardTracking(False)
+        linking_grid.addWidget(self.searchrange_spinbox, 0, 1)
+        # Memory
+        linking_grid.addWidget(QtWidgets.QLabel("Memory:"), 1, 0)
+        self.memory_spinbox = QtWidgets.QSpinBox()
+        self.memory_spinbox.setRange(1, 1e3)
+        self.memory_spinbox.setValue(DEFAULT_PARAMETERS["Memory"])
+        self.memory_spinbox.setKeyboardTracking(False)
+        linking_grid.addWidget(self.memory_spinbox, 1, 1)
+        # Filter length
+        linking_grid.addWidget(QtWidgets.QLabel("Filter Length:"), 2, 0)
+        self.filterlen_spinbox = QtWidgets.QSpinBox()
+        self.filterlen_spinbox.setRange(1, 1e3)
+        self.filterlen_spinbox.setValue(DEFAULT_PARAMETERS["Filter Length"])
+        self.filterlen_spinbox.setKeyboardTracking(False)
+        linking_grid.addWidget(self.filterlen_spinbox, 2, 1)
+        # plot all peaks
+        self.linkplot_pushbutton = QtWidgets.QPushButton("Link and Plot All Peaks")
+        linking_grid.addWidget(self.linkplot_pushbutton, 3, 0, 1, 2)
+        ## Kinetics ##
+        plot_groupbox = QtWidgets.QGroupBox("Plotting Kinetics")
+        vbox.addWidget(plot_groupbox)
+        plot_grid = QtWidgets.QGridLayout(plot_groupbox)
+        # left section fro peak-number
+        plot_grid.addWidget(QtWidgets.QLabel("Left Peak No:"), 0, 0)
+        self.leftpeak_num_combobox = QtWidgets.QComboBox()
+        self.leftpeak_num_combobox.addItems(["1"])
+        plot_grid.addWidget(self.leftpeak_num_combobox, 0, 1)
+        # right section fro peak-number
+        plot_grid.addWidget(QtWidgets.QLabel("Right Peak No:"), 1, 0)
+        self.rightpeak_num_combobox = QtWidgets.QComboBox()
+        self.rightpeak_num_combobox.addItems(["1"])
+        plot_grid.addWidget(self.rightpeak_num_combobox, 1, 1)
+        # plot kinetics
+        self.loopkinetics_pushbutton = QtWidgets.QPushButton("Plot Loop Kinetics")
+        self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loov Vs Mol")
+        plot_grid.addWidget(self.loopkinetics_pushbutton, 2, 0)
+        plot_grid.addWidget(self.loopVsmol_pushbutton, 2, 1)
+        # include Force
+        self.force_checkbox = QtWidgets.QCheckBox("Include Force")
+        self.force_combobox = QtWidgets.QComboBox()
+        self.force_combobox.addItems(["Interpolation", "Analytical"])
+        plot_grid.addWidget(self.force_checkbox, 3, 0)
+        plot_grid.addWidget(self.force_combobox, 3, 1)
+
+    def connect_signals(self):
+        self.prominence_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
+        self.prominence_slider.sliderReleased.connect(self.on_prominence_slider_changed)
+        self.preview_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
+        self.DNAlength_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
+        self.DNApuncta_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
+        self.loopcorrection_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
+        self.smol_prominence_spinbox.valueChanged.connect(self.on_smol_prominence_spinbox_changed)
+        self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
+        self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
+        self.linkplot_pushbutton.clicked.connect(self.on_clicking_linkplot_pushbutton)
+        self.loopVsmol_pushbutton.clicked.connect(self.on_clicking_loopVsmol_pushbutton)
+        self.loopkinetics_pushbutton.clicked.connect(self.on_clicking_loopkinetics_pushbutton)
+
+
+    def on_prominence_spinbox_changed(self):
+        value = self.prominence_spinbox.value()
+        self.prominence_slider.setValue(value)
+        self.window.params_change_loop_detection()
+
+    def on_prominence_slider_changed(self):
+        value = self.prominence_slider.value()
+        self.prominence_spinbox.setValue(value)
+
+    def on_smol_prominence_spinbox_changed(self):
+        value = self.smol_prominence_spinbox.value()
+        self.smol_prominence_slider.setValue(value)
+        self.window.params_change_smol_detection()
+
+    def on_smol_prominence_slider_changed(self):
+        value = self.smol_prominence_slider.value()
+        self.smol_prominence_spinbox.setValue(value)
+
+    def on_clicking_linkplot_pushbutton(self):
+        self.window.matplot_all_peaks()
+    
+    def on_clicking_loopkinetics_pushbutton(self):
+        self.window.matplot_loop_kinetics()
+
+    def on_clicking_loopVsmol_pushbutton(self):
+        self.window.matplot_loop_vs_sm()
+
+
+class ROIDialog(QtWidgets.QDialog):
+    """
+    ROI analysis and manipulation
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("ROI Analysis / Control")
+        # self.resize(300, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        ## ROI analysis
+        analysis_groupbox = QtWidgets.QGroupBox("ROI Analysis")
+        vbox.addWidget(analysis_groupbox)
+        analysis_grid = QtWidgets.QGridLayout(analysis_groupbox)
+        # set left and right labels
+        label_L = QtWidgets.QLabel("Left ROI Rect")
+        label_L.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        label_R = QtWidgets.QLabel("Right ROI Rect")
+        label_R.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        analysis_grid.addWidget(label_L, 0, 0)
+        analysis_grid.addWidget(label_R, 0, 1)
+        # extract left images
+        self.L_roiextract_pushbutton = QtWidgets.QPushButton("Extract Images(L)")
+        analysis_grid.addWidget(self.L_roiextract_pushbutton, 1, 0)
+        self.L_roiextract_pushbutton.clicked.connect(lambda: self.window.extract_rectROI('left'))
+        # extract right images
+        self.R_roiextract_pushbutton = QtWidgets.QPushButton("Extract Images(R)")
+        self.R_roiextract_pushbutton.clicked.connect(lambda: self.window.extract_rectROI('right'))
+        analysis_grid.addWidget(self.R_roiextract_pushbutton, 1, 1)
+        # extract merged images
+        self.merged_roiextract_pushbutton = QtWidgets.QPushButton("Extract and Merge Two colors")
+        self.merged_roiextract_pushbutton.clicked.connect(lambda: self.window.extract_rectROI('both'))
+        analysis_grid.addWidget(self.merged_roiextract_pushbutton, 2, 0, 1, 2)
+        # plot time trace : left
+        self.L_roitrace_pushbutton = QtWidgets.QPushButton("Time Trace(L)")
+        self.L_roitrace_pushbutton.clicked.connect(lambda: self.window.timetrace_rectROI('left'))
+        analysis_grid.addWidget(self.L_roitrace_pushbutton, 3, 0)
+        # plot time trace: right
+        self.R_roitrace_pushbutton = QtWidgets.QPushButton("Time Trace(R)")
+        self.R_roitrace_pushbutton.clicked.connect(lambda: self.window.timetrace_rectROI('right'))
+        analysis_grid.addWidget(self.R_roitrace_pushbutton, 3, 1)
+        ## ROI setting / control
+        control_groupbox = QtWidgets.QGroupBox("ROI Control")
+        vbox.addWidget(control_groupbox)
+        control_grid = QtWidgets.QGridLayout(control_groupbox)
+
+class DoubleSlider(QtWidgets.QSlider):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.decimals = 5
+        self._max_int = 10 ** self.decimals
+
+        super().setMinimum(0)
+        super().setMaximum(self._max_int)
+
+        self._min_value = 0.0
+        self._max_value = 1.0
+
+    @property
+    def _value_range(self):
+        return self._max_value - self._min_value
+
+    def value(self):
+        return float(super().value()) / self._max_int * self._value_range + self._min_value
+
+    def setValue(self, value):
+        super().setValue(int((value - self._min_value) / self._value_range * self._max_int))
+
+    def setMinimum(self, value):
+        if value > self._max_value:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._min_value = value
+        self.setValue(self.value())
+
+    def setMaximum(self, value):
+        if value < self._min_value:
+            raise ValueError("Minimum limit cannot be higher than maximum")
+
+        self._max_value = value
+        self.setValue(self.value())
+
+    def minimum(self):
+        return self._min_value
+
+    def maximum(self):
+        return self._max_value
+
+class MainWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.ui = Ui_Form()
-        self.ui.setupUi(self)
-        logopath = os.path.join(os.path.dirname(__file__), 'assets', 'kymograph_window_bar.png')
-        icon = pg_qt.QtGui.QIcon()
-        icon.addPixmap(pg_qt.QtGui.QPixmap(logopath),
-                       pg_qt.QtGui.QIcon.Normal, pg_qt.QtGui.QIcon.Off)
-        self.setWindowIcon(icon)
-        self.layout = pg_qt.QtGui.QGridLayout()
+        self.layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.layout)
+        # dockwidget home
         self.dockarea = pg_da.DockArea()
-        self.ui.centralWidget.setLayout(self.layout)
         self.layout.addWidget(self.dockarea)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.dockarea.sizePolicy().hasHeightForWidth())
+        self.dockarea.setSizePolicy(sizePolicy)
+        self.dockarea.setBaseSize(QtCore.QSize(0, 2))
+        ## bottom bar
+        self.bottomwidget = QtWidgets.QWidget()
+        self.layout.addWidget(self.bottomwidget)
+        self.bottomlayout = QtWidgets.QGridLayout()
+        self.bottomwidget.setLayout(self.bottomlayout)
+        # Num colors
+        grid_numc = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_numc, 0, 0)
+        grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
+        self.numColorsComboBox = QtWidgets.QComboBox()
+        self.numColorsComboBox.addItems(["2", "1"])
+        grid_numc.addWidget(self.numColorsComboBox, 0, 1)
+        # Current ROI width
+        grid_roi = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_roi, 1, 0)
+        grid_numc.addWidget(QtWidgets.QLabel("CurrROIwidth"), 1, 0)
+        self.currROIWidthLabel = QtWidgets.QLabel(
+            str(DEFAULT_PARAMETERS["ROI Width"]) + " pixels")
+        grid_numc.addWidget(self.currROIWidthLabel, 1, 1)
+        # detect loops
+        grid_btn1 = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_btn1, 0, 1)
+        self.detectLoopsBtn = QtWidgets.QPushButton("Detect loops")
+        self.detectLoopsBtn.setShortcut("Ctrl+D")
+        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0)
+        self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
+        self.processImageCheckBox.setChecked(True)
+        grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
 
-        # initiate some parameters
-        self.numColors = self.ui.numColorsComboBox_3.currentText()
-        self.ui.numColorsComboBox_3.currentIndexChanged.connect(self.change_num_colors)
-        self.LineROIwidth = self.ui.roiWidthSpinBox.value()
-        self.pixelSize = 1e-3 * self.ui.pixelSizeSpinBox.value() # converted to um from nm
-        self.acquisitionTime = 1e-3 * self.ui.AcquisitionTimeSpinBox_2.value() # converted to sec from ms
-        if self.numColors == "2": self.acquisitionTime = 2 * self.acquisitionTime
-        self.scalebar_img = None
-        # add plotting widgets
+        # Frame number: start and end
+        grid_frame = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_frame, 0, 2)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameStart:"), 0, 0)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameEnd:"), 1, 0)
+        self.frameStartSpinBox = QtWidgets.QSpinBox()
+        self.frameStartSpinBox.setRange(0, 1e5)
+        self.frameStartSpinBox.setValue(0)
+        self.frameEndSpinBox = QtWidgets.QSpinBox()
+        self.frameEndSpinBox.setRange(-1, 1e5)
+        self.frameEndSpinBox.setValue(-1)
+        grid_frame.addWidget(self.frameStartSpinBox, 0, 1)
+        grid_frame.addWidget(self.frameEndSpinBox, 1, 1)
+
+        # Kymograph
+        grid_kymo = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_kymo, 0, 4)
+        self.RealTimeKymoCheckBox = QtWidgets.QCheckBox("RealTimeKymo")
+        self.RealTimeKymoCheckBox.setChecked(True)
+        self.updateKymoBtn = QtWidgets.QPushButton("UpdateKymo")
+        self.updateKymoBtn.setShortcut("Ctrl+U")
+        grid_kymo.addWidget(self.RealTimeKymoCheckBox, 0, 0)
+        grid_kymo.addWidget(self.updateKymoBtn, 1, 0)
+
+        # save section
+        grid_save = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_save, 0, 5)
+        self.saveSectionBtn = QtWidgets.QPushButton("Save section")
+        self.saveSectionComboBox = QtWidgets.QComboBox()
+        self.saveSectionComboBox.addItems(["d0left:video", "d0right:video",
+                                           "d1left:tif", "d1right:tif",
+                                           "d2left:tif", "d2right:tif",
+                                           ])
+        grid_save.addWidget(self.saveSectionBtn, 0, 0)
+        grid_save.addWidget(self.saveSectionComboBox, 1, 0)
+        
+        # swap or merge colors
+        grid_colors = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_colors, 0, 6)
+        self.swapColorsCheckBox = QtWidgets.QCheckBox("Swap colors")
+        self.mergeColorsCheckBox = QtWidgets.QCheckBox("Merge colors")
+        grid_colors.addWidget(self.swapColorsCheckBox, 0, 0)
+        grid_colors.addWidget(self.mergeColorsCheckBox, 1, 0)
+
+
+class Window(QtWidgets.QMainWindow):
+    """ The main window """
+
+    def __init__(self):
+        super().__init__()
+        # Init GUI
+        self.setWindowTitle("LEADS : Kymograph Analysis")
+        this_directory = os.path.dirname(os.path.realpath(__file__))
+        icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar.png")
+        icon = QtGui.QIcon(icon_path)
+        self.setWindowIcon(icon)
+        self.resize(1200, 900)
+        self.ui = MainWidget()
+        self.setCentralWidget(self.ui)
+        self.dockarea = self.ui.dockarea
+        self.parameters_dialog = ParametersDialog(self)
+        self.multipeak_dialog = MultiPeakDialog(self)
+        self.roi_dialog = ROIDialog(self)
+        self.init_menu_bar()
+        # load params
+        self.load_parameters()
+        # add figures
         self.add_col1_imvs()
         if self.numColors == "2":
             self.add_col2_imvs()
-        # connect the signals
-        self.connect_signals()
-        self.ui.loadImageStackButton.clicked.connect(self.load_img_stack)
-        self.ui.loadImageSeqButton.clicked.connect(self.restore_default_dockstate)
         self.defaultDockState = self.dockarea.saveState()
-        self.ui.saveParamsBtn.clicked.connect(self.save_yaml_params)
-        self.ui.pixelSizeSpinBox.valueChanged.connect(self.set_scalebar)
-        self.ui.AcquisitionTimeSpinBox_2.valueChanged.connect(self.set_scalebar)
+        self.load_user_settings()
+        self.connect_signals_init()
+        self.connect_signals()
+        self.multipeak_dialog.connect_signals()
+
+    def init_menu_bar(self):
+        menu_bar = self.menuBar()
+
+        """ File """
+        file_menu = menu_bar.addMenu("File")
+        open_action = file_menu.addAction("Open image stack (.tif/.tiff)")
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.load_img_stack)
+        save_action = file_menu.addAction("Save (yaml and hdf5)")
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.save)
+        loadyaml_action = file_menu.addAction("Load .yaml params")
+        loadyaml_action.setShortcut("Ctrl+Y")
+        loadyaml_action.triggered.connect(self.load_yaml_params_external)
+        """ View """
+        view_menu = menu_bar.addMenu("View")
+        default_action = view_menu.addAction("Default View State")
+        default_action.setShortcut("Ctrl+A")
+        default_action.triggered.connect(self.restore_default_dockstate)
+        """ Analyze """
+        analyze_menu = menu_bar.addMenu("Analyze")
+        parameters_action = analyze_menu.addAction("Parameters")
+        parameters_action.setShortcut("Ctrl+P")
+        parameters_action.triggered.connect(self.parameters_dialog.show)
+        multipeak_action = analyze_menu.addAction("Multi Peak Analysis")
+        multipeak_action.setShortcut("Ctrl+M")
+        multipeak_action.triggered.connect(self.multipeak_dialog.show)
+        roi_action = analyze_menu.addAction("ROI Analysis / Control")
+        roi_action.setShortcut("Ctrl+R")
+        roi_action.triggered.connect(self.roi_dialog.show)
+
+    def connect_signals_init(self):
+        self.ui.numColorsComboBox.currentIndexChanged.connect(self.change_num_colors)
         self.ui.processImageCheckBox.stateChanged.connect(self.processed_image_check)
         self.ui.mergeColorsCheckBox.stateChanged.connect(self.merge_colors)
         self.ui.swapColorsCheckBox.stateChanged.connect(self.swap_colors)
@@ -64,13 +512,38 @@ class kymographGui(pg_qt.QtGui.QWidget):
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
 
     def connect_signals(self):
-        self.ui.roiWidthSpinBox.valueChanged.connect(self.set_roi_width)
-        self.roirect_left.sigRegionChanged.connect(self.roi_changed)
+        # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
+        self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed)
         self.infline_left.sigPositionChanged.connect(self.infiline_left_update)
         if self.numColors == "2":
             self.imv00.sigTimeChanged.connect(self.sync_videos)
             self.infline_right.sigPositionChanged.connect(self.infiline_right_update)
         # self.infline_left.sigDragged
+
+    def load_parameters(self):
+        self.numColors = self.ui.numColorsComboBox.currentText()
+        self.LineROIwidth = self.parameters_dialog.roi_spinbox.value()
+        self.pixelSize = 1e-3 * self.parameters_dialog.pix_spinbox.value()
+        self.acquisitionTime = 1e-3 * int(self.numColors) * self.parameters_dialog.aqt_spinbox.value()
+        # get paramters from multipeak dialog
+        self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
+        self.dna_length_kb = self.multipeak_dialog.DNAlength_spinbox.value()
+        self.dna_puncta_size = self.multipeak_dialog.DNApuncta_spinbox.value()
+        self.correction_with_no_loop = self.multipeak_dialog.loopcorrection_checkbox.isChecked()
+        # parameters for smol (2nd color)
+        self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
+        # multi peak paramters from analyze/peak analysis dialog
+        self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
+        self.memory_link = self.multipeak_dialog.memory_spinbox.value()
+        self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
+        # initialize parameters that don't exist yet
+        self.folderpath = None
+        self.scalebar_img = None
+        self.kymo_left = None
+        self.max_peak_dict = None
+        self.df_peaks_linked = None
+        self.linkedpeaks_analyzed = None
+
     def add_col1_imvs(self):
         self.imv00 = pg.ImageView(name='color 1')
         self.imv00.setPredefinedGradient(DEFAULTS["ColorMap"])
@@ -89,7 +562,7 @@ class kymographGui(pg_qt.QtGui.QWidget):
         self.imv10.addItem(self.region3_noLoop, ignoreBounds=True)
         label = pg.InfLineLabel(self.region3_noLoop.lines[1], "Non loop region",
                                 position=0.75, rotateAxis=(1,0), anchor=(1, 1))
-        self.region3_Loop = pg.LinearRegionItem((120, 200), brush=pg_qt.QtGui.QBrush(pg_qt.QtGui.QColor(255, 0, 0, 50)))
+        self.region3_Loop = pg.LinearRegionItem((120, 200), brush=QtGui.QBrush(QtGui.QColor(255, 0, 0, 50)))
         self.imv10.addItem(self.region3_Loop, ignoreBounds=True)
         label = pg.InfLineLabel(self.region3_Loop.lines[1], "Loop region",
                                 position=0.75, rotateAxis=(1,0), anchor=(1, 1))        
@@ -168,23 +641,25 @@ class kymographGui(pg_qt.QtGui.QWidget):
             self.d0_left.close()
             self.d1_left.close()
             self.d2_left.close()
+            if self.plot_loop_errbar is not None:
+                self.d3_left.close()
             self.d0_right.close()
             self.d1_right.close()
             self.d2_right.close()
             if self.plot_loop_errbar is not None:
-                self.d3_left.close()
                 self.d3_right.close()
         except: print('already removed')
 
     def restore_default_dockstate(self):
         self.dockarea.restoreState(self.defaultDockState)
-        self.imv10.showMaximized()
-        if self.numColors == "2":
-            self.imv11.showMaximized()
+        if self.kymo_left is not None:
+            shape = self.kymo_left.shape
+            self.imv10.view.autoRange()
+            self.imv10.view.setXRange(0, shape[0])
 
     def set_scalebar(self):
-        self.pixelSize = 1e-3 * self.ui.pixelSizeSpinBox.value()
-        self.acquisitionTime = 1e-3 * self.ui.AcquisitionTimeSpinBox_2.value() # converted to sec from ms
+        self.pixelSize = 1e-3 * self.parameters_dialog.pix_spinbox.value()
+        self.acquisitionTime = 1e-3 * int(self.numColors) * self.parameters_dialog.aqt_spinbox.value() # converted to sec from ms
         if self.scalebar_img is not None:
             self.scalebar_img.size = 2/self.pixelSize
             self.scalebar_img.updateBar()
@@ -225,8 +700,8 @@ class kymographGui(pg_qt.QtGui.QWidget):
                 self.scalebar_kymoloop_right.anchor((1, 1), (1, 1), offset=(-40, -40))
 
     def load_img_stack(self):
-        filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                        filetypes = (("tif files","*.tif"),("all files","*.*")))
+        filepath = io.FileDialog(self.folderpath, "open a tif file stack",
+                                 "Tif File (*.tif)").openFileNameDialog()
         self.filepath = filepath
         self.image_meta = read_img_stack(self.filepath)
         self.frame_start = 0
@@ -241,6 +716,8 @@ class kymographGui(pg_qt.QtGui.QWidget):
     def set_img_stack(self):
         print("Loading and processing the image ...")
         start_time = time.time()
+        if self.image_meta["num_colors"] == 1 and self.numColors == "2":
+            self.ui.numColorsComboBox.setCurrentText("1")
         if self.numColors == "2":
             self.imgarr_left = self.image_meta['img_arr_color_0'][self.frame_start:self.frame_end, ...]
             self.imgarr_right = self.image_meta['img_arr_color_1'][self.frame_start:self.frame_end, ...]
@@ -281,17 +758,27 @@ class kymographGui(pg_qt.QtGui.QWidget):
                 self.params_yaml = {
                     'filepath' : self.filepath,
                     'folderpath' : self.folderpath,
-                    'Pixel Size' : self.ui.pixelSizeSpinBox.value(),
+                    'Pixel Size' : self.parameters_dialog.pix_spinbox.value(),
                     'ROI width' : None,
                     'Region Errbar': [10, 30],
                 }
+                shape = list(self.imgarr_left[0, ...].shape)
+                self.params_yaml["Region Errbar"] = [1, max(shape)]
                 yaml.dump(self.params_yaml, f)
         return self.params_yaml
-    
+
+    def load_yaml_params_external(self):
+        filepath_yaml = io.FileDialog(self.folderpath, "open yaml parameter file",
+                                 "yaml (*.yaml)").openFileNameDialog()
+        if os.path.isfile(filepath_yaml):
+            with open(filepath_yaml) as f:
+                self.params_yaml = yaml.load(f)
+        self.set_yaml_params()
+
     def save_yaml_params(self):
         self.params_yaml = self.load_yaml_params()
-        self.params_yaml['Pixel Size'] = self.ui.pixelSizeSpinBox.value()
-        self.params_yaml['ROI width'] = self.ui.currROIWidthLabel.text()
+        self.params_yaml['Pixel Size'] = self.parameters_dialog.pix_spinbox.value()
+        self.params_yaml['ROI width'] = self.parameters_dialog.roi_spinbox.text()
         self.params_yaml['roi1 state'] = {}
         self.params_yaml['roi1 state']['position'] = list(self.roirect_left.pos()) #[self.roirect_left.pos()[0], self.roirect_left.pos()[1]]
         self.params_yaml['roi1 state']['size'] = list(self.roirect_left.size())
@@ -304,6 +791,12 @@ class kymographGui(pg_qt.QtGui.QWidget):
         with open(self.filepath_yaml, 'w') as f:
             yaml.dump(self.params_yaml, f)
 
+    def save(self):
+        self.save_yaml_params()
+        print("Parameters saved to yaml file")
+        self.save_hdf5()
+        print("output and metadata saved to hdf5 file")
+
     def set_yaml_params(self):
         if self.params_yaml['ROI width'] is not None:
             self.roirect_left.setPos(self.params_yaml['roi1 state']['position'])
@@ -311,7 +804,7 @@ class kymographGui(pg_qt.QtGui.QWidget):
             self.roirect_left.setAngle(self.params_yaml['roi1 state']['angle'])
 
             self.region3_Loop.setRegion(self.params_yaml['region3_Loop'])
-            self.region3_Loop.setRegion(self.params_yaml['region3_Loop'])
+            self.region3_noLoop.setRegion(self.params_yaml['region3_noLoop'])
 
     def processed_image_check(self):
         if self.ui.processImageCheckBox.isChecked():
@@ -349,20 +842,20 @@ class kymographGui(pg_qt.QtGui.QWidget):
         roi1_data = self.roirect_left.getArrayRegion(self.imgarr_left,
                                             self.imv00.imageItem, axes=(1, 2))
         self.kymo_left = np.sum(roi1_data, axis=2)
-        self.kymo_left = self.kymo_left / np.max(self.kymo_left)
+        # self.kymo_left = self.kymo_left / np.max(self.kymo_left)
         self.imv10.setImage(self.kymo_left)
         if self.numColors == "2":
             self.roirect_right.setState(self.roirect_left.getState())
             roi2_data = self.roirect_right.getArrayRegion(self.imgarr_right,
                                                 self.imv01.imageItem, axes=(1, 2))                                                       
             self.kymo_right = np.sum(roi2_data, axis=2)
-            self.kymo_right = self.kymo_right / np.max(self.kymo_right)
+            # self.kymo_right = self.kymo_right / np.max(self.kymo_right)
             if self.ui.mergeColorsCheckBox.isChecked():
-                kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
-                                        self.kymo_left[:, :, np.newaxis],
-                                        np.zeros_like(self.kymo_right[:, :, np.newaxis])),
-                                        axis=2)
-                self.imv11.setImage(kymo_comb, levelMode='rgba')
+                self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+                                    self.kymo_left[:, :, np.newaxis],
+                                    np.zeros_like(self.kymo_right[:, :, np.newaxis])),
+                                    axis=2)
+                self.imv11.setImage(self.kymo_comb, levelMode='rgba')
                 self.imv11.ui.histogram.show()
             else:
                 self.imv11.setImage(self.kymo_right)
@@ -393,8 +886,48 @@ class kymographGui(pg_qt.QtGui.QWidget):
 
     def set_roi_width(self):
         roi1_state_update = self.roirect_left.getState()
-        roi1_state_update['size'][1] = self.ui.roiWidthSpinBox.value()
+        roi1_state_update['size'][1] = self.parameters_dialog.roi_spinbox.value()
         self.roirect_left.setState(roi1_state_update)
+
+    def timetrace_rectROI(self, side='left'):
+        if side == 'left':
+            roi1_data = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+        elif side == 'right' and self.numColors == "2":
+            roi1_data = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+        else:
+            roi1_data = None
+        win = pg.plot()
+        win.setWindowTitle('Time trace of ROI: ' + str(side))
+        if roi1_data is not None:
+            timetrace = np.average(roi1_data, axis=(1,2))
+            win.plot(timetrace)
+            win.setYRange(0, np.max(timetrace))
+
+    def extract_rectROI(self, side='left'):
+        roi_data = None
+        win = pg.image(title='Extracted images of ROI: ' + str(side))
+        if side == 'left':
+            roi_data = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+            win.setPredefinedGradient(DEFAULTS["ColorMap"])
+            win.setImage(roi_data)
+        elif side == 'right' and self.numColors == "2":
+            roi_data = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+            win.setPredefinedGradient(DEFAULTS["ColorMap"])
+            win.setImage(roi_data)
+        elif side == 'both' and self.numColors == "2":
+            roi_data_1 = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+            roi2_data_2 = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+            roi_data = np.concatenate((roi2_data_2[:, :, :, np.newaxis],
+                                        roi_data_1[:, :, :, np.newaxis],
+                                        np.zeros_like(roi2_data_2[:, :, :, np.newaxis])),
+                                        axis=3)
+            win.setImage(roi_data, levelMode='rgba')        
 
     def infiline_left_update(self):
         frame_numer = int(self.infline_left.value())
@@ -426,14 +959,14 @@ class kymographGui(pg_qt.QtGui.QWidget):
         # self.imv00.ui.histogram.
 
     def change_num_colors(self):
-        self.numColors = self.ui.numColorsComboBox_3.currentText()
+        self.numColors = self.ui.numColorsComboBox.currentText()
         if self.numColors == "1":
             self.remove_all_widgets()
             self.add_col1_imvs()
             self.connect_signals()
         elif self.numColors == "2":
-            # self.remove_all_widgets()
-            # self.add_col1_imvs()
+            self.remove_all_widgets()
+            self.add_col1_imvs()
             self.add_col2_imvs()
             self.connect_signals()
         self.defaultDockState = self.dockarea.saveState()
@@ -480,13 +1013,13 @@ class kymographGui(pg_qt.QtGui.QWidget):
                                         axis=3)
             self.imv01.setImage(arr_combined, levelMode='rgba')
             self.imv01.showMaximized()
-            kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+            self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
                                     self.kymo_left[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right[:, :, np.newaxis])),
                                     axis=2)
-            self.imv11.setImage(kymo_comb, levelMode='rgba')
+            self.imv11.setImage(self.kymo_comb, levelMode='rgba')
             self.imv11.ui.histogram.show()
-            kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
+            self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
                                     self.kymo_left_loop[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
                                     axis=2)
@@ -495,7 +1028,7 @@ class kymographGui(pg_qt.QtGui.QWidget):
                                     np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
                                     axis=2)
             self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
-            self.imv23.setImage(kymo_loop_comb, levelMode='rgba')
+            self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
         else:
             # set back the imagedata
             self.imv01.setImage(self.imgarr_right, levelMode='mono')
@@ -530,8 +1063,12 @@ class kymographGui(pg_qt.QtGui.QWidget):
         if self.numColors == "2":
             self.d3_right = pg_da.Dock("Single Molecule detections")
             self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
-            self.plot_loop_vs_sm = pg.PlotWidget()
-            self.d3_right.addWidget(self.plot_loop_vs_sm)
+            self.plot_loop_vs_sm = pg.PlotItem()
+            self.imv31 = pg.ImageView(view=self.plot_loop_vs_sm)
+            self.imv31.setPredefinedGradient(DEFAULTS["ColorMap"])
+            self.hide_imgv_cmap(self.imv31)
+            self.d3_right.addWidget(self.imv31)
+            # self.d3_right.addWidget(self.plot_loop_vs_sm)
             self.plot_loop_vs_sm_smdata = self.plot_loop_vs_sm.plot(title='SM',
                 symbol='o', symbolSize=4, pen=pg.mkPen(None),
                 symbolPen=pg.mkPen(None), symbolBrush='r')
@@ -543,6 +1080,9 @@ class kymographGui(pg_qt.QtGui.QWidget):
             self.plot_loop_vs_sm_linebottom = pg.InfiniteLine(
                                     movable=False, angle=0, pen=(3, 9))
             self.plot_loop_vs_sm_smdata.getViewBox().invertY(True)
+            self.plotSmolPosData = self.plot_loop_vs_sm.scatterPlot(
+                    symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
+
         # adding errorbar plot items for data updating later
         self.errbar_loop = pg.ErrorBarItem(beam=0.5, pen=pg.mkPen('r'))
         self.plot_loop_errbar.addItem(self.errbar_loop)
@@ -579,17 +1119,69 @@ class kymographGui(pg_qt.QtGui.QWidget):
         legend.addItem(self.plot_data_loopDown, 'Down')
         # loop position in imv21
         self.plotLoopPosData = self.plotLoopPos.scatterPlot(
-            symbol='o', symbolSize=5, pen=pg.mkPen('r'))#symbolBrush=pg.mkPen('r')
+            symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))#symbolBrush=pg.mkPen('r')
         # change the default docking positions to the new one
         self.defaultDockState = self.dockarea.saveState()
         self.dockarea.restoreState(self.defaultDockState)
 
+    def params_change_loop_detection(self):
+        self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
+        self.dna_length_kb = self.multipeak_dialog.DNAlength_spinbox.value()
+        self.dna_puncta_size = self.multipeak_dialog.DNApuncta_spinbox.value()
+        self.correction_with_no_loop = self.multipeak_dialog.loopcorrection_checkbox.isChecked()
+        if self.multipeak_dialog.preview_checkbox.isChecked():
+            self.preview_maxpeak_on_params_change()
+
+    def preview_maxpeak_on_params_change(self):
+        if self.plot_loop_errbar is None:
+            self.set_loop_detection_widgets()
+        self.loop_region_left = int(self.region_errbar.getRegion()[0])
+        self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        self.all_peaks_dict = peakfinder_savgol(self.kymo_left_loop.T,
+                self.loop_region_left, -self.loop_region_right,
+                prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size,
+                plotting=False, kymo_noLoop=self.kymo_left_noLoop.T,
+                correction_noLoop=self.correction_with_no_loop
+                )
+        self.max_peak_dict = analyze_maxpeak(self.all_peaks_dict['Max Peak'], smooth_length=7,
+                frame_width = self.loop_region_right - self.loop_region_left,
+                dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
+                )
+        if self.numColors == "2":
+            self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
+                self.loop_region_left, -self.loop_region_right,
+                prominence_min=self.peak_prominence_smol, pix_width=self.dna_puncta_size, plotting=False,
+                )
+        self.plotLoopPosData.setData(self.all_peaks_dict["All Peaks"]["FrameNumber"],
+                                     self.all_peaks_dict["All Peaks"]["PeakPosition"])
+
+    def params_change_smol_detection(self):
+        self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
+        if self.multipeak_dialog.smol_preview_checkbox.isChecked():
+            self.preview_smol_peaks_on_params_change()
+
+    def preview_smol_peaks_on_params_change(self):
+        if self.plot_loop_errbar is None:
+            self.set_loop_detection_widgets()
+        self.loop_region_left = int(self.region_errbar.getRegion()[0])
+        self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        if self.numColors == "2":
+            self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
+                self.loop_region_left, -self.loop_region_right,
+                prominence_min=self.peak_prominence_smol, 
+                pix_width=self.dna_puncta_size, plotting=False,)
+            self.plot_loop_vs_sm_smdata.clear()
+            self.plot_loop_vs_sm_loopdata.clear()
+            self.imv31.setImage(self.kymo_right_loop)
+            self.plotSmolPosData.setData(self.all_smpeaks_dict["All Peaks"]["FrameNumber"],
+                                     self.all_smpeaks_dict["All Peaks"]["PeakPosition"])
+
     def detect_loops(self):
         if self.plot_loop_errbar is None:
             self.set_loop_detection_widgets()
-        self.d3_left.setStretch(200, 200)
-        if self.numColors == "2":
-            self.d3_right.setStretch(200, 200)
+        # self.d3_left.setStretch(200, 200)
+        # if self.numColors == "2":
+        #     self.d3_right.setStretch(200, 200)
         # set errorbars for loop positions
         loop_std = np.std(self.kymo_left_loop, axis=0)
         loop_avg = np.average(self.kymo_left_loop, axis=0)
@@ -603,59 +1195,183 @@ class kymographGui(pg_qt.QtGui.QWidget):
                                    y=noLoop_avg, height=noLoop_std)
         self.errdata_noLoop.setData(noLoop_avg)
         # detect loop position
-        loop_region_left = int(self.region_errbar.getRegion()[0])
-        loop_region_right = int(self.region_errbar.getRegion()[1])
-        pix_width = 11
-        peak_dict = peakfinder_savgol(self.kymo_left_loop.T,
-                loop_region_left, -loop_region_right,
-                prominence_min=1/3, pix_width=pix_width, plotting=False,
-                kymo_noLoop=self.kymo_left_noLoop.T, #use this carefully, safe way is to put it none or just comment this line
-                )
-        peak_dict = analyze_maxpeak(peak_dict['Max Peak'], smooth_length=7,
-                frame_width = loop_region_right-loop_region_left,
-                dna_length=48, pix_width=pix_width,
-                )
-        frame_no = peak_dict["Max Peak"]["FrameNumber"]
-        peak_pos = peak_dict["Max Peak"]["PeakPosition"]
-        int_peak = peak_dict["Max Peak"]["PeakIntensity"]
-        int_peakup = peak_dict["Max Peak"]["PeakUpIntensity"]
-        int_peakdown = peak_dict["Max Peak"]["PeakDownIntensity"]
+        self.preview_maxpeak_on_params_change()
+        frame_no = self.max_peak_dict["Max Peak"]["FrameNumber"]
+        peak_pos = self.max_peak_dict["Max Peak"]["PeakPosition"]
+        int_peak = self.max_peak_dict["Max Peak"]["PeakIntensity"]
+        int_peakup = self.max_peak_dict["Max Peak"]["PeakUpIntensity"]
+        int_peakdown = self.max_peak_dict["Max Peak"]["PeakDownIntensity"]
         self.plotLoopPosData.setData(frame_no, peak_pos)
         self.plot_data_loop.setData(frame_no, int_peak)
         self.plot_data_loopUp.setData(frame_no, int_peakup)
         self.plot_data_loopDown.setData(frame_no, int_peakdown)
         self.plot_data_loop_filt.setData(frame_no,
-                        peak_dict["Max Peak"]["PeakIntFiltered"])
+                        self.max_peak_dict["Max Peak"]["PeakIntFiltered"])
         self.plot_data_loopUp_filt.setData(frame_no,
-                        peak_dict["Max Peak"]["PeakIntUpFiltered"])
+                        self.max_peak_dict["Max Peak"]["PeakIntUpFiltered"])
         self.plot_data_loopDown_filt.setData(frame_no,
-                        peak_dict["Max Peak"]["PeakIntDownFiltered"])
+                        self.max_peak_dict["Max Peak"]["PeakIntDownFiltered"])
         if self.numColors == "2":
-            smpeak_dict = peakfinder_savgol(self.kymo_right_loop.T,
-                loop_region_left, -loop_region_right,
-                prominence_min=1/2, pix_width=pix_width, plotting=True,
-                # kymo_noLoop=self.kymo_left_noLoop.T, #use this carefully, safe way is to put it none or just comment this line
-                )
-            loop_sm_dict = loop_sm_dist(peak_dict, smpeak_dict, smooth_length=21)
-            self.plot_sm_dist.setData(loop_sm_dict['FrameNumver'],
-                                      loop_sm_dict['PeakDiffFiltered'])
+            # self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
+            #     self.loop_region_left, -self.loop_region_right,
+            #     prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size, plotting=False,
+            #     # kymo_noLoop=self.kymo_left_noLoop.T, #use this carefully, safe way is to put it none or just comment this line
+            #     )
+            self.imv31.clear()
+            self.plotSmolPosData.clear()
+            self.max_smpeak_dict = analyze_maxpeak(self.all_smpeaks_dict['Max Peak'], smooth_length=7,
+                    frame_width = self.loop_region_right-self.loop_region_left,
+                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
+                    )
+            max_loop_sm_dict = loop_sm_dist(self.max_peak_dict, self.max_smpeak_dict, smooth_length=21)
+            self.plot_sm_dist.setData(max_loop_sm_dict['FrameNumber'],
+                                      max_loop_sm_dict['PeakDiffFiltered'])
             # update data in smVsLoop plot
             self.plot_loop_vs_sm_smdata.setData(
-                    smpeak_dict['Max Peak']['FrameNumber'],
-                    smpeak_dict['Max Peak']['PeakPosition'])
+                    self.max_smpeak_dict['Max Peak']['FrameNumber'],
+                    self.max_smpeak_dict['Max Peak']['PeakPosition'])
             self.plot_loop_vs_sm_loopdata.setData(
-                    peak_dict['Max Peak']['FrameNumber'],
-                    peak_dict['Max Peak']['PeakPosition'])
-            self.plot_loop_vs_sm.setYRange(loop_region_left-5, loop_region_right+5)
-            self.plot_loop_vs_sm_linetop.setValue(loop_region_left)
-            self.plot_loop_vs_sm_linebottom.setValue(loop_region_right)
+                    self.max_peak_dict['Max Peak']['FrameNumber'],
+                    self.max_peak_dict['Max Peak']['PeakPosition'])
+            self.plot_loop_vs_sm.setYRange(self.loop_region_left-5, self.loop_region_right+5)
+            self.plot_loop_vs_sm_linetop.setValue(self.loop_region_left)
+            self.plot_loop_vs_sm_linebottom.setValue(self.loop_region_right)
+
+    def matplot_all_peaks(self):
+        self.preview_maxpeak_on_params_change()
+        self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
+        self.memory_link = self.multipeak_dialog.memory_spinbox.value()
+        self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
+        if self.numColors == "2":
+            self.df_peaks_linked, self.df_peaks_linked_sm = kymograph.link_and_plot_two_color(
+                    self.all_peaks_dict, self.all_smpeaks_dict,
+                    search_range=self.search_range_link, memory=self.memory_link,
+                    filter_length=self.filter_length_link, plotting=True,)
+            df_gb = self.df_peaks_linked.groupby("particle")
+            gb_names = list(df_gb.groups.keys())
+            for i in range(len(gb_names)):
+                gb_names[i] = str(gb_names[i])
+            self.multipeak_dialog.leftpeak_num_combobox.clear()
+            self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
+            df_gb = self.df_peaks_linked_sm.groupby("particle")
+            gb_names = list(df_gb.groups.keys())
+            for i in range(len(gb_names)):
+                gb_names[i] = str(gb_names[i])
+            self.multipeak_dialog.rightpeak_num_combobox.clear()
+            self.multipeak_dialog.rightpeak_num_combobox.addItems(gb_names)
+        else:
+            self.df_peaks_linked = kymograph.link_peaks(
+                    self.all_peaks_dict["All Peaks"],
+                    search_range=self.search_range_link, memory=self.memory_link,
+                    filter_length=self.filter_length_link, plotting=True,)
+            plt.hlines([0, self.loop_region_left], 0, self.all_peaks_dict["shape_kymo"][1], 'g', alpha=0.5)
+            plt.hlines([0, self.loop_region_right], 0, self.all_peaks_dict["shape_kymo"][1], 'g', alpha=0.5)
+            plt.ylim(0, self.all_peaks_dict["shape_kymo"][0])
+            df_gb = self.df_peaks_linked.groupby("particle")
+            gb_names = list(df_gb.groups.keys())
+            for i in range(len(gb_names)):
+                gb_names[i] = str(gb_names[i])
+            self.multipeak_dialog.leftpeak_num_combobox.clear()
+            self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
+
+    def matplot_loop_kinetics(self):
+        left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
+        right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
+        self.loop_region_left = int(self.region_errbar.getRegion()[0])
+        self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        df_gb = self.df_peaks_linked.groupby("particle")
+        group_sel = df_gb.get_group(left_peak_no)
+        group_sel = group_sel.reset_index(drop=True)
+        peak_analyzed_dict = analyze_maxpeak(group_sel, smooth_length=7,
+                frame_width = self.loop_region_right - self.loop_region_left,
+                dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+        _, ax = plt.subplots()
+        df_peak_analyzed = peak_analyzed_dict["Max Peak"]
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                df_peak_analyzed["PeakIntensity"], 'g', label='Peak')
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                df_peak_analyzed["PeakUpIntensity"], 'r', label='Peak Up')
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                df_peak_analyzed["PeakDownIntensity"], 'b', label='Peak down')
+        if self.numColors == '2':
+            df_gb = self.df_peaks_linked_sm.groupby("particle")
+            group_sel = df_gb.get_group(right_peak_no)
+            group_sel = group_sel.reset_index(drop=True)
+            peak_analyzed_dict_sm = analyze_maxpeak(group_sel, smooth_length=7,
+                    frame_width = self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+            sel_loop_sm_dict = loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=11)
+            ax.plot(sel_loop_sm_dict["FrameNumber"],
+                    sel_loop_sm_dict["PeakDiffFiltered"], 'm', label='SMol')
+        if self.multipeak_dialog.force_checkbox.isChecked():
+            if self.multipeak_dialog.force_combobox.currentText() == "Interpolation":
+                interpolation_bool = True
+            else: interpolation_bool = False
+            self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
+                    frame_width=self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, dna_length_um=16,
+                    pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
+                    interpolation=interpolation_bool)
+            df_gb = self.linkedpeaks_analyzed.groupby("particle")
+            group_sel = df_gb.get_group(left_peak_no)
+            group_sel = group_sel.reset_index(drop=True)
+            print(group_sel)
+            ax_f = ax.twinx()
+            ax_f.plot(group_sel["FrameNumber"],
+                      savgol_filter(group_sel["Force"].values, window_length=11, polyorder=2),
+                      '.', label='Force')
+            ax_f.set_ylabel('Force / pN')
+            ax_f.legend(loc='lower right')
+        ax.set_xlabel('Frame Number')
+        ax.set_ylabel('DNA/kb')
+        ax.legend()
+        plt.show()
+
+    def matplot_loop_vs_sm(self):
+        pass
+
+    def save_hdf5(self):
+        filepath_hdf5 = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'
+        h5_analysis = h5py.File(filepath_hdf5, 'w')
+        # save parameters
+        params_group = h5_analysis.create_group("parameters")
+        params_group['Acquisition Time'] = self.acquisitionTime
+        params_group['Pixel Size'] = self.pixelSize
+        if self.plot_loop_errbar is not None:
+            params_group['region3_noLoop'] = list(self.region3_noLoop.getRegion())
+            params_group['region3_Loop'] = list(self.region3_Loop.getRegion())
+            params_group["DNA ends"] = list(self.region_errbar.getRegion())
+        roi1_group = params_group.create_group("roi1")
+        roi1_group['position'] = list(self.roirect_left.pos())
+        roi1_group['size'] = list(self.roirect_left.size())
+        roi1_group['angle'] = float(self.roirect_left.angle())
+        # save analyzed data
+        if self.kymo_left is not None:
+            h5_analysis["Left Kymograph"] = self.kymo_left.T
+            h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
+            h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
+            if self.numColors == "2":
+                h5_analysis["Right Kymograph"] = self.kymo_right.T
+                h5_analysis["Right Kymograph Loop"] = self.kymo_right_loop.T
+                h5_analysis["Right Kymograph No Loop"] = self.kymo_right_noLoop.T
+        if self.max_peak_dict is not None:
+            h5_analysis["Left Max Peaks"] = self.max_peak_dict["Max Peak"].to_records()
+            if self.numColors == "2":
+                h5_analysis["Right Max Peaks"] = self.max_smpeak_dict["Max Peak"].to_records()
+        if self.df_peaks_linked is not None:
+            h5_analysis["Left Linked Peaks"] = self.df_peaks_linked.to_records()
+            if self.numColors == "2":
+                h5_analysis["Right Linked Peaks"] = self.df_peaks_linked_sm.to_records()
+        if self.linkedpeaks_analyzed is not None:
+            h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
+        h5_analysis.close()
 
     def save_section(self):
         temp_folder = os.path.abspath(os.path.join(self.folderpath, 'temp'))
-        print(temp_folder)
         if not os.path.isdir(temp_folder):
             os.mkdir(temp_folder)
-        if self.ui.saveSectionComboBox.currentText() == "d0left":
+        # save left video : d0left
+        if self.ui.saveSectionComboBox.currentText() == "d0left:video":
             roi_state = self.roirect_left.getState()
             self.roirect_left.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
@@ -668,13 +1384,14 @@ class kymographGui(pg_qt.QtGui.QWidget):
                 i += 1
             self.roirect_left.setState(roi_state) #set back to its previous state
             filelist = glob.glob(temp_folder+'/temp_*.png')
-            filename = self.folderpath+'/'+self.filename_base + 'left.avi'
+            filename = self.folderpath+'/'+self.filename_base + '_left.avi'
             os.chdir(temp_folder)
             subprocess.call(['ffmpeg', '-y', '-r', '10', '-i', 'temp_%d0.png', filename])
             for file in filelist:
                 os.remove(file)
             print("Video conversion FINISHED")
-        elif self.ui.saveSectionComboBox.currentText() == "d0right":
+        # save left video : d0right
+        elif self.ui.saveSectionComboBox.currentText() == "d0right:video":
             roi_state = self.roirect_right.getState()
             self.roirect_right.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
@@ -687,13 +1404,40 @@ class kymographGui(pg_qt.QtGui.QWidget):
                 i += 1
             self.roirect_right.setState(roi_state) #set back to its previous state
             filelist = glob.glob(temp_folder+'/temp_*.png')
-            filename = self.folderpath+'/'+self.filename_base + 'left.avi'
+            filename = self.folderpath+'/'+self.filename_base + '_right.avi'
             os.chdir(temp_folder)
             subprocess.call(['ffmpeg', '-y', '-r', '10', '-i', 'temp_%d0.png', filename])
             for file in filelist:
                 os.remove(file)
             print("Video conversion FINISHED")
-
+        # save left full kymo : d1left
+        elif self.ui.saveSectionComboBox.currentText() == "d1left:tif":
+            filename = self.folderpath+'/'+self.filename_base + '_left_kymo.tif'
+            imwrite(filename, self.kymo_left.T.astype(np.uint16), imagej=True,
+                    metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+        # save right full kymo : d1right
+        elif self.ui.saveSectionComboBox.currentText() == "d1right:tif":
+            filename = self.folderpath+'/'+self.filename_base + '_right_kymo.tif'
+            if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
+                imwrite(filename, self.kymo_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+            else:
+                imwrite(filename, self.kymo_right.T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+        # save left selected kymo : d2left
+        elif self.ui.saveSectionComboBox.currentText() == "d2left:tif":
+            filename = self.folderpath+'/'+self.filename_base + '_left_selected_kymo.tif'
+            imwrite(filename, self.kymo_left_loop.T.astype(np.uint16), imagej=True,
+                    metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+        # save right selected kymo : d2right
+        elif self.ui.saveSectionComboBox.currentText() == "d2right:tif":
+            filename = self.folderpath+'/'+self.filename_base + '_right_selected_kymo.tif'
+            if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
+                imwrite(filename, self.kymo_loop_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+            else:
+                imwrite(filename, self.kymo_right_loop.T.astype(np.uint16), imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
 
     def frames_changed(self):
         print("Changing the frames and resetting plts...")
@@ -704,9 +1448,52 @@ class kymographGui(pg_qt.QtGui.QWidget):
         print("took %s seconds to reset!" % (time.time() - start_time))
         print("DONE:Changing the frames.")
 
+    def closeEvent(self, event):
+        settings = io.load_user_settings()
+        if self.folderpath is not None:
+            settings["kymograph"]["PWD"] = self.folderpath
+            settings["kymograph"]["Acquisiton Time"] = self.parameters_dialog.aqt_spinbox.value()
+            settings["kymograph"]["Pixel Size"] = self.parameters_dialog.pix_spinbox.value()
+            settings["kymograph"]['ROI width'] = self.LineROIwidth
+            settings["kymograph"]["Peak Prominence"] = self.peak_prominence
+            settings["kymograph"]["DNA Length"] = self.dna_length_kb
+            settings["kymograph"]["Puncta Size"] = self.dna_puncta_size
+            settings["kymograph"]["Peak Prominence Right"] = self.peak_prominence_smol
+            settings["kymograph"]["Search Range"] = self.search_range_link
+            settings["kymograph"]["Memory"] = self.memory_link
+            settings["kymograph"]["Filter Length"] = self.filter_length_link
+        io.save_user_settings(settings)
+        QtWidgets.qApp.closeAllWindows()
+
+    def load_user_settings(self):
+        settings = io.load_user_settings()
+        try:
+            self.folderpath = settings["kymograph"]["PWD"]
+            self.parameters_dialog.aqt_spinbox.setValue(settings["kymograph"]["Acquisiton Time"])
+            self.parameters_dialog.pix_spinbox.setValue(settings["kymograph"]["Pixel Size"])
+            self.parameters_dialog.roi_spinbox.setValue(settings["kymograph"]['ROI width'])
+            self.multipeak_dialog.prominence_spinbox.setValue(settings["kymograph"]["Peak Prominence"])
+            self.multipeak_dialog.DNAlength_spinbox.setValue(settings["kymograph"]["DNA Length"])
+            self.multipeak_dialog.DNApuncta_spinbox.setValue(settings["kymograph"]["Puncta Size"])
+            self.multipeak_dialog.smol_prominence_spinbox.setValue(settings["kymograph"]["Peak Prominence Right"])
+            self.multipeak_dialog.searchrange_spinbox.setValue(settings["kymograph"]["Search Range"])
+            self.multipeak_dialog.memory_spinbox.setValue(settings["kymograph"]["Memory"])
+            self.multipeak_dialog.filterlen_spinbox.setValue(settings["kymograph"]["Filter Length"])
+        except Exception as e:
+            print(e)
+            pass
+        if len(self.folderpath) == 0:
+            self.folderpath = None
+
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+    win = Window()
+    app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+    win.show()
+    sys.exit(app.exec_())
+    if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
+        QtWidgets.QApplication.instance().exec_()
+
 if __name__ == '__main__':
-    app = pg_qt.QtGui.QApplication([])
-    ui = kymographGui()
-    ui.show()
-    if (sys.flags.interactive != 1) or not hasattr(pg_qt.QtCore, 'PYQT_VERSION'):
-        pg_qt.QtGui.QApplication.instance().exec_()
+    main()

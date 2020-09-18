@@ -3,9 +3,9 @@ import numpy as np
 from . import crop_images_ui
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
-import PySimpleGUI as sg
+from .. import io
 
-from .. import crop_images
+from .. import crop_images 
 
 class NapariTabs(QtWidgets.QWidget):
     def __init__(self, viewer):
@@ -16,6 +16,7 @@ class NapariTabs(QtWidgets.QWidget):
 
         # set defaults
         self.use_current_image_path = False
+        self.current_image_path = None
 
         # number of colors
         self.ui.numColorsCbox.setCurrentText("2")
@@ -45,6 +46,7 @@ class NapariTabs(QtWidgets.QWidget):
             self.image_meta = crop_images.daskread_img_seq(num_colors=int(self.ui.numColorsCbox.currentText()), 
             bkg_subtraction=bool(self.ui.bkgSubstractionCheckBox.checkState()))
         self.use_current_image_path = False
+        self.current_image_path = self.image_meta["folderpath"]
         for l in reversed(self.viewer.layers[:]):
             self.viewer.layers.remove(l)
         color_list = ['green', 'magenta', 'cyan']
@@ -65,11 +67,17 @@ class NapariTabs(QtWidgets.QWidget):
             self.image_meta
             self.frame_start = self.ui.frameStartSbox.value()
             self.frame_end = self.ui.frameEndBox.value()
+            self.shift_bool = self.ui.shiftImageCheckBox.isChecked()
+            self.shift_x = self.ui.xShiftSpinBox.value()
+            self.shift_y = self.ui.yShiftSpinBox.value()
+            self.angle = self.ui.angleSpinBox.value()
             if self.frame_end == -1:
                 self.frame_end = None
             shape_layer = self.viewer.layers['rect_roi']
             crop_images.crop_rect_shapes(self.image_meta, shape_layer,
                             frame_start=self.frame_start, frame_end=self.frame_end,
+                            geometric_transform=self.shift_bool,
+                            shift_x=self.shift_x, shift_y=self.shift_y, angle=self.angle
                             )
         except:
             self.load_img_seq()
@@ -82,9 +90,8 @@ class NapariTabs(QtWidgets.QWidget):
         self.num_colors = self.ui.numColorsCbox.currentText()
 
     def load_imageJ_rois(self):
-        roi_file_list = sg.tkinter.filedialog.askopenfilenames(
-            title = "Select ROI files", 
-            filetypes = (("ROI files","*.roi"),("all files","*.*")))
+        roi_file_list = io.FileDialog(self.current_image_path, "Select ROI files",
+                            "ROI files *.roi").openFileNamesDialog()
         _ = crop_images.addroi_to_shapelayer(self.viewer.layers['rect_roi'], roi_file_list)
 
     def save_imageJ_rois(self):
@@ -94,7 +101,23 @@ class NapariTabs(QtWidgets.QWidget):
     def toggle_bkg_subtraction(self):
         #current_image_path = self.image_meta.get("folderpath")#self.image_meta["folderpath"]
         self.use_current_image_path = True
-        self.load_img_seq()      
+        self.load_img_seq()
+
+    def closeEvent(self, event):
+        settings = io.load_user_settings()
+        if self.folderpath is not None:
+            settings["crop"]["PWD"] = self.current_image_path
+        io.save_user_settings(settings)
+        QtWidgets.qApp.closeAllWindows()
+
+    def load_user_settings(self):
+        settings = io.load_user_settings()
+        try:
+            self.current_image_path = settings["crop"]["PWD"]
+        except Exception as e:
+            print(e)
+            pass
+
 
 def main():
     with napari.gui_qt():
