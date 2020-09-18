@@ -7,9 +7,9 @@ from skimage.filters import threshold_otsu
 from skimage.transform import rotate
 from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
-import PySimpleGUI as sg
 import pims
 from tqdm import trange
+from . import io
 
 def get_rect_params(rect, printing=False):
     length = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
@@ -54,7 +54,7 @@ def rect_shape_to_roi(arr_from_napari):
     return roi_coord
 
 def save_rectshape_as_imageJroi(shape_layer):
-    folder_to_save = sg.tkinter.filedialog.askdirectory(title="give the name of the folder to save")
+    folder_to_save = io.FileDialog().openDirectoryDialog()
     if not os.path.isdir(folder_to_save):
         print("folder to save doesn't exist")
     rect_shape = np.rint(shape_layer.data)
@@ -87,7 +87,9 @@ def addroi_to_shapelayer(shape_layer, roi_file_list):
     return roi_arr_list
 
 def crop_rect_shapes(image_meta, shape_layer, dir_to_save=None,
-                     frame_start=None, frame_end=None):
+                     frame_start=None, frame_end=None,
+                     geometric_transform=False,
+                     shift_x=0, shift_y=0, angle=0):
     '''
     shape_layer should be a shape object from napari viewer 
     '''
@@ -127,10 +129,13 @@ def crop_rect_shapes(image_meta, shape_layer, dir_to_save=None,
         rect_0 = rect[0].astype(int)
         if i < 10: sl_no = str(0) + str(i)
         else: sl_no = str(i)
+        shift_text = ''
+        if geometric_transform:
+            shift_text = shift_text + '_shifted_' + str(shift_x) + 'dx_' + str(shift_y) + 'dy'
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + 'd-f' + str(frame_start) + '-f' +\
-              str(frame_end)
+              str(frame_end) + shift_text
         names_roi_tosave.append(nam)
     rect_keys = list(img_array_all.keys())   
     for col in range(image_meta['num_colors']):
@@ -140,6 +145,11 @@ def crop_rect_shapes(image_meta, shape_layer, dir_to_save=None,
             img = np.array(imgseq[i], dtype=np.uint16)
             for j in range(len(rect_shape)):
                 img_croped = crop_rect(img, rect_shape[j])
+                # shift image if true. col=1 corresponds to 2nd color
+                if col == 1 and geometric_transform:
+                    img_croped = geometric_shift(img_croped, angle=angle,
+                                    shift_x=shift_x, shift_y=shift_y)
+                # append the image to the stack
                 img_array_all[rect_keys[j]][i, col, :, :] = img_croped
 
     for i in range(len(rect_shape)):
@@ -170,11 +180,22 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
     if path:
         folderpath = path
     else:
-        filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                        filetypes = (("tif files","*.tif"),("all files","*.*")))
+        settings = io.load_user_settings()
+        try:
+            folderpath = settings["crop"]["PWD"]
+            filepath = io.FileDialog(folderpath, "open a tif file stack",
+                                 "Tif File (*.tif *.tiff)").openFileNameDialog()
+        except Exception as e:
+            print(e)
+            filepath = io.FileDialog(None, "open a tif file stack",
+                                 "Tif File (*.tif *.tiff)").openFileNameDialog()
+            pass
         folderpath = os.path.dirname(filepath)
     image_meta['folderpath'] = folderpath
-    filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
+    if filepath.endswith('tif'):
+        filenames = sorted(glob.glob(folderpath + "/*.tif"), key=alphanumeric_key)
+    elif filepath.endswith('tiff'):
+        filenames = sorted(glob.glob(folderpath + "/*.tiff"), key=alphanumeric_key)
     image_meta['filenames'] = filenames
     # read the first file to get the shape and dtype
     # ASSUMES THAT ALL FILES SHARE THE SAME SHAPE/TYPE
@@ -211,6 +232,11 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
         image_meta['min_contrast_color_'+str(i)] = minVal
         image_meta['max_contrast_color_'+str(i)] = maxVal
         print('Channel {}: adjusted min intensity {}, adjusted max intensity {}'.format(i, round(minVal), round(maxVal)))    
+
+    settings = io.load_user_settings()
+    if folderpath is not None:
+        settings["crop"]["PWD"] = folderpath
+    io.save_user_settings(settings)
     return image_meta
 
 def AutoAdjustContrast(img):
@@ -261,3 +287,8 @@ def bkg_substration(txy_array, size_bgs=150, light_bg=False):
         else:
             array_processed = white_tophat(txy_array, size=size_bgs)
     return array_processed
+
+def geometric_shift(image2d, angle, shift_x, shift_y):
+    image_rotated = ndimage.rotate(image2d, angle, reshape=False)
+    image_shifted = ndimage.shift(image_rotated, (float(shift_x), float(shift_y)))
+    return image_shifted

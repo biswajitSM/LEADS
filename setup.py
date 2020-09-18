@@ -27,12 +27,16 @@ setuptools.setup(
         "napari",
         "pyqtgraph",
         "dask",
-        "PySimpleGUI",
+        # "PySimpleGUI",
         "pims",
+        "trackpy",
         "tqdm",
         "tifffile==2020.6.3",
         "roifile==2020.5.28",
-        "PyYAML"
+        "PyYAML",
+        "h5py",
+        "tables",
+        "qdarkstyle"
     ],
     dependency_links = ["git+https://github.com/pyqtgraph/pyqtgraph@master"]
 )

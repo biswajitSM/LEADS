@@ -1,18 +1,19 @@
 import os, glob
 import numpy as np
 import pandas as pd
+import h5py
 from scipy.ndimage import median_filter, white_tophat, black_tophat
 from scipy.signal import find_peaks, savgol_filter, peak_prominences
-import PySimpleGUI as sg
 import tifffile
 from skimage.io.collection import alphanumeric_key
 import pims
+import trackpy
 import matplotlib.pyplot as plt
+from . import io
+plt.style.use('seaborn')
+
 
 def read_img_stack(filepath):
-    # filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-    #                                                 filetypes = (("tif files","*.tif"),("all files","*.*")))
-
     image_meta = {}
     image_meta['filepath'] = os.path.abspath(filepath)
     with tifffile.TiffFile(filepath) as tif:
@@ -20,17 +21,18 @@ def read_img_stack(filepath):
         imagej_metadata = tif.imagej_metadata
     if imagej_hyperstack.ndim == 3:
         num_colors = 1
+        image_meta["num_colors"] = num_colors
         image_meta['img_arr_color_' + str(0)] = imagej_hyperstack
     elif imagej_hyperstack.ndim == 4:
         num_colors = imagej_metadata['channels']
+        image_meta["num_colors"] = num_colors
         for i in range(num_colors):
             image_meta['img_arr_color_' + str(i)] = imagej_hyperstack[:, i, :, :]
     return image_meta
 
 
 def read_img_seq(num_colors=2):
-    filepath = sg.tkinter.filedialog.askopenfilename(title = "Select tif file/s",
-                                                    filetypes = (("tif files","*.tif *.tiff"),("all files","*.*")))
+    filepath = io.FileDialog(None, 'Open Tif File', "Tif File (*.tif *.tiff)").openFileNameDialog()
     image_meta = {}
     folderpath = os.path.dirname(filepath)
     image_meta['folderpath'] = folderpath
@@ -61,7 +63,8 @@ def median_bkg_substration(txy_array, size_med=5, size_bgs=10, light_bg=False):
 
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
-                      prominence_min=1/2, pix_width=11, plotting=False, kymo_noLoop=None):
+                      prominence_min=1/2, pix_width=11, plotting=False,
+                      kymo_noLoop=None, correction_noLoop=True):
     '''
     prominence_min : minimum peak height with respect to max
     signal in the kymo.
@@ -70,10 +73,11 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     '''
     if skip_left is None: skip_left = 0
     if skip_right is 0 or None: skip_right = 1
-    if kymo_noLoop is not None:
+    if kymo_noLoop is not None and correction_noLoop:
         kymo_noLoop_avg = np.sum(kymo_noLoop, axis=1)
+        kymo_noLoop_avg = 1 + (kymo_noLoop_avg/max(kymo_noLoop_avg))
         kym_arr = kym_arr / kymo_noLoop_avg[:, None]
-    kym_arr_cropped = kym_arr[skip_left:-skip_right, :]
+    kym_arr_cropped = kym_arr[skip_left : -skip_right, :]
     pix_rad = int(pix_width/2)
     maxpeak_pos_list = []
     pos_list = []
@@ -88,7 +92,10 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
         peaks_sel = peaks[prom_bool]
         if len(peaks_sel) != 0:
             for peak_pos in peaks_sel:
-                pos_list.append([i, peak_pos, line1d_smth[peak_pos]])
+                peak_int = np.sum(line1d_smth[peak_pos-pix_rad : peak_pos+pix_rad])
+                peak_up_int = np.sum(line1d_smth[:peak_pos-pix_rad])
+                peak_down_int = np.sum(line1d_smth[peak_pos+pix_rad:])
+                pos_list.append([i, peak_pos, peak_int, peak_up_int, peak_down_int])
             prominence_list.append(prominences)
             # max peak pos and val
             max_prominence = max(prominences) #max(line1d_smth[peaks])
@@ -101,7 +108,8 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     pos_list[:, 1] = pos_list[:, 1] + skip_left
     maxpeak_pos_list = np.array(maxpeak_pos_list)
     maxpeak_pos_list[:, 1] = maxpeak_pos_list[:, 1] + skip_left
-    df_pks = pd.DataFrame(pos_list, columns=["FrameNumber", "PeakPosition", "Intensity"])
+    df_pks = pd.DataFrame(pos_list,
+            columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
     df_max_pks = pd.DataFrame(maxpeak_pos_list,
             columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
     peak_dict = {
@@ -110,6 +118,7 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
         "Peak Prominences": prominence_list,
         "skip_left" : skip_left,
         "skip_right" : skip_right,
+        "shape_kymo" : kym_arr.shape
     }
     if plotting:
         plt.figure(figsize=(15,5))
@@ -157,6 +166,10 @@ def analyze_maxpeak(df_maxpeak, smooth_length=11, fitting=False, fit_lim=[0, 30]
 
 
 def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
+    '''
+    Compares the positions (frame numbers) of two colors and 
+    returns the values where both colors have the same frame numbers
+    '''
     df_loop = maxpeak_dict["Max Peak"]
     df_sm = smpeak_dict['Max Peak']
     df_sm = df_sm.loc[df_sm['FrameNumber'].isin(df_loop['FrameNumber'])]
@@ -173,9 +186,9 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     peak_diff = pos_diff_kb_shift.values
     peak_diff_filt = savgol_filter(peak_diff, window_length=smooth_length, polyorder=2)
     loop_sm_dict = {
-        "FrameNumver": frame_number,
-        "PeakDiff" : peak_diff,
-        "PeakDiffFiltered" : peak_diff_filt,
+        "FrameNumber": frame_number,
+        "PeakDiff" : peak_diff, # difference in peak position in kilobases
+        "PeakDiffFiltered" : peak_diff_filt, #smoothed peaks
     }
     if plotting:
         frame_no = maxpeak_dict["Max Peak"]["FrameNumber"]
@@ -192,6 +205,148 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
         plt.ylabel('DNA/kb')
         plt.legend()
     return loop_sm_dict
+
+def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
+               plotting=True, axis=None,):
+    plt.style.use('seaborn')
+    df_peaks["x"] = df_peaks["PeakPosition"]
+    if df_peaks_sm is None:
+        df_peaks["y"] = df_peaks["FrameNumber"]
+    else:
+        df_peaks["y"] = df_peaks_sm["PeakPosition"]
+    df_peaks["frame"] = df_peaks["FrameNumber"]
+    t = trackpy.link(df_peaks, search_range=search_range,
+                memory=memory, pos_columns=['y', 'x'])
+    t_filt = trackpy.filter_stubs(t, filter_length)
+    t_filt_gb = t_filt.groupby("particle")
+    gb_names = list(t_filt_gb.groups.keys())
+    peaks_linked = t_filt.copy(deep=True)
+    particle_index = 1
+    for name in gb_names:
+        peaks_linked['particle'][t_filt['particle']==name] = particle_index
+        particle_index += 1
+    peaks_linked_gb = peaks_linked.groupby("particle")
+    gb_names = list(peaks_linked_gb.groups.keys())
+    if plotting:
+        if axis is None:
+            fig, axis = plt.subplots()
+            axis.set_xlabel('Frames')
+            axis.set_ylabel('Pixels')
+        for name in gb_names:
+            gp_sel = peaks_linked_gb.get_group(name)
+            axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
+            axis.text(gp_sel["frame"].values[0], np.average(gp_sel["x"].values), str(name))
+        plt.show()
+    peaks_linked = peaks_linked.reset_index(drop=True)
+    return peaks_linked
+
+
+def link_and_plot_two_color(peak_dict, peak_dict_sm,
+            search_range=10, memory=5, filter_length=10,
+            plotting=True):
+    df_peaks = peak_dict["All Peaks"]
+    df_peaks_sm = peak_dict_sm["All Peaks"]
+    # set axes and figsize
+    fig = plt.figure()
+    gs = fig.add_gridspec(3, 3)
+    ax1 = fig.add_subplot(gs[0, :])
+    ax1.set_xticks([])
+    ax2 = fig.add_subplot(gs[1, :])
+    ax2.set_xticks([])
+    ax3 = fig.add_subplot(gs[2, :])
+    # link and plot data to it
+    df_peaks_linked = link_peaks(df_peaks, search_range=search_range,
+                          memory=memory, filter_length=filter_length,
+                          plotting=plotting, axis=ax1)
+    df_peaks_linked_sm = link_peaks(df_peaks_sm, search_range=search_range,
+                          memory=memory, filter_length=filter_length,
+                          plotting=plotting, axis=ax2)
+    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.8, label='DNA')
+    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.8, label='SM')
+    ax3.legend(loc=4)
+    dna_height = peak_dict["shape_kymo"][0]
+    kymo_length = peak_dict["shape_kymo"][1]
+    ax_list = [ax1, ax2, ax3]
+    for ax in ax_list:
+        ax.hlines([0, dna_height], 0, kymo_length, 'g', alpha=0.5)
+        ax.set_ylim([0 - 0.05*dna_height, dna_height + 0.05*dna_height])
+        ax.set_xlim(0, kymo_length)
+        ax.set_ylabel('pixels')
+    ax3.set_xlabel('Frame Numbers')
+    ax1.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'DNA punctas')
+    ax2.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'Single molecules')
+    ax3.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'DNA punctas and SM')
+    fig.tight_layout()
+    plt.show()
+    return df_peaks_linked, df_peaks_linked_sm
+
+
+def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
+                      dna_length=48.5, dna_length_um=16, pix_width=11, pix_size=0.115,
+                     interpolation=True):
+    '''
+    frame_width: same as the DA end to end distance
+    pix_size: in micrometer
+    '''
+    if frame_width is None: frame_width = df_linked["PeakPosition"].max() - df_linked["PeakPosition"].min()
+    pix_rad = pix_width/2
+    df_linked_cp = df_linked.copy(deep=True)
+    df_linked_cp["TotalIntensity"] = df_linked["PeakIntensity"] + df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
+    df_linked_cp["NonPeakIntensity"] = df_linked["PeakUpIntensity"] + df_linked["PeakDownIntensity"]
+    df_linked_gb = df_linked_cp.groupby("FrameNumber")
+    gb_names = df_linked_gb.groups.keys()
+    for name in gb_names:
+        gb_sel = df_linked_gb.get_group(name)
+        # gb_sel.apply(lambda x: x)
+        num_peaks = len(gb_sel)
+        if num_peaks > 1:
+            total_avg_int = np.sum(gb_sel["TotalIntensity"][...]) / num_peaks
+            non_peak_int = total_avg_int - np.sum(gb_sel["PeakIntensity"][...])
+            df_linked_cp["NonPeakIntensity"][df_linked_cp["FrameNumber"]==name] = non_peak_int
+    df_linked_gb = df_linked_cp.copy(deep=True)
+    if convert_to_kb:
+        avg_int_pix = df_linked_gb["TotalIntensity"] / frame_width
+        df_linked_gb['PeakIntensity'] = dna_length * (df_linked_gb['PeakIntensity'] - 2*pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
+        df_linked_gb['PeakUpIntensity'] = dna_length * (df_linked_gb['PeakUpIntensity'] + pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
+        df_linked_gb['PeakDownIntensity'] = dna_length * (df_linked_gb['PeakDownIntensity'] + pix_rad*avg_int_pix) / df_linked_gb["TotalIntensity"]
+        df_linked_gb['TotalIntensity'] = dna_length * df_linked_gb['TotalIntensity'] / df_linked_gb["TotalIntensity"]
+        df_linked_gb['NonPeakIntensity'] = dna_length * (df_linked_gb['NonPeakIntensity'] + 2*pix_rad*avg_int_pix) / df_linked_cp["TotalIntensity"]
+    kb_per_um = dna_length_um/dna_length
+    non_peak_dna_um = kb_per_um * df_linked_gb['NonPeakIntensity'].values
+    nonpeak_rel_ext = frame_width * pix_size / non_peak_dna_um
+    df_linked_gb["NonPeakRelativeExtension"] = nonpeak_rel_ext
+    if interpolation:
+        F = np.interp(nonpeak_rel_ext, RELATIVE_EXTENSION, FORCE)
+    else:
+        F = force_wlc(nonpeak_rel_ext, Plen=50)
+    df_linked_gb["Force"] = F
+    return df_linked_gb
+
+
+def force_wlc(rel_ext, Plen=50):
+    '''
+    rel_ext : relative extension
+    Plen : Persistence Length in nm
+    '''
+    kbT = 4.114 # unit: pN⋅nm
+    sqt = 1 / (4 * (1 - rel_ext)**2)
+    F = (kbT/Plen)*(sqt - 0.25 + rel_ext)
+    return F
+
+
+RELATIVE_EXTENSION = np.array([0.23753, 0.26408, 0.37554, 0.49173, 0.63215, 0.70054, 0.73801,
+                               0.76414, 0.77522, 0.78494, 0.79982, 0.81246, 0.82065, 0.82519,
+                               0.83706, 0.84505, 0.84763, 0.85419, 0.86057, 0.8663 , 0.8697 ,
+                               0.87641, 0.87783, 0.87796, 0.88391, 0.88784, 0.88949, 0.8944 ,
+                               0.89656, 0.89834, 0.89997, 0.90261, 0.90348, 0.90675, 0.90767,
+                               0.91085, 0.91311, 0.9126 , 0.91601, 0.91726, 0.91791, 0.91901,
+                               0.92   , 0.92409, 0.92469, 0.92648, 0.92733, 0.92774, 0.92833,
+                               0.93037])
+
+FORCE = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1. , 1.1, 1.2, 1.3,
+                  1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2. , 2.1, 2.2, 2.3, 2.4, 2.5, 2.6,
+                  2.7, 2.8, 2.9, 3. , 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9,
+                  4. , 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5. ])
 
 
 if __name__ == "__main__":
