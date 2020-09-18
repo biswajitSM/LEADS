@@ -133,7 +133,7 @@ def crop_rect_shapes(image_meta, shape_layer, dir_to_save=None,
         names_roi_tosave.append(nam)
     rect_keys = list(img_array_all.keys())   
     for col in range(image_meta['num_colors']):
-        print('Corpping color: {} ...'.format(col))
+        print('Cropping color: {} ...'.format(col))
         imgseq = pims.ImageSequence(image_meta['filenames_color_'+str(col)])[frame_start:frame_end]
         for i in trange(num_frames_update, desc='cropping images'):
             img = np.array(imgseq[i], dtype=np.uint16)
@@ -148,7 +148,7 @@ def crop_rect_shapes(image_meta, shape_layer, dir_to_save=None,
                 img_array_all[rect_keys[i]], imagej=True,
                 metadata={'axis': 'TCYX', 'channels': image_meta['num_colors'],
                 'mode': 'composite',})
-    print(" croping is finished")
+    print(" Cropping is finished")
     return
 
 
@@ -192,6 +192,7 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
     # Stack into one large dask.array
     stack = da.stack(dask_arrays, axis=0)
     print('Whole Stack shape: ', stack.shape)  # (nfiles, nz, ny, nx)
+    
 
     # background subtraction
     if bkg_subtraction:
@@ -205,7 +206,10 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
         image_meta['stack_color_'+str(i)] = stack[i:num_frames:num_colors]        
         sample = imread(filenames[i])
         image_meta['min_int_color_'+str(i)] = sample.min()
-        image_meta['max_int_color_'+str(i)] = sample.max()        
+        image_meta['max_int_color_'+str(i)] = sample.max()
+        image_meta['min_contrast_color_'+str(i)] = sample.min()
+        image_meta['max_contrast_color_'+str(i)] = sk.filters.threshold_otsu(sample)
+        print('adjusted max value: {}'.format(sk.filters.threshold_otsu(sample)))
     return image_meta
 
 
