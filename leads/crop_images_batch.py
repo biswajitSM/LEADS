@@ -180,8 +180,7 @@ def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
 
 
     #imgseq = imgseq[frame_start:frame_end]
-    for col in range(num_colors):
-        #print('Cropping color '+str(col)+'/'+str(num_colors)+' for directory '+str(nDir)+'/'+str(numDirs)+'...')
+    for col in range(num_colors):        
         
         for i in trange(round(num_frames_update/num_colors), desc='Cropping color '+str(col+1)+'/'+str(num_colors)+' for directory '+str(nDir+1)+'/'+str(numDirs)+'...'):
             frame_index = i*num_colors+col
@@ -242,5 +241,6 @@ for i in range(len(sub_dirs)):
         roi_coord[roi_coord<0] = 1
         roi_coord_list.append(roi_coord)
         
+    print('Cropping in '+sub_dirs[i]+os.path.sep+tag)
     crop(sub_dirs[i], tag, roi_coord_list, num_colors, i, len(sub_dirs))
 print('Cropping is finished.')
