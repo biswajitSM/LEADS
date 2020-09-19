@@ -49,17 +49,18 @@ class NapariTabs(QtWidgets.QWidget):
         self.current_image_path = self.image_meta["folderpath"]
         for l in reversed(self.viewer.layers[:]):
             self.viewer.layers.remove(l)
-        color_list = ['green', 'red', 'blue']
+        color_list = ['green', 'magenta', 'cyan']
         color_numer = 0
         while color_numer <= self.image_meta['num_colors']-1 and color_numer <= 5:
             self.viewer.add_image(self.image_meta['stack_color_'+str(color_numer)], colormap=color_list[color_numer],
                     contrast_limits=[self.image_meta['min_int_color_'+str(color_numer)],self.image_meta['max_int_color_'+str(color_numer)]],
                     blending='additive', multiscale=False, name='color_'+str(color_numer))
+            self.viewer.layers['color_'+str(color_numer)].contrast_limits = [self.image_meta['min_contrast_color_'+str(color_numer)],self.image_meta['max_contrast_color_'+str(color_numer)]]
             color_numer += 1
         shp_to_add = np.array([[10, 0], [80, 0], [80, 50], [10, 50]])
         self.viewer.add_shapes(shp_to_add, shape_type='rectangle', name='rect_roi',
                         edge_color='yellow', edge_width=5, opacity=0.2)
-        self.viewer.layers['rect_roi'].mode = 'select'
+        self.viewer.layers['rect_roi'].mode = 'select'        
 
     def crop(self):
         try:
