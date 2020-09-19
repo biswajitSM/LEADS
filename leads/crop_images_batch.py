@@ -6,9 +6,11 @@ import skimage as sk
 from skimage.transform import rotate
 from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
-import PySimpleGUI as sg
+# import PySimpleGUI as sg
 import pims
 from tqdm import trange
+from . import io
+from PyQt5.QtWidgets import QApplication
 
 # ---------------------------------------------------------------
 def FindAllSubdirectories(dirname):
@@ -204,43 +206,53 @@ def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
                     metadata={'axis': 'TCYX', 'channels': num_colors,
                     'mode': 'composite',})
     
-    
-## -------------------------------------------------------------------------------------------------------
-## ------------------------------------- START SCRIPT ----------------------------------------------------
-## -------------------------------------------------------------------------------------------------------
-# #directory = 'O:\\PhD\\Data\\Imaging\\20200827_yeastCondensin_SetupBis\\'
 
-try:
-    directory = sg.tkinter.filedialog.askdirectory(initialdir=open('.tkinter_lastdir').read(),title='Please select a directory')
-except:
-    directory = sg.tkinter.filedialog.askdirectory(initialdir="/",title='Please select a directory')
-with open('.tkinter_lastdir', 'w') as f: f.write(directory)
-directory = directory.replace('/', os.sep)
-directory = directory+os.path.sep
+def crop_from_directory(directory=None):
+    '''
+    crops from all the subfolders with images and corresponding ROIs
+    '''
+    if directory is None:
+        settings = io.load_user_settings()
+        try:
+            directory = settings["crop"]["PWD BATCH"]
+        except:
+            directory = None
+            pass
+        _ = QApplication([])
+        directory = io.FileDialog(directory, 'Please select a directory').openDirectoryDialog()
+        print('Directory:\n'+directory+'\n...')
+        settings["crop"]["PWD BATCH"] = directory
+        io.save_user_settings(settings)
+    # with open('.tkinter_lastdir', 'w') as f: f.write(directory)
+    # directory = directory.replace('/', os.sep)
+    # directory = directory+os.path.sep
 
-#directory = os.path.normpath(directory)
-num_colors = 2
+    #directory = os.path.normpath(directory)
+    num_colors = 2
 
-# Get relevant subdirectories
-sub_dirs, tag = IdentifyRelevantDirectories(directory)
+    # Get relevant subdirectories
+    sub_dirs, tag = IdentifyRelevantDirectories(directory)
 
-# go through each sub-directory and get all .roi files
-for i in range(len(sub_dirs)):
-    roi_file_list = glob.glob(sub_dirs[i] + "/**/*.roi", recursive = True)
-    
-    roi_file_list_updated = []
-    for j in range(len(roi_file_list)):    
-        if (roi_file_list[j].count('-f')<2):
-            roi_file_list_updated.append(roi_file_list[j])
-    roi_file_list = roi_file_list_updated
-    
-    roi_coord_list = []
-    for roi_file in roi_file_list:
-        roi = ImagejRoi.fromfile(roi_file)
-        roi_coord = np.flip(roi.coordinates())
-        roi_coord[roi_coord<0] = 1
-        roi_coord_list.append(roi_coord)
+    # go through each sub-directory and get all .roi files
+    for i in range(len(sub_dirs)):
+        roi_file_list = glob.glob(sub_dirs[i] + "/**/*.roi", recursive = True)
         
-    print('Cropping in '+sub_dirs[i]+os.path.sep+tag)
-    crop(sub_dirs[i], tag, roi_coord_list, num_colors, i, len(sub_dirs))
-print('Cropping is finished.')
+        roi_file_list_updated = []
+        for j in range(len(roi_file_list)):    
+            if (roi_file_list[j].count('-f')<2):
+                roi_file_list_updated.append(roi_file_list[j])
+        roi_file_list = roi_file_list_updated
+        
+        roi_coord_list = []
+        for roi_file in roi_file_list:
+            roi = ImagejRoi.fromfile(roi_file)
+            roi_coord = np.flip(roi.coordinates())
+            roi_coord[roi_coord<0] = 1
+            roi_coord_list.append(roi_coord)
+            
+        print('Cropping in '+sub_dirs[i]+os.path.sep+tag)
+        crop(sub_dirs[i], tag, roi_coord_list, num_colors, i, len(sub_dirs))
+    print('Cropping is finished.')
+
+if __name__ == "__main__":
+    crop_from_directory()
