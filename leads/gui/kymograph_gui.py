@@ -479,9 +479,15 @@ class Window(QtWidgets.QMainWindow):
         save_action = file_menu.addAction("Save (yaml and hdf5)")
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save)
+        save_as_action = file_menu.addAction("Save as .hdf5")
+        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.triggered.connect(self.save_as)
         loadyaml_action = file_menu.addAction("Load .yaml params")
         loadyaml_action.setShortcut("Ctrl+Y")
         loadyaml_action.triggered.connect(self.load_yaml_params_external)
+        saveyaml_as_action = file_menu.addAction("Save .yaml params As")
+        saveyaml_as_action.setShortcut("Ctrl+Shift+Y")
+        saveyaml_as_action.triggered.connect(self.save_yaml_as)
         """ View """
         view_menu = menu_bar.addMenu("View")
         default_action = view_menu.addAction("Default View State")
@@ -768,14 +774,19 @@ class Window(QtWidgets.QMainWindow):
         return self.params_yaml
 
     def load_yaml_params_external(self):
-        filepath_yaml = io.FileDialog(self.folderpath, "open yaml parameter file",
+        filepath_yaml = io.FileDialog(self.filepath_yaml, "open yaml parameter file",
                                  "yaml (*.yaml)").openFileNameDialog()
         if os.path.isfile(filepath_yaml):
             with open(filepath_yaml) as f:
                 self.params_yaml = yaml.load(f)
         self.set_yaml_params()
 
-    def save_yaml_params(self):
+    def save_yaml_as(self):
+        yamlpath = io.FileDialog(self.filepath_yaml, 'Save parameters as',
+                        'YAML File(*.yaml)').saveFileDialog()
+        self.save_yaml_params(yamlpath)
+
+    def save_yaml_params(self, filepath_yaml):
         self.params_yaml = self.load_yaml_params()
         self.params_yaml['Pixel Size'] = self.parameters_dialog.pix_spinbox.value()
         self.params_yaml['ROI width'] = self.parameters_dialog.roi_spinbox.text()
@@ -788,14 +799,24 @@ class Window(QtWidgets.QMainWindow):
         if self.plot_loop_errbar is not None:
             self.params_yaml['Region Errbar'] = list(self.region_errbar.getRegion())
 
-        with open(self.filepath_yaml, 'w') as f:
+        with open(filepath_yaml, 'w') as f:
             yaml.dump(self.params_yaml, f)
 
     def save(self):
-        self.save_yaml_params()
+        self.save_yaml_params(self.filepath_yaml)
         print("Parameters saved to yaml file")
-        self.save_hdf5()
+        filepath_hdf5 = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'
+        self.save_hdf5(filepath_hdf5)
         print("output and metadata saved to hdf5 file")
+
+    def save_as(self):
+        suggest_name = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'
+        hdf5path = io.FileDialog(suggest_name, 'Save analysis outputs as',
+                        'HDF5 File(*.hdf5)').saveFileDialog()
+        self.save_hdf5(hdf5path)
+        (name_without_ext, _) = os.path.splitext(os.path.basename(hdf5path))
+        yamlpath = os.path.join(os.path.dirname(hdf5path), name_without_ext + '.yaml')
+        self.save_yaml_params(yamlpath)
 
     def set_yaml_params(self):
         if self.params_yaml['ROI width'] is not None:
@@ -1330,8 +1351,7 @@ class Window(QtWidgets.QMainWindow):
     def matplot_loop_vs_sm(self):
         pass
 
-    def save_hdf5(self):
-        filepath_hdf5 = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'
+    def save_hdf5(self, filepath_hdf5):
         h5_analysis = h5py.File(filepath_hdf5, 'w')
         # save parameters
         params_group = h5_analysis.create_group("parameters")
@@ -1364,6 +1384,9 @@ class Window(QtWidgets.QMainWindow):
                 h5_analysis["Right Linked Peaks"] = self.df_peaks_linked_sm.to_records()
         if self.linkedpeaks_analyzed is not None:
             h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
+        # save images
+        img_group = h5.create_group("Images")
+        
         h5_analysis.close()
 
     def save_section(self):
