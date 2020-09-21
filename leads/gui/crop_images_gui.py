@@ -28,7 +28,6 @@ class NapariTabs(QtWidgets.QWidget):
         if self.frame_end == -1:
             self.frame_end = None
         # image preprocessing
-        #self.subtractBackground = self.ui.bkgSubstractionCheckBox.checkState()        
         self.ui.bkgSubstractionCheckBox.stateChanged.connect(self.toggle_bkg_subtraction)
         # processing
         self.ui.loadImageBtn.clicked.connect(self.load_img_seq)
@@ -99,7 +98,6 @@ class NapariTabs(QtWidgets.QWidget):
         crop_images.save_rectshape_as_imageJroi(shape_layer)
 
     def toggle_bkg_subtraction(self):
-        #current_image_path = self.image_meta.get("folderpath")#self.image_meta["folderpath"]
         self.use_current_image_path = True
         self.load_img_seq()
 
