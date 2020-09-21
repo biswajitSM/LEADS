@@ -11,23 +11,27 @@ import pims
 from tqdm import trange
 from . import io
 from PyQt5.QtWidgets import QApplication
+import time
 
 # ---------------------------------------------------------------
-def FindAllSubdirectories(dirname):
+def FindAllSubdirectories(dirname, count=0):
     subfolders= [f.path for f in os.scandir(dirname) if f.is_dir()]
     for dirname in list(subfolders):
-        subfolders.extend(FindAllSubdirectories(dirname))
+        count += 1
+        print('Found '+str(count)+' subdirectories.', end="\r", flush=True)
+        subfolders.extend(FindAllSubdirectories(dirname, count))
     return subfolders
 
 # ---------------------------------------------------------------
 def IdentifyRelevantDirectories(directory):
     # scan directory for folders
     sub_dirs = FindAllSubdirectories(directory)
+    print()
 
     # check if there are any ambiguities we have to ask the user about
     name_list = []
     sub_dirs_updated = []
-    for i in range(len(sub_dirs)):
+    for i in trange(len(sub_dirs), desc='Check for ambiguities'):
         roi_file_list = glob.glob(sub_dirs[i] + "/**/*.roi", recursive = True)
 
         if roi_file_list: # only consider if there are any roi files
@@ -49,7 +53,7 @@ def IdentifyRelevantDirectories(directory):
 
         # remove all directories which don't fit in the user selected scheme
         sub_dirs_updated = []
-        for i in range(len(sub_dirs)):
+        for i in trange(len(sub_dirs), desc='Remove unselected subdirectories'):
             subfolders = [f.path for f in os.scandir(sub_dirs[i]) if f.is_dir()]
             for j in range(len(subfolders)):
                 name = os.path.basename(subfolders[j])
@@ -61,7 +65,7 @@ def IdentifyRelevantDirectories(directory):
         
     # remove all subdirectories which contain a roi file which has 2x "-f" in the name since those are files which are saved together with the crop    
     sub_dirs_updated = []
-    for i in range(len(sub_dirs)):
+    for i in trange(len(sub_dirs), desc='Remove already processed ROIs'):
         subfolders = [f.path for f in os.scandir(sub_dirs[i]) if f.is_dir()]
         for j in range(len(subfolders)):
             roi_file_list = glob.glob(sub_dirs[i] + "/**/*.roi", recursive = True)
@@ -100,9 +104,7 @@ def get_rect_params(rect, printing=False):
 # ---------------------------------------------------------------
 def crop_rect(img, rect):
     # rect : array for rectanglular roi as in napari
-    #print(rect)
     rect_params = get_rect_params(rect)
-    #print(rect_params)
     if rect_params['angle'] != 0:
         img_rot = rotate(img, angle=rect_params['angle'],
                          center=(rect_params['y_cent'], rect_params['x_cent']))
@@ -111,7 +113,6 @@ def crop_rect(img, rect):
     x = int(rect_params['x_cent'] - rect_params['length']/2)
     y = int(rect_params['y_cent'] - rect_params['width']/2)
     img_croped = img_rot[x:x+rect_params['length'], y:y+rect_params['width']]
-    #print(img_croped.shape)
     return sk.util.img_as_uint(img_croped)
 
 # ---------------------------------------------------------------
@@ -148,11 +149,11 @@ def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
                                        rect_params['length'], rect_params['width']),
                                        dtype=np.uint16)        
         # name = pix_x-pix_y-length-width-angle-frame_start-frame_end
-        rect_0 = rect[0].astype(int)
+        rect_0 = rect[2].astype(int)
         if i < 10: sl_no = str(0) + str(i)
         else: sl_no = str(i)
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-              '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
+              '-l' + str(rect_params['width']) + '-w' + str(rect_params['length']) +\
               '-a' + str(rect_params['angle']) + 'd-f' + str(frame_start) + '-f' +\
               str(frame_end)
         names_roi_tosave.append(nam)
@@ -187,9 +188,9 @@ def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
         for i in trange(round(num_frames_update/num_colors), desc='Cropping color '+str(col+1)+'/'+str(num_colors)+' for directory '+str(nDir+1)+'/'+str(numDirs)+'...'):
             frame_index = i*num_colors+col
             if col==0:
-                frame_index = frame_index+1
+                frame_index += 1
             elif col==1:
-                frame_index = frame_index-1
+                frame_index -= 1
             img = np.array(imgseq[frame_index], dtype=np.uint16)
             for j in range(len(roi_coord_list)):
                 if (not skipIMG[j]):
@@ -224,10 +225,7 @@ def crop_from_directory(directory=None):
         settings["crop"]["PWD BATCH"] = directory
         io.save_user_settings(settings)
     # with open('.tkinter_lastdir', 'w') as f: f.write(directory)
-    # directory = directory.replace('/', os.sep)
-    # directory = directory+os.path.sep
 
-    #directory = os.path.normpath(directory)
     num_colors = 2
 
     # Get relevant subdirectories
