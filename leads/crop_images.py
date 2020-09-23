@@ -167,6 +167,7 @@ from skimage.io import imread
 from skimage.io.collection import alphanumeric_key
 from dask import delayed
 import dask.array as da
+import random
 folderpath = ''
 def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
     '''
@@ -211,6 +212,12 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
         for delayed_reader in lazy_arrays
     ]
 
+    # save current folderpath for the next time when the dialog is opened
+    settings = io.load_user_settings()
+    if folderpath is not None:
+        settings["crop"]["PWD"] = folderpath
+    io.save_user_settings(settings)
+
     # Stack into one large dask.array
     stack = da.stack(dask_arrays, axis=0)
     print('Whole Stack shape: ', stack.shape)  # (nfiles, nz, ny, nx)
@@ -222,21 +229,25 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
 
     num_frames = num_colors * (len(filenames)//num_colors)
     image_meta['num_frames'] = num_frames
+    minVal = []; maxVal = []
+    minCon = []; maxCon = []
+    sampling = random.choices(range(0, num_frames, num_colors), k=10)
     for i in range(num_colors):
         image_meta['filenames_color_'+str(i)] = filenames[i:num_frames:num_colors]
-        image_meta['stack_color_'+str(i)] = stack[i:num_frames:num_colors]        
-        sample = imread(filenames[i])
-        image_meta['min_int_color_'+str(i)] = sample.min()
-        image_meta['max_int_color_'+str(i)] = sample.max()
-        minVal, maxVal = AutoAdjustContrast(sample)
-        image_meta['min_contrast_color_'+str(i)] = minVal
-        image_meta['max_contrast_color_'+str(i)] = maxVal
-        print('Channel {}: adjusted min intensity {}, adjusted max intensity {}'.format(i, round(minVal), round(maxVal)))    
+        image_meta['stack_color_'+str(i)] = stack[i:num_frames:num_colors]
+        for k in sampling:
+            sample = imread(filenames[k+i])
+            minVal.append(sample.min())
+            maxVal.append(sample.max())
+            minConTemp, maxConTemp = AutoAdjustContrast(sample)
+            minCon.append(minConTemp)
+            maxCon.append(maxConTemp)
+        image_meta['min_int_color_'+str(i)] = np.mean(minVal)
+        image_meta['max_int_color_'+str(i)] = np.mean(maxVal)        
+        image_meta['min_contrast_color_'+str(i)] = np.mean(minCon)
+        image_meta['max_contrast_color_'+str(i)] = np.mean(maxCon)
+        print('Channel {}: adjusted min intensity {}, adjusted max intensity {}'.format(i, round(np.mean(minCon)), round(np.mean(maxCon))))    
 
-    settings = io.load_user_settings()
-    if folderpath is not None:
-        settings["crop"]["PWD"] = folderpath
-    io.save_user_settings(settings)
     return image_meta
 
 def AutoAdjustContrast(img):
