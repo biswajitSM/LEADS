@@ -805,7 +805,7 @@ class Window(QtWidgets.QMainWindow):
     def save(self):
         self.save_yaml_params(self.filepath_yaml)
         print("Parameters saved to yaml file")
-        filepath_hdf5 = self.folderpath+'/'+self.filename_base + '_analysis.hdf5'
+        filepath_hdf5 = os.path.join(self.folderpath, self.filename_base + '_analysis.hdf5')
         self.save_hdf5(filepath_hdf5)
         print("output and metadata saved to hdf5 file")
 
@@ -1330,7 +1330,7 @@ class Window(QtWidgets.QMainWindow):
             else: interpolation_bool = False
             self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
                     frame_width=self.loop_region_right - self.loop_region_left,
-                    dna_length=self.dna_length_kb, dna_length_um=16,
+                    dna_length=self.dna_length_kb, dna_length_um=20,
                     pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
                     interpolation=interpolation_bool)
             df_gb = self.linkedpeaks_analyzed.groupby("particle")
@@ -1385,7 +1385,7 @@ class Window(QtWidgets.QMainWindow):
         if self.linkedpeaks_analyzed is not None:
             h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
         # save images
-        img_group = h5.create_group("Images")
+        # img_group = h5_analysis.create_group("Images")
         
         h5_analysis.close()
 
@@ -1427,7 +1427,7 @@ class Window(QtWidgets.QMainWindow):
                 i += 1
             self.roirect_right.setState(roi_state) #set back to its previous state
             filelist = glob.glob(temp_folder+'/temp_*.png')
-            filename = self.folderpath+'/'+self.filename_base + '_right.avi'
+            filename = os.path.join(self.folderpath, self.filename_base + '_right.avi')
             os.chdir(temp_folder)
             subprocess.call(['ffmpeg', '-y', '-r', '10', '-i', 'temp_%d0.png', filename])
             for file in filelist:
