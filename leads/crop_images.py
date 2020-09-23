@@ -180,6 +180,10 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
     global folderpath
     if path:
         folderpath = path
+        for file in os.listdir(folderpath):
+            if file.endswith(".tif") or file.endswith(".tiff"):
+                filepath = file
+                break
     else:
         settings = io.load_user_settings()
         try:
@@ -237,6 +241,8 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path=""):
         image_meta['stack_color_'+str(i)] = stack[i:num_frames:num_colors]
         for k in sampling:
             sample = imread(filenames[k+i])
+            if bkg_subtraction:
+                sample = bkg_substration(sample)
             minVal.append(sample.min())
             maxVal.append(sample.max())
             minConTemp, maxConTemp = AutoAdjustContrast(sample)
@@ -282,7 +288,7 @@ def AutoAdjustContrast(img):
     return hmin, hmax
 
 from scipy.ndimage import white_tophat, black_tophat
-def bkg_substration(txy_array, size_bgs=150, light_bg=False):
+def bkg_substration(txy_array, size_bgs=50, light_bg=False):
     array_processed = np.zeros_like(txy_array)
     if array_processed.ndim>2:
         for i in range(txy_array.shape[0]):
