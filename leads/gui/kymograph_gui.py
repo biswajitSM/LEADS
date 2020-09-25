@@ -26,6 +26,7 @@ DEFAULT_PARAMETERS = {
     "ROI Width" : 11,
     "Peak Prominence" : 0.25,
     "DNA Length" : 48.5, # in kilo bases
+    "DNA Contour Length" : 16, # in micrometer
     "DNA Puncta Diameter" : 9,
     "Search Range" : 10,
     "Memory" : 5,
@@ -103,7 +104,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         general_grid.addWidget(QtWidgets.QLabel("Peak Prominence:"), 0, 0)
         self.prominence_spinbox = QtWidgets.QDoubleSpinBox()
         self.prominence_spinbox.setRange(0, 1)
-        self.prominence_spinbox.setSingleStep(0.1)
+        self.prominence_spinbox.setSingleStep(0.01)
         self.prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.prominence_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.prominence_spinbox, 0, 1)
@@ -112,11 +113,15 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.prominence_slider.setOrientation(QtCore.Qt.Horizontal)
         self.prominence_slider.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.prominence_slider.setSingleStep(0.01)
-        general_grid.addWidget(self.prominence_slider, 1, 0)
+        general_grid.addWidget(self.prominence_slider, 1, 0, 1, 3)
         # Preview
         self.preview_checkbox = QtWidgets.QCheckBox("Preview")
         self.preview_checkbox.setChecked(True)
-        general_grid.addWidget(self.preview_checkbox, 1, 1)
+        general_grid.addWidget(self.preview_checkbox, 1, 3)
+        # normalize/correction with no-loop data
+        self.loopcorrection_checkbox = QtWidgets.QCheckBox("Correction with Non-loop")
+        self.loopcorrection_checkbox.setChecked(True)
+        general_grid.addWidget(self.loopcorrection_checkbox, 0, 2, 1, 2)
         # DNA length
         general_grid.addWidget(QtWidgets.QLabel("DNA length:"), 3, 0)
         self.DNAlength_spinbox = QtWidgets.QDoubleSpinBox()
@@ -125,18 +130,29 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.DNAlength_spinbox.setSuffix(" kb")
         self.DNAlength_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.DNAlength_spinbox, 3, 1)
+        # DNA Contour length
+        general_grid.addWidget(QtWidgets.QLabel("DNA Contour length:"), 4, 0)
+        self.DNAcontourlength_spinbox = QtWidgets.QDoubleSpinBox()
+        self.DNAcontourlength_spinbox.setRange(1, 1e3)
+        self.DNAcontourlength_spinbox.setValue(DEFAULT_PARAMETERS["DNA Contour Length"])
+        self.DNAcontourlength_spinbox.setSuffix(" \u03BCm")
+        self.DNAcontourlength_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.DNAcontourlength_spinbox, 4, 1)
         # Puncta size
-        general_grid.addWidget(QtWidgets.QLabel("Puncta diameter:"), 4, 0)
+        general_grid.addWidget(QtWidgets.QLabel("Puncta diameter:"), 3, 2)
         self.DNApuncta_spinbox = QtWidgets.QSpinBox()
         self.DNApuncta_spinbox.setRange(1, 1e3)
         self.DNApuncta_spinbox.setValue(DEFAULT_PARAMETERS["DNA Puncta Diameter"])
         self.DNApuncta_spinbox.setSuffix(" pixels")
         self.DNApuncta_spinbox.setKeyboardTracking(False)
-        general_grid.addWidget(self.DNApuncta_spinbox, 4, 1)
-        # normalize/correction with no-loop data
-        self.loopcorrection_checkbox = QtWidgets.QCheckBox("Correction with No loop region")
-        self.loopcorrection_checkbox.setChecked(True)
-        general_grid.addWidget(self.loopcorrection_checkbox, 5, 0, 1, 2)
+        general_grid.addWidget(self.DNApuncta_spinbox, 3, 3)
+        # Smoothing length
+        general_grid.addWidget(QtWidgets.QLabel("Smoothing Length:"), 4, 2)
+        self.smoothlength_spinbox = QtWidgets.QSpinBox()
+        self.smoothlength_spinbox.setRange(3, 1e3)
+        self.smoothlength_spinbox.setValue(7)
+        self.smoothlength_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.smoothlength_spinbox, 4, 3)
         ## Single molecule peak detection parameters
         singlemolecule_groupbox = QtWidgets.QGroupBox("Single Molecule Parameters")
         vbox.addWidget(singlemolecule_groupbox)
@@ -145,7 +161,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         smol_grid.addWidget(QtWidgets.QLabel("Peak Prominence:"), 0, 0)
         self.smol_prominence_spinbox = QtWidgets.QDoubleSpinBox()
         self.smol_prominence_spinbox.setRange(0, 1)
-        self.smol_prominence_spinbox.setSingleStep(0.1)
+        self.smol_prominence_spinbox.setSingleStep(0.01)
         self.smol_prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.smol_prominence_spinbox.setKeyboardTracking(False)
         smol_grid.addWidget(self.smol_prominence_spinbox, 0, 1)
@@ -172,22 +188,22 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.searchrange_spinbox.setKeyboardTracking(False)
         linking_grid.addWidget(self.searchrange_spinbox, 0, 1)
         # Memory
-        linking_grid.addWidget(QtWidgets.QLabel("Memory:"), 1, 0)
+        linking_grid.addWidget(QtWidgets.QLabel("Memory:"), 0, 2)
         self.memory_spinbox = QtWidgets.QSpinBox()
         self.memory_spinbox.setRange(1, 1e3)
         self.memory_spinbox.setValue(DEFAULT_PARAMETERS["Memory"])
         self.memory_spinbox.setKeyboardTracking(False)
-        linking_grid.addWidget(self.memory_spinbox, 1, 1)
+        linking_grid.addWidget(self.memory_spinbox, 0, 3)
         # Filter length
-        linking_grid.addWidget(QtWidgets.QLabel("Filter Length:"), 2, 0)
+        linking_grid.addWidget(QtWidgets.QLabel("Filter Length:"), 1, 0)
         self.filterlen_spinbox = QtWidgets.QSpinBox()
         self.filterlen_spinbox.setRange(1, 1e3)
         self.filterlen_spinbox.setValue(DEFAULT_PARAMETERS["Filter Length"])
         self.filterlen_spinbox.setKeyboardTracking(False)
-        linking_grid.addWidget(self.filterlen_spinbox, 2, 1)
+        linking_grid.addWidget(self.filterlen_spinbox, 1, 1)
         # plot all peaks
         self.linkplot_pushbutton = QtWidgets.QPushButton("Link and Plot All Peaks")
-        linking_grid.addWidget(self.linkplot_pushbutton, 3, 0, 1, 2)
+        linking_grid.addWidget(self.linkplot_pushbutton, 1, 2, 1, 2)
         ## Kinetics ##
         plot_groupbox = QtWidgets.QGroupBox("Plotting Kinetics")
         vbox.addWidget(plot_groupbox)
@@ -198,29 +214,30 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.leftpeak_num_combobox.addItems(["1"])
         plot_grid.addWidget(self.leftpeak_num_combobox, 0, 1)
         # right section fro peak-number
-        plot_grid.addWidget(QtWidgets.QLabel("Right Peak No:"), 1, 0)
+        plot_grid.addWidget(QtWidgets.QLabel("Right Peak No:"), 0, 2)
         self.rightpeak_num_combobox = QtWidgets.QComboBox()
         self.rightpeak_num_combobox.addItems(["1"])
-        plot_grid.addWidget(self.rightpeak_num_combobox, 1, 1)
+        plot_grid.addWidget(self.rightpeak_num_combobox, 0, 3)
         # plot kinetics
         self.loopkinetics_pushbutton = QtWidgets.QPushButton("Plot Loop Kinetics")
         self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loov Vs Mol")
-        plot_grid.addWidget(self.loopkinetics_pushbutton, 2, 0)
-        plot_grid.addWidget(self.loopVsmol_pushbutton, 2, 1)
+        plot_grid.addWidget(self.loopkinetics_pushbutton, 1, 0, 1, 2)
+        plot_grid.addWidget(self.loopVsmol_pushbutton, 1, 2, 1, 2)
         # include Force
         self.force_checkbox = QtWidgets.QCheckBox("Include Force")
         self.force_combobox = QtWidgets.QComboBox()
         self.force_combobox.addItems(["Interpolation", "Analytical"])
-        plot_grid.addWidget(self.force_checkbox, 3, 0)
-        plot_grid.addWidget(self.force_combobox, 3, 1)
+        plot_grid.addWidget(self.force_checkbox, 2, 0)
+        plot_grid.addWidget(self.force_combobox, 2, 1)
 
     def connect_signals(self):
         self.prominence_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         self.prominence_slider.sliderReleased.connect(self.on_prominence_slider_changed)
         self.preview_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
+        self.loopcorrection_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
         self.DNAlength_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         self.DNApuncta_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
-        self.loopcorrection_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
+        self.smoothlength_spinbox.valueChanged.connect(self.on_smoothlength_spinbox_changed)
         self.smol_prominence_spinbox.valueChanged.connect(self.on_smol_prominence_spinbox_changed)
         self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
         self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
@@ -237,6 +254,11 @@ class MultiPeakDialog(QtWidgets.QDialog):
     def on_prominence_slider_changed(self):
         value = self.prominence_slider.value()
         self.prominence_spinbox.setValue(value)
+
+    def on_smoothlength_spinbox_changed(self):
+        if self.smoothlength_spinbox.value() % 2 != 0: # only processing odd values
+            self.window.params_change_loop_detection()
+            self.window.params_change_smol_detection()
 
     def on_smol_prominence_spinbox_changed(self):
         value = self.smol_prominence_spinbox.value()
@@ -1169,6 +1191,7 @@ class Window(QtWidgets.QMainWindow):
         self.all_peaks_dict = peakfinder_savgol(self.kymo_left_loop.T,
                 self.loop_region_left, -self.loop_region_right,
                 prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size,
+                smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(),
                 plotting=False, kymo_noLoop=self.kymo_left_noLoop.T,
                 correction_noLoop=self.correction_with_no_loop
                 )
@@ -1179,15 +1202,17 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
-                prominence_min=self.peak_prominence_smol, pix_width=self.dna_puncta_size, plotting=False,
+                prominence_min=self.peak_prominence_smol, pix_width=self.dna_puncta_size,
+                smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(), plotting=False,
                 )
         self.plotLoopPosData.setData(self.all_peaks_dict["All Peaks"]["FrameNumber"],
                                      self.all_peaks_dict["All Peaks"]["PeakPosition"])
 
     def params_change_smol_detection(self):
-        self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
-        if self.multipeak_dialog.smol_preview_checkbox.isChecked():
-            self.preview_smol_peaks_on_params_change()
+        if self.numColors == "2":
+            self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
+            if self.multipeak_dialog.smol_preview_checkbox.isChecked():
+                self.preview_smol_peaks_on_params_change()
 
     def preview_smol_peaks_on_params_change(self):
         if self.plot_loop_errbar is None:
@@ -1197,7 +1222,8 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
-                prominence_min=self.peak_prominence_smol, 
+                prominence_min=self.peak_prominence_smol,
+                smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(),
                 pix_width=self.dna_puncta_size, plotting=False,)
             self.plot_loop_vs_sm_smdata.clear()
             self.plot_loop_vs_sm_loopdata.clear()
@@ -1336,9 +1362,10 @@ class Window(QtWidgets.QMainWindow):
             if self.multipeak_dialog.force_combobox.currentText() == "Interpolation":
                 interpolation_bool = True
             else: interpolation_bool = False
+            dna_contour_len = self.multipeak_dialog.DNAcontourlength_spinbox.value()
             self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
                     frame_width=self.loop_region_right - self.loop_region_left,
-                    dna_length=self.dna_length_kb, dna_length_um=20,
+                    dna_length=self.dna_length_kb, dna_length_um=dna_contour_len,
                     pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
                     interpolation=interpolation_bool)
             df_gb = self.linkedpeaks_analyzed.groupby("particle")

@@ -63,7 +63,8 @@ def median_bkg_substration(txy_array, size_med=5, size_bgs=10, light_bg=False):
 
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
-                      prominence_min=1/2, pix_width=11, plotting=False,
+                      smooth_length = 7, prominence_min=1/2,
+                      pix_width=11, plotting=False,
                       kymo_noLoop=None, correction_noLoop=True):
     '''
     prominence_min : minimum peak height with respect to max
@@ -84,7 +85,7 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     prominence_list = []
     for i in range(kym_arr_cropped.shape[1]):
         line1d = kym_arr_cropped[:, i]
-        line1d_smth = savgol_filter(line1d, window_length=7, polyorder=1)
+        line1d_smth = savgol_filter(line1d, window_length=smooth_length, polyorder=1)
         peaks, properties = find_peaks(line1d_smth,
                 prominence=min(line1d_smth))
         prom_bool = properties['prominences'] > (prominence_min * max(line1d_smth))
