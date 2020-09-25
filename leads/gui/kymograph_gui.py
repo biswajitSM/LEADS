@@ -425,8 +425,16 @@ class MainWidget(QtWidgets.QWidget):
                                            "d1left:tif", "d1right:tif",
                                            "d2left:tif", "d2right:tif",
                                            ])
+        self.saveFormatComboBox = QtWidgets.QComboBox()
+        self.saveFormatComboBox.addItems([".avi", ".gif"])
+        self.saveFramerateSpinBox = QtWidgets.QSpinBox()
+        self.saveFramerateSpinBox.setRange(1, 1e3)
+        self.saveFramerateSpinBox.setValue(7)
+        self.saveFramerateSpinBox.setSuffix(" fps")
         grid_save.addWidget(self.saveSectionBtn, 0, 0)
         grid_save.addWidget(self.saveSectionComboBox, 1, 0)
+        grid_save.addWidget(self.saveFormatComboBox, 0, 1)
+        grid_save.addWidget(self.saveFramerateSpinBox, 1, 1)
         
         # swap or merge colors
         grid_colors = QtWidgets.QGridLayout()
@@ -1406,11 +1414,13 @@ class Window(QtWidgets.QMainWindow):
                 # self.imv00.jumpFrames(1)
                 i += 1
             self.roirect_left.setState(roi_state) #set back to its previous state
-            filelist = glob.glob(temp_folder+'/temp_*.png')
-            filename = self.folderpath+'/'+self.filename_base + '_left.avi'
+            filelist_png = glob.glob(temp_folder+'/temp_*.png')
+            frame_rate = str(self.ui.saveFramerateSpinBox.value())
+            extension = self.ui.saveFormatComboBox.currentText()
+            filename = os.path.join(self.folderpath, self.filename_base + '_left' + extension)
             os.chdir(temp_folder)
-            subprocess.call(['ffmpeg', '-y', '-r', '10', '-i', 'temp_%d0.png', filename])
-            for file in filelist:
+            subprocess.call(['ffmpeg', '-y', '-r', frame_rate, '-i', 'temp_%d0.png', filename])
+            for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
         # save left video : d0right
@@ -1426,11 +1436,13 @@ class Window(QtWidgets.QMainWindow):
                 # self.imv00.jumpFrames(1)
                 i += 1
             self.roirect_right.setState(roi_state) #set back to its previous state
-            filelist = glob.glob(temp_folder+'/temp_*.png')
-            filename = os.path.join(self.folderpath, self.filename_base + '_right.avi')
+            filelist_png = glob.glob(temp_folder+'/temp_*.png')
+            frame_rate = str(self.ui.saveFramerateSpinBox.value())
+            extension = self.ui.saveFormatComboBox.currentText()
+            filename = os.path.join(self.folderpath, self.filename_base + '_right' + extension)
             os.chdir(temp_folder)
-            subprocess.call(['ffmpeg', '-y', '-r', '10', '-i', 'temp_%d0.png', filename])
-            for file in filelist:
+            subprocess.call(['ffmpeg', '-y', '-r', frame_rate, '-i', 'temp_%d0.png', filename])
+            for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
         # save left full kymo : d1left
