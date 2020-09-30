@@ -108,6 +108,10 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.prominence_spinbox.setValue(DEFAULT_PARAMETERS["Peak Prominence"])
         self.prominence_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.prominence_spinbox, 0, 1)
+        # normalize/correction with no-loop data
+        self.loopcorrection_checkbox = QtWidgets.QCheckBox("Correction with Non-loop")
+        self.loopcorrection_checkbox.setChecked(True)
+        general_grid.addWidget(self.loopcorrection_checkbox, 0, 2, 1, 2)
         # Slider
         self.prominence_slider = DoubleSlider()
         self.prominence_slider.setOrientation(QtCore.Qt.Horizontal)
@@ -118,10 +122,6 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.preview_checkbox = QtWidgets.QCheckBox("Preview")
         self.preview_checkbox.setChecked(True)
         general_grid.addWidget(self.preview_checkbox, 1, 3)
-        # normalize/correction with no-loop data
-        self.loopcorrection_checkbox = QtWidgets.QCheckBox("Correction with Non-loop")
-        self.loopcorrection_checkbox.setChecked(True)
-        general_grid.addWidget(self.loopcorrection_checkbox, 0, 2, 1, 2)
         # DNA length
         general_grid.addWidget(QtWidgets.QLabel("DNA length:"), 3, 0)
         self.DNAlength_spinbox = QtWidgets.QDoubleSpinBox()
@@ -153,6 +153,21 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.smoothlength_spinbox.setValue(7)
         self.smoothlength_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.smoothlength_spinbox, 4, 3)
+        # Peak widths: Min and Max
+        self.minwidth_spinbox = QtWidgets.QSpinBox()
+        self.minwidth_spinbox.setRange(1, 1e2)
+        self.minwidth_spinbox.setValue(1)
+        self.minwidth_spinbox.setSuffix(" pixels")
+        self.minwidth_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(QtWidgets.QLabel("Min Peak Width:"), 5, 0)
+        general_grid.addWidget(self.minwidth_spinbox, 5, 1)
+        self.maxwidth_spinbox = QtWidgets.QSpinBox()
+        self.maxwidth_spinbox.setRange(1, 1e3)
+        self.maxwidth_spinbox.setValue(20)
+        self.maxwidth_spinbox.setSuffix(" pixels")
+        self.maxwidth_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(QtWidgets.QLabel("Max Peak Width:"), 5, 2)
+        general_grid.addWidget(self.maxwidth_spinbox, 5, 3)
         ## Single molecule peak detection parameters
         singlemolecule_groupbox = QtWidgets.QGroupBox("Single Molecule Parameters")
         vbox.addWidget(singlemolecule_groupbox)
@@ -235,6 +250,8 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.prominence_slider.sliderReleased.connect(self.on_prominence_slider_changed)
         self.preview_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
         self.loopcorrection_checkbox.stateChanged.connect(self.on_prominence_spinbox_changed)
+        self.minwidth_spinbox.valueChanged.connect(self.on_peakwidth_spinbox_changed)
+        self.maxwidth_spinbox.valueChanged.connect(self.on_peakwidth_spinbox_changed)
         self.DNAlength_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         self.DNApuncta_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         self.smoothlength_spinbox.valueChanged.connect(self.on_smoothlength_spinbox_changed)
@@ -254,6 +271,10 @@ class MultiPeakDialog(QtWidgets.QDialog):
     def on_prominence_slider_changed(self):
         value = self.prominence_slider.value()
         self.prominence_spinbox.setValue(value)
+
+    def on_peakwidth_spinbox_changed(self):
+        self.window.params_change_loop_detection()
+        self.window.params_change_smol_detection()
 
     def on_smoothlength_spinbox_changed(self):
         if self.smoothlength_spinbox.value() % 2 != 0: # only processing odd values
@@ -616,7 +637,10 @@ class Window(QtWidgets.QMainWindow):
         self.imv21 = pg.ImageView(view=self.plotLoopPos)
         self.imv21.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_roi_norm(self.imv21)
-        
+        # invert Y-axis of kymos
+        self.imv10.view.invertY(False)
+        self.imv20.view.invertY(False)
+        self.imv21.view.invertY(False)
 
         self.d0_left = pg_da.Dock("d0left - DNA")
         self.d0_left.addWidget(self.imv00)
@@ -659,6 +683,11 @@ class Window(QtWidgets.QMainWindow):
         self.imv23 = pg.ImageView()
         self.imv23.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_roi_norm(self.imv23)
+        
+        # invert Y-axis of kymos
+        self.imv11.view.invertY(False)
+        self.imv22.view.invertY(False)
+        self.imv23.view.invertY(False)
 
         self.d0_right = pg_da.Dock("d0right-single molecule")
         self.d0_right.addWidget(self.imv01)
@@ -1117,6 +1146,7 @@ class Window(QtWidgets.QMainWindow):
             self.plot_loop_vs_sm = pg.PlotItem()
             self.imv31 = pg.ImageView(view=self.plot_loop_vs_sm)
             self.imv31.setPredefinedGradient(DEFAULTS["ColorMap"])
+            self.plot_loop_vs_sm.getViewBox().invertY(False)
             self.hide_imgv_cmap(self.imv31)
             self.d3_right.addWidget(self.imv31)
             # self.d3_right.addWidget(self.plot_loop_vs_sm)
@@ -1130,7 +1160,6 @@ class Window(QtWidgets.QMainWindow):
                                     movable=False, angle=0, pen=(3, 9))
             self.plot_loop_vs_sm_linebottom = pg.InfiniteLine(
                                     movable=False, angle=0, pen=(3, 9))
-            self.plot_loop_vs_sm_smdata.getViewBox().invertY(True)
             self.plotSmolPosData = self.plot_loop_vs_sm.scatterPlot(
                     symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
 
@@ -1188,9 +1217,13 @@ class Window(QtWidgets.QMainWindow):
             self.set_loop_detection_widgets()
         self.loop_region_left = int(self.region_errbar.getRegion()[0])
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
+        max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
         self.all_peaks_dict = peakfinder_savgol(self.kymo_left_loop.T,
                 self.loop_region_left, -self.loop_region_right,
-                prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size,
+                prominence_min=self.peak_prominence,
+                peak_width=(min_peak_width, max_peak_width),
+                pix_width=self.dna_puncta_size,
                 smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(),
                 plotting=False, kymo_noLoop=self.kymo_left_noLoop.T,
                 correction_noLoop=self.correction_with_no_loop
@@ -1202,7 +1235,9 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
-                prominence_min=self.peak_prominence_smol, pix_width=self.dna_puncta_size,
+                prominence_min=self.peak_prominence_smol,
+                peak_width=(min_peak_width, max_peak_width),
+                pix_width=self.dna_puncta_size,
                 smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(), plotting=False,
                 )
         self.plotLoopPosData.setData(self.all_peaks_dict["All Peaks"]["FrameNumber"],
@@ -1219,10 +1254,13 @@ class Window(QtWidgets.QMainWindow):
             self.set_loop_detection_widgets()
         self.loop_region_left = int(self.region_errbar.getRegion()[0])
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
+        max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
         if self.numColors == "2":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
                 prominence_min=self.peak_prominence_smol,
+                peak_width=(min_peak_width, max_peak_width),
                 smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(),
                 pix_width=self.dna_puncta_size, plotting=False,)
             self.plot_loop_vs_sm_smdata.clear()
