@@ -187,10 +187,11 @@ def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
         
         for i in trange(round(num_frames_update/num_colors), desc='Cropping color '+str(col+1)+'/'+str(num_colors)+' for directory '+str(nDir+1)+'/'+str(numDirs)+'...'):
             frame_index = i*num_colors+col
-            if col==0:
-                frame_index += 1
-            elif col==1:
-                frame_index -= 1
+            if num_colors>1:
+                if col==0:
+                    frame_index += 1
+                elif col==1:
+                    frame_index -= 1
             img = np.array(imgseq[frame_index], dtype=np.uint16)
             for j in range(len(roi_coord_list)):
                 if (not skipIMG[j]):
