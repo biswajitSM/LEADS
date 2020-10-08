@@ -219,6 +219,27 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # plot all peaks
         self.linkplot_pushbutton = QtWidgets.QPushButton("Link and Plot All Peaks")
         linking_grid.addWidget(self.linkplot_pushbutton, 1, 2, 1, 2)
+        # link col1 and col2
+        self.link_col1col2_checkbox = QtWidgets.QCheckBox("LinkTwoColors")
+        self.max_frame_diff_spinbox = QtWidgets.QSpinBox()
+        self.max_frame_diff_spinbox.setRange(1, 1e3)
+        self.max_frame_diff_spinbox.setValue(10)
+        self.max_frame_diff_spinbox.setPrefix("\u0394frames ")
+        self.max_frame_diff_spinbox.setKeyboardTracking(False)
+        self.max_pix_diff_spinbox = QtWidgets.QSpinBox()
+        self.max_pix_diff_spinbox.setRange(1, 1e3)
+        self.max_pix_diff_spinbox.setValue(10)
+        self.max_pix_diff_spinbox.setPrefix("\u0394pixs ")
+        self.max_pix_diff_spinbox.setKeyboardTracking(False)
+        self.min_coloc_diff_spinbox = QtWidgets.QSpinBox()
+        self.min_coloc_diff_spinbox.setRange(1, 1e3)
+        self.min_coloc_diff_spinbox.setValue(10)
+        self.min_coloc_diff_spinbox.setPrefix("\u0394coloc ")
+        self.min_coloc_diff_spinbox.setKeyboardTracking(False)
+        linking_grid.addWidget(self.link_col1col2_checkbox, 2, 0)
+        linking_grid.addWidget(self.max_frame_diff_spinbox, 2, 1)
+        linking_grid.addWidget(self.max_pix_diff_spinbox, 2, 2)
+        linking_grid.addWidget(self.min_coloc_diff_spinbox, 2, 3)
         ## Kinetics ##
         plot_groupbox = QtWidgets.QGroupBox("Plotting Kinetics")
         vbox.addWidget(plot_groupbox)
@@ -603,6 +624,7 @@ class Window(QtWidgets.QMainWindow):
         self.max_peak_dict = None
         self.df_peaks_linked = None
         self.linkedpeaks_analyzed = None
+        self.df_cols_linked = None
 
     def add_col1_imvs(self):
         self.imv00 = pg.ImageView(name='color 1')
@@ -1354,10 +1376,12 @@ class Window(QtWidgets.QMainWindow):
         self.memory_link = self.multipeak_dialog.memory_spinbox.value()
         self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
         if self.numColors == "2":
-            self.df_peaks_linked, self.df_peaks_linked_sm = kymograph.link_and_plot_two_color(
-                    self.all_peaks_dict, self.all_smpeaks_dict,
+            result = kymograph.link_and_plot_two_color(
+                    self.all_peaks_dict["All Peaks"], self.all_smpeaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True,)
+            self.df_peaks_linked = result['df_peaks_linked']
+            self.df_peaks_linked_sm = result['df_peaks_linked_sm']
             df_gb = self.df_peaks_linked.groupby("particle")
             gb_names = list(df_gb.groups.keys())
             for i in range(len(gb_names)):
@@ -1370,6 +1394,31 @@ class Window(QtWidgets.QMainWindow):
                 gb_names[i] = str(gb_names[i])
             self.multipeak_dialog.rightpeak_num_combobox.clear()
             self.multipeak_dialog.rightpeak_num_combobox.addItems(gb_names)
+            if self.multipeak_dialog.link_col1col2_checkbox.isChecked():
+                dna_contour_len = self.multipeak_dialog.DNAcontourlength_spinbox.value()
+                self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
+                        frame_width=self.loop_region_right - self.loop_region_left,
+                        dna_length=self.dna_length_kb, dna_length_um=dna_contour_len,
+                        pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
+                        # interpolation=interpolation_bool,
+                        )
+                delta_frames = self.multipeak_dialog.max_frame_diff_spinbox.value()
+                delta_pixels = self.multipeak_dialog.max_pix_diff_spinbox.value()
+                delta_colocalized = self.multipeak_dialog.min_coloc_diff_spinbox.value()
+                self.df_cols_linked = kymograph.link_multipeaks_2colrs(
+                    self.linkedpeaks_analyzed, self.df_peaks_linked_sm,
+                    delta_frames=delta_frames, delta_pixels=delta_pixels,
+                    delta_colocalized=delta_colocalized)
+                for i in range(len(self.df_cols_linked.index)):
+                    particle_i = self.df_cols_linked.loc[i]
+                    xy_col1 = (particle_i["frame_col1"], particle_i["x_col1"])
+                    xy_col2 = (particle_i["frame_col2"], particle_i["x_col2"])
+                    from matplotlib.patches import ConnectionPatch
+                    con = ConnectionPatch(xyA=xy_col1, xyB=xy_col2, coordsA="data", coordsB="data",
+                                axesA=result["ax1"], axesB=result["ax2"], color="red")
+                    result["ax2"].add_artist(con)
+                print(self.df_cols_linked)
+                print(self.df_cols_linked.dtypes)
         else:
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
@@ -1475,9 +1524,8 @@ class Window(QtWidgets.QMainWindow):
                 h5_analysis["Right Linked Peaks"] = self.df_peaks_linked_sm.to_records()
         if self.linkedpeaks_analyzed is not None:
             h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
-        # save images
-        # img_group = h5_analysis.create_group("Images")
-        
+        if self.df_cols_linked is not None:
+            h5_analysis["Two Colors Linked"] = self.df_cols_linked.to_records()
         h5_analysis.close()
 
     def save_section(self):

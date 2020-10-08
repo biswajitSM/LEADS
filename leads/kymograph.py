@@ -4,6 +4,7 @@ import pandas as pd
 import h5py
 from scipy.ndimage import median_filter, white_tophat, black_tophat
 from scipy.signal import find_peaks, savgol_filter, peak_prominences
+from scipy.spatial import cKDTree
 import tifffile
 from skimage.io.collection import alphanumeric_key
 import pims
@@ -242,11 +243,9 @@ def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_len
     return peaks_linked
 
 
-def link_and_plot_two_color(peak_dict, peak_dict_sm,
+def link_and_plot_two_color(df_peaks, df_peaks_sm,
             search_range=10, memory=5, filter_length=10,
             plotting=True):
-    df_peaks = peak_dict["All Peaks"]
-    df_peaks_sm = peak_dict_sm["All Peaks"]
     # set axes and figsize
     fig = plt.figure()
     gs = fig.add_gridspec(3, 3)
@@ -265,21 +264,25 @@ def link_and_plot_two_color(peak_dict, peak_dict_sm,
     ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.8, label='DNA')
     ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.8, label='SM')
     ax3.legend(loc=4)
-    dna_height = peak_dict["shape_kymo"][0]
-    kymo_length = peak_dict["shape_kymo"][1]
     ax_list = [ax1, ax2, ax3]
     for ax in ax_list:
-        ax.hlines([0, dna_height], 0, kymo_length, 'g', alpha=0.5)
-        ax.set_ylim([0 - 0.05*dna_height, dna_height + 0.05*dna_height])
-        ax.set_xlim(0, kymo_length)
+        ax.set_ylim(0, None)
+        ax.set_xlim(0, None)
         ax.set_ylabel('pixels')
     ax3.set_xlabel('Frame Numbers')
-    ax1.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'DNA punctas')
-    ax2.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'Single molecules')
-    ax3.text(kymo_length-0.55*kymo_length, 0.9*dna_height, 'DNA punctas and SM')
+    ax1.text(0.55, 0.9, 'DNA punctas')
+    ax2.text(0.55, 0.9, 'Single molecules')
+    ax3.text(0.55, 0.9, 'DNA punctas and SM')
     fig.tight_layout()
     plt.show()
-    return df_peaks_linked, df_peaks_linked_sm
+    result = {
+        'df_peaks_linked' : df_peaks_linked,
+        'df_peaks_linked_sm' : df_peaks_linked_sm,
+        'ax1' : ax1,
+        'ax2' : ax2,
+        'ax3' : ax3,
+    }
+    return result
 
 
 def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
@@ -322,6 +325,82 @@ def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
         F = force_wlc(nonpeak_rel_ext, Plen=50)
     df_linked_gb["Force"] = F
     return df_linked_gb
+
+
+def link_multipeaks_2colrs(
+                df_peaks_linked_col1, df_peaks_linked_col2,
+                delta_frames=10, delta_pixels=10,
+                delta_colocalized=5, plotting=False):
+    coord_col1 = df_peaks_linked_col1[['x', 'y']].values
+    coord_col2 = df_peaks_linked_col2[['x', 'y']].values
+    if plotting:
+        fig, ax = plt.subplots()    
+    tree_col1 = cKDTree(coord_col1)
+    particle_names = df_peaks_linked_col2.particle.unique()
+    print(particle_names)
+    columns = ["col1", "col2", "int_col1", "int_col2",
+               "frame_col1", "frame_col2", "x_col1", "x_col2",
+               "len_col1", "len_col2"
+               ]
+    df_cols_linked = pd.DataFrame(columns=columns)
+    for col2_particle_no in particle_names:
+        col2_particle_i = df_peaks_linked_col2[df_peaks_linked_col2["particle"]==col2_particle_no][['x', 'y']].values
+        dist, indexes = tree_col1.query(col2_particle_i)
+        paired_indexes = clean_duplicate_maxima(dist, indexes)
+        left_linked_indexes = []
+        for i, j in paired_indexes:
+            pix1, frame1 = coord_col1[i]
+            pix2, frame2 = col2_particle_i[j]
+            distance = np.sqrt( (pix2 - pix1)**2 + (frame2 - frame1)**2 )
+            width = coord_col1.shape[1]
+            # if distance < distance_max:
+            if abs(pix2-pix1) < delta_pixels and abs(frame2-frame1) < delta_frames:
+                left_linked_indexes.append(i)
+            if plotting:
+                tmp_color = np.random.uniform(0,1,3)
+                ax.plot(frame1, pix1, color=tmp_color, marker='+')
+                ax.plot(frame2, pix2 + width, color=tmp_color, marker='+')
+                ax.plot([frame1, frame2], [pix1, pix2 + width], color=tmp_color)
+        col1_paritcles = df_peaks_linked_col1.iloc[left_linked_indexes]['particle'][...]
+        if len(col1_paritcles.index) > delta_colocalized:
+            col1_particle_no = np.argmax(np.bincount(col1_paritcles))
+            part_int_col1 = df_peaks_linked_col1[df_peaks_linked_col1['particle']==col1_particle_no]['PeakIntensity'][:10].mean()
+            part_int_col2 = df_peaks_linked_col2[df_peaks_linked_col2['particle']==col2_particle_no]['PeakIntensity'][:10].mean()
+            frame_col1 = df_peaks_linked_col1[df_peaks_linked_col1['particle']==col1_particle_no]["FrameNumber"].values[0]
+            frame_col2 = df_peaks_linked_col2[df_peaks_linked_col2['particle']==col2_particle_no]["FrameNumber"].values[0]
+            x_col1 = df_peaks_linked_col1[df_peaks_linked_col1['particle']==col1_particle_no]["x"].values[0]
+            x_col2 = df_peaks_linked_col2[df_peaks_linked_col2['particle']==col2_particle_no]["x"].values[0]
+            len_col1 = len(df_peaks_linked_col1[df_peaks_linked_col1['particle']==col1_particle_no].index)
+            len_col2 = len(df_peaks_linked_col2[df_peaks_linked_col2['particle']==col2_particle_no].index)
+            df_cols_linked = df_cols_linked.append(pd.DataFrame([[
+                                float(col1_particle_no), float(col2_particle_no), part_int_col1, part_int_col2,
+                                frame_col1, frame_col2, x_col1, x_col2,
+                                float(len_col1), float(len_col2),
+                                ]], columns=columns), ignore_index=True)
+    if plotting:
+        ax.plot(coord_col1[:, 1], coord_col1[:, 0], '.b', alpha=0.1)
+        ax.plot(coord_col2[:, 1], coord_col2[:, 0], '.r', alpha=0.1)
+        plt.show()
+    return df_cols_linked
+
+
+def clean_duplicate_maxima(dist, indexes):
+    paired_indexes = []
+    count = -1
+    for i in set(indexes):
+        tmp_dist = np.inf
+        tmp = None
+        for j, k in zip(indexes, dist):
+            if i == j:
+                count += 1
+                if k < tmp_dist:
+                    tmp = [j, count]
+                    tmp_dist = k
+            else:
+                pass
+        if tmp is not None:
+            paired_indexes.append(tmp)
+    return paired_indexes
 
 
 def force_wlc(rel_ext, Plen=50):
