@@ -443,9 +443,11 @@ class MainWidget(QtWidgets.QWidget):
         self.frameStartSpinBox = QtWidgets.QSpinBox()
         self.frameStartSpinBox.setRange(0, 1e5)
         self.frameStartSpinBox.setValue(0)
+        self.frameStartSpinBox.setKeyboardTracking(False)
         self.frameEndSpinBox = QtWidgets.QSpinBox()
         self.frameEndSpinBox.setRange(-1, 1e5)
         self.frameEndSpinBox.setValue(-1)
+        self.frameEndSpinBox.setKeyboardTracking(False)
         grid_frame.addWidget(self.frameStartSpinBox, 0, 1)
         grid_frame.addWidget(self.frameEndSpinBox, 1, 1)
 
@@ -469,7 +471,7 @@ class MainWidget(QtWidgets.QWidget):
                                            "d2left:tif", "d2right:tif",
                                            ])
         self.saveFormatComboBox = QtWidgets.QComboBox()
-        self.saveFormatComboBox.addItems([".avi", ".gif"])
+        self.saveFormatComboBox.addItems([".mp4", ".avi", ".gif"])
         self.saveFramerateSpinBox = QtWidgets.QSpinBox()
         self.saveFramerateSpinBox.setRange(1, 1e3)
         self.saveFramerateSpinBox.setValue(7)
@@ -572,9 +574,10 @@ class Window(QtWidgets.QMainWindow):
         # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
         self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed)
         self.infline_left.sigPositionChanged.connect(self.infiline_left_update)
+        self.imv00.sigTimeChanged.connect(self.on_frame_change_imv00)
         if self.numColors == "2":
-            self.imv00.sigTimeChanged.connect(self.sync_videos)
             self.infline_right.sigPositionChanged.connect(self.infiline_right_update)
+            self.imv01.sigTimeChanged.connect(self.on_frame_change_imv01)
         # self.infline_left.sigDragged
 
     def load_parameters(self):
@@ -658,6 +661,10 @@ class Window(QtWidgets.QMainWindow):
         # initiation of otherplots
         self.plot_loop_errbar = None
 
+        # add text (fps) to images
+        self.imv00_text = pg.TextItem(text="")
+        self.imv00_text.setParentItem(self.imv00.imageItem)
+
     def add_col2_imvs(self):
         self.imv01 = pg.ImageView(name='color 2')
         self.imv01.setPredefinedGradient(DEFAULTS["ColorMap"])
@@ -695,11 +702,15 @@ class Window(QtWidgets.QMainWindow):
         self.d1_right.addWidget(self.imv11)
         self.d2_right = pg_da.Dock("d2right-single molecule on NoLoop and Loop")
         self.d2_right.addWidget(self.imv22, 0, 0, 1, 1)
-        self.d2_right.addWidget(self.imv23, 0, 1, 1, 3)
+        self.d2_right.addWidget(self.imv23, 0, 1, 1, 5)
 
         self.dockarea.addDock(self.d0_right, 'right')
         self.dockarea.addDock(self.d1_right, 'bottom', self.d0_right)
         self.dockarea.addDock(self.d2_right, 'bottom', self.d1_right)
+
+        # add text (fps) to images
+        self.imv01_text = pg.TextItem(text="")
+        self.imv01_text.setParentItem(self.imv01.imageItem)
 
     def remove_all_widgets(self):
         try:
@@ -940,9 +951,16 @@ class Window(QtWidgets.QMainWindow):
             else:
                 self.imv11.setImage(self.kymo_right)
 
-    def sync_videos(self):
+    def on_frame_change_imv00(self):
         frame_imv00 = self.imv00.currentIndex
-        self.imv01.setCurrentIndex(frame_imv00)
+        self.imv00_text.setText(str(np.round(frame_imv00 * self.acquisitionTime, 1)) + ' s')
+        if self.numColors:
+            self.imv01.setCurrentIndex(frame_imv00)
+            self.imv01_text.setText(str(np.round(frame_imv00 * self.acquisitionTime, 1)) + ' s')
+
+    def on_frame_change_imv01(self):
+        frame_imv01 = self.imv01.currentIndex
+        self.imv01_text.setText(str(np.round(frame_imv01 * self.acquisitionTime, 1)) + ' s')
 
     def roi_changed(self):
         # ROIwidth = self.roirect_left.getState()['size'][1]
@@ -1484,7 +1502,9 @@ class Window(QtWidgets.QMainWindow):
             extension = self.ui.saveFormatComboBox.currentText()
             filename = os.path.join(self.folderpath, self.filename_base + '_left' + extension)
             os.chdir(temp_folder)
-            subprocess.call(['ffmpeg', '-y', '-r', frame_rate, '-i', 'temp_%d0.png', filename])
+            # subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate, '-i', 'temp_%d0.png', '-c:v', 'libx264', '-vf', 'fps=50', filename])
+            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate,'-i','temp_%d0.png',
+                '-c:v', 'mpeg1video', '-vf', 'fps=50', '-crf', '10', filename])
             for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
@@ -1506,7 +1526,9 @@ class Window(QtWidgets.QMainWindow):
             extension = self.ui.saveFormatComboBox.currentText()
             filename = os.path.join(self.folderpath, self.filename_base + '_right' + extension)
             os.chdir(temp_folder)
-            subprocess.call(['ffmpeg', '-y', '-r', frame_rate, '-i', 'temp_%d0.png', filename])
+            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate, '-i', 'temp_%d0.png',
+                '-c:v', 'mpeg1video', '-vf', 'fps=50', '-crf', '0', filename])
+            
             for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
