@@ -692,6 +692,7 @@ class Window(QtWidgets.QMainWindow):
         self.scalebar_img = None
         self.kymo_left = None
         self.max_peak_dict = None
+        self.max_smpeak_dict = None
         self.df_peaks_linked = None
         self.linkedpeaks_analyzed = None
         self.df_cols_linked = None
@@ -994,7 +995,7 @@ class Window(QtWidgets.QMainWindow):
 
             self.region3_Loop.setRegion(self.params_yaml['region3_Loop'])
             self.region3_noLoop.setRegion(self.params_yaml['region3_noLoop'])
-        if len(self.params_yaml["MultiPeak"]) > 0:
+        if "MultiPeak" in self.params_yaml:
             multipeak_setting = {"kymograph" : {}}
             multipeak_setting["kymograph"]["MultiPeak"] = self.params_yaml["MultiPeak"]
             print(multipeak_setting)
@@ -1578,31 +1579,30 @@ class Window(QtWidgets.QMainWindow):
         pass
 
     def save_hdf5(self, filepath_hdf5):
-        h5_analysis = h5py.File(filepath_hdf5, 'w')
-        # save parameters
-        params_group = h5_analysis.create_group("parameters")
-        hdf5dict.dump(self.params_yaml, params_group)
-        if self.kymo_left is not None:
-            h5_analysis["Left Kymograph"] = self.kymo_left.T
-            h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
-            h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
-            if self.numColors == "2":
-                h5_analysis["Right Kymograph"] = self.kymo_right.T
-                h5_analysis["Right Kymograph Loop"] = self.kymo_right_loop.T
-                h5_analysis["Right Kymograph No Loop"] = self.kymo_right_noLoop.T
-        if self.max_peak_dict is not None:
-            h5_analysis["Left Max Peaks"] = self.max_peak_dict["Max Peak"].to_records()
-            if self.numColors == "2":
-                h5_analysis["Right Max Peaks"] = self.max_smpeak_dict["Max Peak"].to_records()
-        if self.df_peaks_linked is not None:
-            h5_analysis["Left Linked Peaks"] = self.df_peaks_linked.to_records()
-            if self.numColors == "2":
-                h5_analysis["Right Linked Peaks"] = self.df_peaks_linked_sm.to_records()
-        if self.linkedpeaks_analyzed is not None:
-            h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
-        if self.df_cols_linked is not None and len(self.df_cols_linked.index)>0:
-            h5_analysis["Two Colors Linked"] = self.df_cols_linked.to_records()
-        h5_analysis.close()
+        with h5py.File(filepath_hdf5, 'w') as h5_analysis:
+            # save parameters
+            params_group = h5_analysis.create_group("parameters")
+            hdf5dict.dump(self.params_yaml, params_group)
+            if self.kymo_left is not None:
+                h5_analysis["Left Kymograph"] = self.kymo_left.T
+                h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
+                h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
+                if self.numColors == "2":
+                    h5_analysis["Right Kymograph"] = self.kymo_right.T
+                    h5_analysis["Right Kymograph Loop"] = self.kymo_right_loop.T
+                    h5_analysis["Right Kymograph No Loop"] = self.kymo_right_noLoop.T
+            if self.max_peak_dict is not None:
+                h5_analysis["Left Max Peaks"] = self.max_peak_dict["Max Peak"].to_records()
+                if self.numColors == "2" and self.max_smpeak_dict is not None:
+                    h5_analysis["Right Max Peaks"] = self.max_smpeak_dict["Max Peak"].to_records()
+            if self.df_peaks_linked is not None:
+                h5_analysis["Left Linked Peaks"] = self.df_peaks_linked.to_records()
+                if self.numColors == "2":
+                    h5_analysis["Right Linked Peaks"] = self.df_peaks_linked_sm.to_records()
+            if self.linkedpeaks_analyzed is not None:
+                h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
+            if self.df_cols_linked is not None and len(self.df_cols_linked.index)>0:
+                h5_analysis["Two Colors Linked"] = self.df_cols_linked.to_records()
 
     def save_section(self):
         temp_folder = os.path.abspath(os.path.join(self.folderpath, 'temp'))
