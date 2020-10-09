@@ -344,6 +344,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         settings["kymograph"]["MultiPeak"]["force"] = self.force_checkbox.isChecked()
         io.save_user_settings(settings)
         self.settings = settings
+        return self.settings
 
     def on_start_event(self, settings=None):
         if settings is None:
@@ -369,6 +370,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
             print(e)
             pass
         self.settings = settings
+        return self.settings
 
 class ROIDialog(QtWidgets.QDialog):
     """
@@ -908,6 +910,7 @@ class Window(QtWidgets.QMainWindow):
                     'Pixel Size' : self.parameters_dialog.pix_spinbox.value(),
                     'ROI width' : None,
                     'Region Errbar': [10, 30],
+                    'MultiPeak' : {},
                 }
                 shape = list(self.imgarr_left[0, ...].shape)
                 self.params_yaml["Region Errbar"] = [1, max(shape)]
@@ -939,7 +942,8 @@ class Window(QtWidgets.QMainWindow):
         self.params_yaml['region3_Loop'] = list(self.region3_Loop.getRegion())
         if self.plot_loop_errbar is not None:
             self.params_yaml['Region Errbar'] = list(self.region_errbar.getRegion())
-
+        multipeak_settings = self.multipeak_dialog.on_close_event()
+        self.params_yaml["MultiPeak"] = multipeak_settings["kymograph"]["MultiPeak"]
         with open(filepath_yaml, 'w') as f:
             yaml.dump(self.params_yaml, f)
 
@@ -967,6 +971,15 @@ class Window(QtWidgets.QMainWindow):
 
             self.region3_Loop.setRegion(self.params_yaml['region3_Loop'])
             self.region3_noLoop.setRegion(self.params_yaml['region3_noLoop'])
+        if len(self.params_yaml["MultiPeak"]) > 0:
+            multipeak_setting = {"kymograph" : {}}
+            multipeak_setting["kymograph"]["MultiPeak"] = self.params_yaml["MultiPeak"]
+            print(multipeak_setting)
+            try:
+                _ = self.multipeak_dialog.on_start_event(settings=multipeak_setting)
+            except Exception as e:
+                print(e)
+                pass
 
     def processed_image_check(self):
         if self.ui.processImageCheckBox.isChecked():
@@ -1138,6 +1151,7 @@ class Window(QtWidgets.QMainWindow):
             self.add_col1_imvs()
             self.add_col2_imvs()
             self.connect_signals()
+        self.scalebar_img = None
         self.defaultDockState = self.dockarea.saveState()
         
     def region_noLoop_changed(self):
