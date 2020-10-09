@@ -284,6 +284,22 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.loopVsmol_pushbutton.clicked.connect(self.on_clicking_loopVsmol_pushbutton)
         self.loopkinetics_pushbutton.clicked.connect(self.on_clicking_loopkinetics_pushbutton)
 
+    def disconnect_signals(self):
+        self.prominence_spinbox.valueChanged.disconnect()
+        self.prominence_slider.sliderReleased.disconnect()
+        self.preview_checkbox.stateChanged.disconnect()
+        self.loopcorrection_checkbox.stateChanged.disconnect()
+        self.minwidth_spinbox.valueChanged.disconnect()
+        self.maxwidth_spinbox.valueChanged.disconnect()
+        self.DNAlength_spinbox.valueChanged.disconnect()
+        self.DNApuncta_spinbox.valueChanged.disconnect()
+        self.smoothlength_spinbox.valueChanged.disconnect()
+        self.smol_prominence_spinbox.valueChanged.disconnect()
+        self.smol_prominence_slider.sliderReleased.disconnect()
+        self.smol_preview_checkbox.stateChanged.disconnect()
+        self.linkplot_pushbutton.clicked.disconnect()
+        self.loopVsmol_pushbutton.clicked.disconnect()
+        self.loopkinetics_pushbutton.clicked.disconnect()
 
     def on_prominence_spinbox_changed(self):
         value = self.prominence_spinbox.value()
@@ -352,6 +368,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
             settings = io.load_user_settings()
         try:
             self.prominence_spinbox.setValue(settings["kymograph"]["MultiPeak"]["prominence"])
+            self.prominence_slider.setValue(settings["kymograph"]["MultiPeak"]["prominence"])
             self.loopcorrection_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["loop_correction"])
             self.preview_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["preview"])
             self.DNAlength_spinbox.setValue(settings["kymograph"]["MultiPeak"]["DNAlength"])
@@ -361,6 +378,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
             self.minwidth_spinbox.setValue(settings["kymograph"]["MultiPeak"]["minwidth"])
             self.maxwidth_spinbox.setValue(settings["kymograph"]["MultiPeak"]["maxwidth"])
             self.smol_prominence_spinbox.setValue(settings["kymograph"]["MultiPeak"]["smol_prominence"])
+            self.smol_prominence_slider.setValue(settings["kymograph"]["MultiPeak"]["smol_prominence"])
             self.smol_preview_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["smol_preview"])
             self.link_col1col2_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["link_col1col2"])
             self.max_frame_diff_spinbox.setValue(settings["kymograph"]["MultiPeak"]["max_frame_diff"])
@@ -850,6 +868,8 @@ class Window(QtWidgets.QMainWindow):
                 self.scalebar_kymoloop_right.anchor((1, 1), (1, 1), offset=(-40, -40))
 
     def load_img_stack(self):
+        # disconnect dependent signals
+        self.multipeak_dialog.disconnect_signals()
         filepath = io.FileDialog(self.folderpath, "open a tif file stack",
                                  "Tif File (*.tif)").openFileNameDialog()
         self.filepath = filepath
@@ -862,6 +882,8 @@ class Window(QtWidgets.QMainWindow):
         if self.ui.processImageCheckBox.isChecked():
             self.image_meta = self.get_processed_image()
             self.set_img_stack()
+        # connect back the dependent signals
+        self.multipeak_dialog.connect_signals()
 
     def set_img_stack(self):
         print("Loading and processing the image ...")
@@ -1578,7 +1600,7 @@ class Window(QtWidgets.QMainWindow):
                 h5_analysis["Right Linked Peaks"] = self.df_peaks_linked_sm.to_records()
         if self.linkedpeaks_analyzed is not None:
             h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
-        if self.df_cols_linked is not None:
+        if self.df_cols_linked is not None and len(self.df_cols_linked.index)>0:
             h5_analysis["Two Colors Linked"] = self.df_cols_linked.to_records()
         h5_analysis.close()
 
