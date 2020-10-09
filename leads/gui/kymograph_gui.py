@@ -320,6 +320,55 @@ class MultiPeakDialog(QtWidgets.QDialog):
     def on_clicking_loopVsmol_pushbutton(self):
         self.window.matplot_loop_vs_sm()
 
+    def on_close_event(self):
+        settings = io.load_user_settings()
+        settings["kymograph"]["MultiPeak"] = {}
+        settings["kymograph"]["MultiPeak"]["prominence"] = self.prominence_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["loop_correction"] = self.loopcorrection_checkbox.isChecked()
+        settings["kymograph"]["MultiPeak"]["preview"] = self.preview_checkbox.isChecked()
+        settings["kymograph"]["MultiPeak"]["DNAlength"] = self.DNAlength_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["DNAcontourlength"] = self.DNAcontourlength_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["DNApuncta"] = self.DNApuncta_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["smoothlength"] = self.smoothlength_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["minwidth"] = self.minwidth_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["maxwidth"] = self.maxwidth_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["smol_prominence"] = self.smol_prominence_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["smol_preview"] = self.smol_preview_checkbox.isChecked()
+        settings["kymograph"]["MultiPeak"]["searchrange"] = self.searchrange_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["memory"] = self.memory_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["smol_preview"] = self.filterlen_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["link_col1col2"] = self.link_col1col2_checkbox.isChecked()
+        settings["kymograph"]["MultiPeak"]["max_frame_diff"] = self.max_frame_diff_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["max_pix_diff"] = self.max_pix_diff_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["min_coloc_diff"] = self.min_coloc_diff_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["force"] = self.force_checkbox.isChecked()
+        io.save_user_settings(settings)
+        self.settings = settings
+
+    def on_start_event(self, settings=None):
+        if settings is None:
+            settings = io.load_user_settings()
+        try:
+            self.prominence_spinbox.setValue(settings["kymograph"]["MultiPeak"]["prominence"])
+            self.loopcorrection_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["loop_correction"])
+            self.preview_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["preview"])
+            self.DNAlength_spinbox.setValue(settings["kymograph"]["MultiPeak"]["DNAlength"])
+            self.DNAcontourlength_spinbox.setValue(settings["kymograph"]["MultiPeak"]["DNAcontourlength"])
+            self.DNApuncta_spinbox.setValue(settings["kymograph"]["MultiPeak"]["DNApuncta"])
+            self.smoothlength_spinbox.setValue(settings["kymograph"]["MultiPeak"]["smoothlength"])
+            self.minwidth_spinbox.setValue(settings["kymograph"]["MultiPeak"]["minwidth"])
+            self.maxwidth_spinbox.setValue(settings["kymograph"]["MultiPeak"]["maxwidth"])
+            self.smol_prominence_spinbox.setValue(settings["kymograph"]["MultiPeak"]["smol_prominence"])
+            self.smol_preview_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["smol_preview"])
+            self.link_col1col2_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["link_col1col2"])
+            self.max_frame_diff_spinbox.setValue(settings["kymograph"]["MultiPeak"]["max_frame_diff"])
+            self.max_pix_diff_spinbox.setValue(settings["kymograph"]["MultiPeak"]["max_pix_diff"])
+            self.min_coloc_diff_spinbox.setValue(settings["kymograph"]["MultiPeak"]["min_coloc_diff"])
+            self.force_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["force"])
+        except Exception as e:
+            print(e)
+            pass
+        self.settings = settings
 
 class ROIDialog(QtWidgets.QDialog):
     """
@@ -1625,14 +1674,8 @@ class Window(QtWidgets.QMainWindow):
             settings["kymograph"]["Acquisiton Time"] = self.parameters_dialog.aqt_spinbox.value()
             settings["kymograph"]["Pixel Size"] = self.parameters_dialog.pix_spinbox.value()
             settings["kymograph"]['ROI width'] = self.LineROIwidth
-            settings["kymograph"]["Peak Prominence"] = self.peak_prominence
-            settings["kymograph"]["DNA Length"] = self.dna_length_kb
-            settings["kymograph"]["Puncta Size"] = self.dna_puncta_size
-            settings["kymograph"]["Peak Prominence Right"] = self.peak_prominence_smol
-            settings["kymograph"]["Search Range"] = self.search_range_link
-            settings["kymograph"]["Memory"] = self.memory_link
-            settings["kymograph"]["Filter Length"] = self.filter_length_link
         io.save_user_settings(settings)
+        self.multipeak_dialog.on_close_event()
         QtWidgets.qApp.closeAllWindows()
 
     def load_user_settings(self):
@@ -1642,18 +1685,15 @@ class Window(QtWidgets.QMainWindow):
             self.parameters_dialog.aqt_spinbox.setValue(settings["kymograph"]["Acquisiton Time"])
             self.parameters_dialog.pix_spinbox.setValue(settings["kymograph"]["Pixel Size"])
             self.parameters_dialog.roi_spinbox.setValue(settings["kymograph"]['ROI width'])
-            self.multipeak_dialog.prominence_spinbox.setValue(settings["kymograph"]["Peak Prominence"])
-            self.multipeak_dialog.DNAlength_spinbox.setValue(settings["kymograph"]["DNA Length"])
-            self.multipeak_dialog.DNApuncta_spinbox.setValue(settings["kymograph"]["Puncta Size"])
-            self.multipeak_dialog.smol_prominence_spinbox.setValue(settings["kymograph"]["Peak Prominence Right"])
-            self.multipeak_dialog.searchrange_spinbox.setValue(settings["kymograph"]["Search Range"])
-            self.multipeak_dialog.memory_spinbox.setValue(settings["kymograph"]["Memory"])
-            self.multipeak_dialog.filterlen_spinbox.setValue(settings["kymograph"]["Filter Length"])
         except Exception as e:
             print(e)
             pass
-        if len(self.folderpath) == 0:
+        try:
+            if len(self.folderpath) == 0:
+                self.folderpath = None
+        except:
             self.folderpath = None
+        self.multipeak_dialog.on_start_event()
 
 
 def main():
