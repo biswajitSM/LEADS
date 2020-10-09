@@ -10,6 +10,7 @@ from ..kymograph import (read_img_seq, read_img_stack,
                 analyze_maxpeak, loop_sm_dist)
 from .. import kymograph
 from .. import io
+from ..utils import hdf5dict
 import os, sys, glob, time, subprocess
 import yaml
 import matplotlib.pyplot as plt
@@ -1558,17 +1559,7 @@ class Window(QtWidgets.QMainWindow):
         h5_analysis = h5py.File(filepath_hdf5, 'w')
         # save parameters
         params_group = h5_analysis.create_group("parameters")
-        params_group['Acquisition Time'] = self.acquisitionTime
-        params_group['Pixel Size'] = self.pixelSize
-        if self.plot_loop_errbar is not None:
-            params_group['region3_noLoop'] = list(self.region3_noLoop.getRegion())
-            params_group['region3_Loop'] = list(self.region3_Loop.getRegion())
-            params_group["DNA ends"] = list(self.region_errbar.getRegion())
-        roi1_group = params_group.create_group("roi1")
-        roi1_group['position'] = list(self.roirect_left.pos())
-        roi1_group['size'] = list(self.roirect_left.size())
-        roi1_group['angle'] = float(self.roirect_left.angle())
-        # save analyzed data
+        hdf5dict.dump(self.params_yaml, params_group)
         if self.kymo_left is not None:
             h5_analysis["Left Kymograph"] = self.kymo_left.T
             h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
