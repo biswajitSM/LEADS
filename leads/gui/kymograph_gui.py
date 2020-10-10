@@ -869,20 +869,25 @@ class Window(QtWidgets.QMainWindow):
                 self.scalebar_kymoloop_right.anchor((1, 1), (1, 1), offset=(-40, -40))
 
     def load_img_stack(self):
-        # disconnect dependent signals
-        self.multipeak_dialog.disconnect_signals()
         filepath = io.FileDialog(self.folderpath, "open a tif file stack",
                                  "Tif File (*.tif)").openFileNameDialog()
+        # set paths anfile names
         self.filepath = filepath
+        self.folderpath = os.path.dirname(self.filepath)
+        filename = os.path.basename(self.filepath)
+        (self.filename_base, ext) = os.path.splitext(filename)
+        # read the image
         self.image_meta = read_img_stack(self.filepath)
         self.frame_start = 0
         self.frame_end = -1
         self.set_img_stack()
         self.load_yaml_params()
-        self.set_yaml_params()
         if self.ui.processImageCheckBox.isChecked():
             self.image_meta = self.get_processed_image()
             self.set_img_stack()
+        # disconnect the dependent signals
+        self.multipeak_dialog.disconnect_signals()
+        self.set_yaml_params()
         # connect back the dependent signals
         self.multipeak_dialog.connect_signals()
 
@@ -919,9 +924,6 @@ class Window(QtWidgets.QMainWindow):
         return
 
     def load_yaml_params(self):
-        self.folderpath = os.path.dirname(self.filepath)
-        filename = os.path.basename(self.filepath)
-        (self.filename_base, ext) = os.path.splitext(filename)
         self.filepath_yaml = os.path.join(self.folderpath, self.filename_base + '_params.yaml')
         if os.path.isfile(self.filepath_yaml):
             with open(self.filepath_yaml) as f:
@@ -998,12 +1000,16 @@ class Window(QtWidgets.QMainWindow):
         if "MultiPeak" in self.params_yaml:
             multipeak_setting = {"kymograph" : {}}
             multipeak_setting["kymograph"]["MultiPeak"] = self.params_yaml["MultiPeak"]
-            print(multipeak_setting)
             try:
                 _ = self.multipeak_dialog.on_start_event(settings=multipeak_setting)
             except Exception as e:
                 print(e)
                 pass
+        if "Region Errbar" in self.params_yaml:
+            if self.plot_loop_errbar is None:
+                self.set_loop_detection_widgets()
+            self.region_errbar.setRegion(self.params_yaml['Region Errbar'])
+            self.detect_loops()
 
     def processed_image_check(self):
         if self.ui.processImageCheckBox.isChecked():
@@ -1505,7 +1511,6 @@ class Window(QtWidgets.QMainWindow):
                                 axesA=result["ax1"], axesB=result["ax2"], color="red")
                     result["ax2"].add_artist(con)
                 print(self.df_cols_linked)
-                print(self.df_cols_linked.dtypes)
         else:
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],

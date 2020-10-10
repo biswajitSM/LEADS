@@ -338,7 +338,7 @@ def link_multipeaks_2colrs(
     tree_col1 = cKDTree(coord_col1)
     particle_names = df_peaks_linked_col2.particle.unique()
     print(particle_names)
-    columns = ["col1", "col2", "int_col1", "int_col2",
+    columns = ["particle_col1", "particle_col2", "int_col1", "int_col2",
                "frame_col1", "frame_col2", "x_col1", "x_col2",
                "len_col1", "len_col2"
                ]
