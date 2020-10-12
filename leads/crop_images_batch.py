@@ -29,8 +29,6 @@ def IdentifyRelevantDirectories(directory, num_colors=None):
     sub_dirs = FindAllSubdirectories(directory)
     sub_dirs.append(directory) 
     print()
-    # for d in sub_dirs:
-    #     print(d)
 
     # check if there are any ambiguities we have to ask the user about
     # basename_list = []
@@ -42,11 +40,6 @@ def IdentifyRelevantDirectories(directory, num_colors=None):
         if roi_file_list:
             if (not any(roi_file_list_item.count('-f')>1 for roi_file_list_item in roi_file_list)):
                 sub_dirs_updated.append(sub_dirs[i])
-                # subfolders = [f.path for f in os.scandir(sub_dirs[i]) if f.is_dir()]
-                # for j in range(len(subfolders)):
-                #     name = os.path.basename(subfolders[j])
-                #     if (not("analysis" in name) and (name not in basename_list)):
-                #         basename_list.append(name)
     sub_dirs = sub_dirs_updated
 
     # if there is a choice to be made                
@@ -58,21 +51,9 @@ def IdentifyRelevantDirectories(directory, num_colors=None):
         if choice[0]==-1:
             choice = range(0, len(sub_dirs))
         sub_dirs = [sub_dirs[i] for i in choice]
-
-        # # remove all directories which don't fit in the user selected scheme
-        # sub_dirs_updated = []
-        # for i in trange(len(sub_dirs), desc='Remove unselected subdirectories'):
-        #     subfolders = [f.path for f in os.scandir(sub_dirs[i]) if f.is_dir()]
-        #     for j in range(len(subfolders)):
-        #         name = os.path.basename(subfolders[j])                
-        #         if any(substring in name for substring in basename_list) and (sub_dirs[i] not in sub_dirs_updated):
-        #             sub_dirs_updated.append(sub_dirs[i])
-        # sub_dirs = sub_dirs_updated
     elif not sub_dirs:
         print('No directories found. Try again.')
         crop_from_directory(directory=None, num_colors=num_colors)
-    # else:
-    #     sub_dirs = sub_dirs[0]
         
     # remove all subdirectories which contain a roi file which has 2x "-f" in the name since those are files which are saved together with the crop    
     sub_dirs_updated = []
@@ -90,11 +71,8 @@ def IdentifyRelevantDirectories(directory, num_colors=None):
     for j in range(len(sub_dirs)):
         print("- ", sub_dirs[j])
     print()
-    # print("Cropping from the following folders: ")
-    # for i in range(len(basename_list)):
-    #     print("- ", basename_list[i], ":")
         
-    return sub_dirs#, basename_list
+    return sub_dirs
 
 # ---------------------------------------------------------------
 def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
@@ -170,10 +148,6 @@ def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
             for j in range(len(roi_coord_list)):
                 if (not skipIMG[j]):
                     img_croped = crop_rect(img, roi_coord_list[j])
-                    # print(img_croped.shape)
-                    # print(img_array_all[rect_keys[j]].shape)
-                    # print(img.shape)
-                    # print(roi_coord_list[j])
                     img_array_all[rect_keys[j]][i, col, :, :] = img_croped            
     
     for i in range(len(roi_coord_list)):
@@ -224,7 +198,6 @@ def crop_from_directory(directory=None, num_colors=None):
                 print('- ', subfolder)
 
         for sf in range(len(subfolders)):
-            # print('[', str(i+1), '/', str(len(sub_dirs)), '] ', 'Cropping in '+subfolder)
             crop(subfolders[sf], roi_coord_list, num_colors, sf, len(subfolders))
         print()
         
