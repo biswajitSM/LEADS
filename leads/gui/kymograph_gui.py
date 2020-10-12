@@ -257,7 +257,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         plot_grid.addWidget(self.rightpeak_num_combobox, 0, 3)
         # plot kinetics
         self.loopkinetics_pushbutton = QtWidgets.QPushButton("Plot Loop Kinetics")
-        self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loov Vs Mol")
+        self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loop Vs Mol")
         plot_grid.addWidget(self.loopkinetics_pushbutton, 1, 0, 1, 2)
         plot_grid.addWidget(self.loopVsmol_pushbutton, 1, 2, 1, 2)
         # include Force
@@ -353,6 +353,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         settings["kymograph"]["MultiPeak"]["smol_preview"] = self.smol_preview_checkbox.isChecked()
         settings["kymograph"]["MultiPeak"]["searchrange"] = self.searchrange_spinbox.value()
         settings["kymograph"]["MultiPeak"]["memory"] = self.memory_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["filterlen"] = self.filterlen_spinbox.value()
         settings["kymograph"]["MultiPeak"]["smol_preview"] = self.filterlen_spinbox.value()
         settings["kymograph"]["MultiPeak"]["link_col1col2"] = self.link_col1col2_checkbox.isChecked()
         settings["kymograph"]["MultiPeak"]["max_frame_diff"] = self.max_frame_diff_spinbox.value()
@@ -380,6 +381,9 @@ class MultiPeakDialog(QtWidgets.QDialog):
             self.smol_prominence_spinbox.setValue(settings["kymograph"]["MultiPeak"]["smol_prominence"])
             self.smol_prominence_slider.setValue(settings["kymograph"]["MultiPeak"]["smol_prominence"])
             self.smol_preview_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["smol_preview"])
+            self.searchrange_spinbox.setValue(settings["kymograph"]["MultiPeak"]["searchrange"])
+            self.memory_spinbox.setValue(settings["kymograph"]["MultiPeak"]["memory"])
+            self.filterlen_spinbox.setValue(settings["kymograph"]["MultiPeak"]["filterlen"])
             self.link_col1col2_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["link_col1col2"])
             self.max_frame_diff_spinbox.setValue(settings["kymograph"]["MultiPeak"]["max_frame_diff"])
             self.max_pix_diff_spinbox.setValue(settings["kymograph"]["MultiPeak"]["max_pix_diff"])
@@ -1581,7 +1585,25 @@ class Window(QtWidgets.QMainWindow):
         plt.show()
 
     def matplot_loop_vs_sm(self):
-        pass
+        left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
+        right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
+        self.loop_region_left = int(self.region_errbar.getRegion()[0])
+        self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        _, ax = plt.subplots()
+        # left peak
+        df_gb = self.df_peaks_linked.groupby("particle")
+        group_sel = df_gb.get_group(left_peak_no)
+        group_sel = group_sel.reset_index(drop=True)
+        ax.plot(group_sel["FrameNumber"], group_sel["x"], 'g', label='DNA')
+        if self.numColors == '2':
+            df_gb = self.df_peaks_linked_sm.groupby("particle")
+            group_sel = df_gb.get_group(right_peak_no)
+            group_sel = group_sel.reset_index(drop=True)
+            ax.plot(group_sel["FrameNumber"], group_sel["x"], 'm', label='Single Molecule')
+        ax.set_xlabel('Frame Number')
+        ax.set_ylabel('pixels')
+        ax.legend()
+        plt.show()
 
     def save_hdf5(self, filepath_hdf5):
         with h5py.File(filepath_hdf5, 'w') as h5_analysis:
