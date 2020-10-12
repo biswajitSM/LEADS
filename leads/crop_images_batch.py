@@ -6,11 +6,11 @@ import skimage as sk
 from skimage.transform import rotate
 from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
-# import PySimpleGUI as sg
 import pims
 from tqdm import trange
 from . import io
 from PyQt5.QtWidgets import QApplication
+from leads.crop_images import get_rect_params, crop_rect, rect_shape_to_roi
 import time
 
 # ---------------------------------------------------------------
@@ -77,50 +77,50 @@ def IdentifyRelevantDirectories(directory):
     print("Cropping from folder", name_list, ": Found", len(sub_dirs), "director(y/ies).")
     return sub_dirs, name_list
 
-# ---------------------------------------------------------------
-def get_rect_params(rect, printing=False):
-    length = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
-    width = int(np.sqrt((rect[0][0] - rect[1][0])**2 + (rect[0][1] - rect[1][1])**2))
-    dy = rect[3][1] - rect[0][1]
-    dx = rect[1][0] - rect[0][0]
-    if dx == 0:
-        angle = 0
-    else:
-        m1 = (dy/dx);   # tan(A)
-        A = np.arctan(m1) * 180 / np.pi;
-        angle = 270-A#-(A-90)
-    x_cent = int((rect[0, :][0] + rect[2, :][0])/2)
-    y_cent = int((rect[0, :][1] + rect[2, :][1])/2)
-    if printing:
-        print('length:', length, ', width:', width, ', angle:', angle)
-    rect_params = {
-        'length': length,
-        'width' : width,
-        'angle' : int(angle),
-        'x_cent' : x_cent,
-        'y_cent' : y_cent,}
-    return rect_params
+# # ---------------------------------------------------------------
+# def get_rect_params(rect, printing=False):
+#     length = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
+#     width = int(np.sqrt((rect[0][0] - rect[1][0])**2 + (rect[0][1] - rect[1][1])**2))
+#     dy = rect[3][1] - rect[0][1]
+#     dx = rect[3][0] - rect[0][0]
+#     if dx == 0:
+#         angle = 0
+#     else:
+#         m1 = (dy/dx);   # tan(A)
+#         A = np.arctan(m1) * 180 / np.pi;
+#         angle = 270-A#-(A-90)
+#     x_cent = int((rect[0, :][0] + rect[2, :][0])/2)
+#     y_cent = int((rect[0, :][1] + rect[2, :][1])/2)
+#     if printing:
+#         print('length:', length, ', width:', width, ', angle:', angle)
+#     rect_params = {
+#         'length': length,
+#         'width' : width,
+#         'angle' : int(angle),
+#         'x_cent' : x_cent,
+#         'y_cent' : y_cent,}
+#     return rect_params
 
-# ---------------------------------------------------------------
-def crop_rect(img, rect):
-    # rect : array for rectanglular roi as in napari
-    rect_params = get_rect_params(rect)
-    if rect_params['angle'] != 0:
-        img_rot = rotate(img, angle=rect_params['angle'],
-                         center=(rect_params['y_cent'], rect_params['x_cent']))
-    else:
-        img_rot = img
-    x = int(rect_params['x_cent'] - rect_params['length']/2)
-    y = int(rect_params['y_cent'] - rect_params['width']/2)
-    img_croped = img_rot[x:x+rect_params['length'], y:y+rect_params['width']]
-    return sk.util.img_as_uint(img_croped)
+# # ---------------------------------------------------------------
+# def crop_rect(img, rect):
+#     # rect : array for rectanglular roi as in napari
+#     rect_params = get_rect_params(rect)
+#     if rect_params['angle'] != 0:
+#         img_rot = rotate(img, angle=rect_params['angle'],
+#                          center=(rect_params['y_cent'], rect_params['x_cent']))
+#     else:
+#         img_rot = img
+#     x = int(rect_params['x_cent'] - rect_params['width']/2)
+#     y = int(rect_params['y_cent'] - rect_params['length']/2)
+#     img_croped = img_rot[x:x+rect_params['width'], y:y+rect_params['length']]
+#     return sk.util.img_as_uint(img_croped)
 
-# ---------------------------------------------------------------
-def rect_shape_to_roi(arr_from_napari):
-    arr_from_napari = np.flip(arr_from_napari)
-    roi_coord = np.array([arr_from_napari[0], arr_from_napari[3],
-                          arr_from_napari[2], arr_from_napari[1]], dtype=np.float32)
-    return roi_coord
+# # ---------------------------------------------------------------
+# def rect_shape_to_roi(arr_from_napari):
+#     arr_from_napari = np.flip(arr_from_napari)
+#     roi_coord = np.array([arr_from_napari[0], arr_from_napari[3],
+#                           arr_from_napari[2], arr_from_napari[1]], dtype=np.float32)
+#     return roi_coord
 
 # ---------------------------------------------------------------
 def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
@@ -146,14 +146,14 @@ def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
         rect_params = get_rect_params(rect) 
         key = 'arr' + str(i)
         img_array_all[key] = np.zeros((round(num_frames_update/num_colors), num_colors,
-                                       rect_params['length'], rect_params['width']),
+                                       rect_params['width'], rect_params['length']),
                                        dtype=np.uint16)        
         # name = pix_x-pix_y-length-width-angle-frame_start-frame_end
-        rect_0 = rect[2].astype(int)
+        rect_0 = rect[0].astype(int)
         if i < 10: sl_no = str(0) + str(i)
         else: sl_no = str(i)
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-              '-l' + str(rect_params['width']) + '-w' + str(rect_params['length']) +\
+              '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + 'd-f' + str(frame_start) + '-f' +\
               str(frame_end)
         names_roi_tosave.append(nam)
@@ -208,7 +208,7 @@ def crop(sub_dir, tag, roi_coord_list, num_colors, nDir, numDirs):
                     metadata={'axis': 'TCYX', 'channels': num_colors,
                     'mode': 'composite',})
     
-
+# ---------------------------------------------------------------
 def crop_from_directory(directory=None):
     '''
     crops from all the subfolders with images and corresponding ROIs
@@ -225,9 +225,8 @@ def crop_from_directory(directory=None):
         print('Directory:\n'+directory+'\n...')
         settings["crop"]["PWD BATCH"] = directory
         io.save_user_settings(settings)
-    # with open('.tkinter_lastdir', 'w') as f: f.write(directory)
 
-    num_colors = 2
+    num_colors = inputNumber("How many colors? ")
 
     # Get relevant subdirectories
     sub_dirs, tag = IdentifyRelevantDirectories(directory)
@@ -246,6 +245,7 @@ def crop_from_directory(directory=None):
         for roi_file in roi_file_list:
             roi = ImagejRoi.fromfile(roi_file)
             roi_coord = np.flip(roi.coordinates())
+            roi_coord = np.array([roi_coord[2], roi_coord[1], roi_coord[0], roi_coord[3]], dtype=np.float32)
             roi_coord[roi_coord<0] = 1
             roi_coord_list.append(roi_coord)
             
@@ -253,5 +253,18 @@ def crop_from_directory(directory=None):
         crop(sub_dirs[i], tag, roi_coord_list, num_colors, i, len(sub_dirs))
     print('Cropping is finished.')
 
+# ---------------------------------------------------------------
+def inputNumber(message):
+  while True:
+    try:
+       userInput = int(input(message))       
+    except ValueError:
+       print("Not an integer! Try again.")
+       continue
+    else:
+       return userInput 
+       break 
+
+# ---------------------------------------------------------------    
 if __name__ == "__main__":
     crop_from_directory()
