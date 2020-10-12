@@ -1654,8 +1654,8 @@ class Window(QtWidgets.QMainWindow):
             filename = os.path.join(self.folderpath, self.filename_base + '_left' + extension)
             os.chdir(temp_folder)
             # subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate, '-i', 'temp_%d0.png', '-c:v', 'libx264', '-vf', 'fps=50', filename])
-            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate,'-i','temp_%d0.png',
-                '-c:v', 'mpeg1video', '-vf', 'fps=50', '-crf', '10', filename])
+            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate,'-i','temp_%d.png',
+                '-c:v', 'mpeg1video', '-vf', 'fps=50', '-crf', '0', filename])
             for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
@@ -1677,7 +1677,7 @@ class Window(QtWidgets.QMainWindow):
             extension = self.ui.saveFormatComboBox.currentText()
             filename = os.path.join(self.folderpath, self.filename_base + '_right' + extension)
             os.chdir(temp_folder)
-            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate, '-i', 'temp_%d0.png',
+            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate, '-i', 'temp_%d.png',
                 '-c:v', 'mpeg1video', '-vf', 'fps=50', '-crf', '0', filename])
             
             for file in filelist_png:
