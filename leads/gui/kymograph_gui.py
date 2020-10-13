@@ -10,7 +10,7 @@ from ..kymograph import (read_img_seq, read_img_stack,
                 analyze_maxpeak, loop_sm_dist)
 from .. import kymograph
 from .. import io
-from ..utils import hdf5dict
+from ..utils import hdf5dict, makevideo
 import os, sys, glob, time, subprocess
 import yaml
 import matplotlib.pyplot as plt
@@ -1653,9 +1653,7 @@ class Window(QtWidgets.QMainWindow):
             extension = self.ui.saveFormatComboBox.currentText()
             filename = os.path.join(self.folderpath, self.filename_base + '_left' + extension)
             os.chdir(temp_folder)
-            # subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate, '-i', 'temp_%d0.png', '-c:v', 'libx264', '-vf', 'fps=50', filename])
-            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate,'-i','temp_%d.png',
-                '-c:v', 'mpeg1video', '-vf', 'fps=50', '-crf', '0', filename])
+            makevideo.png_to_video_cv2(temp_folder, filename, fps=int(frame_rate), scaling=4)
             for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
@@ -1677,9 +1675,7 @@ class Window(QtWidgets.QMainWindow):
             extension = self.ui.saveFormatComboBox.currentText()
             filename = os.path.join(self.folderpath, self.filename_base + '_right' + extension)
             os.chdir(temp_folder)
-            subprocess.call(['ffmpeg', '-y', '-framerate', frame_rate, '-i', 'temp_%d.png',
-                '-c:v', 'mpeg1video', '-vf', 'fps=50', '-crf', '0', filename])
-            
+            makevideo.png_to_video_cv2(temp_folder, filename, fps=int(frame_rate), scaling=4)
             for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
