@@ -27,6 +27,7 @@ setuptools.setup(
         "PyQt5",
         "napari",
         "pyqtgraph",
+        "opencv-python",
         "dask",
         "pims",
         "trackpy",
