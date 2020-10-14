@@ -891,7 +891,11 @@ class Window(QtWidgets.QMainWindow):
             self.set_img_stack()
         # disconnect the dependent signals
         self.multipeak_dialog.disconnect_signals()
-        self.set_yaml_params()
+        try:
+            self.set_yaml_params()
+        except Exception as e:
+            print(e)
+            pass
         # connect back the dependent signals
         self.multipeak_dialog.connect_signals()
 
