@@ -266,6 +266,12 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.force_combobox.addItems(["Interpolation", "Analytical"])
         plot_grid.addWidget(self.force_checkbox, 2, 0)
         plot_grid.addWidget(self.force_combobox, 2, 1)
+        # choose and plot types
+        self.plottype_pushbutton = QtWidgets.QPushButton("Plot")
+        self.plottype_combobox = QtWidgets.QComboBox()
+        self.plottype_combobox.addItems(["MSDmoving", "MSDlagtime", "TimeTraceCol1", "TimeTraceCol2"])
+        plot_grid.addWidget(self.plottype_pushbutton, 2, 2)
+        plot_grid.addWidget(self.plottype_combobox, 2, 3)
 
     def connect_signals(self):
         self.prominence_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
@@ -283,6 +289,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.linkplot_pushbutton.clicked.connect(self.on_clicking_linkplot_pushbutton)
         self.loopVsmol_pushbutton.clicked.connect(self.on_clicking_loopVsmol_pushbutton)
         self.loopkinetics_pushbutton.clicked.connect(self.on_clicking_loopkinetics_pushbutton)
+        self.plottype_pushbutton.clicked.connect(self.window.plottype_multipeak)
 
     def disconnect_signals(self):
         self.prominence_spinbox.valueChanged.disconnect()
@@ -300,6 +307,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.linkplot_pushbutton.clicked.disconnect()
         self.loopVsmol_pushbutton.clicked.disconnect()
         self.loopkinetics_pushbutton.clicked.disconnect()
+        self.plottype_pushbutton.clicked.disconnect()
 
     def on_prominence_spinbox_changed(self):
         value = self.prominence_spinbox.value()
@@ -1005,7 +1013,7 @@ class Window(QtWidgets.QMainWindow):
 
             self.region3_Loop.setRegion(self.params_yaml['region3_Loop'])
             self.region3_noLoop.setRegion(self.params_yaml['region3_noLoop'])
-        if "MultiPeak" in self.params_yaml:
+        if "MultiPeak" in self.params_yaml and len(self.params_yaml["MultiPeak"])>0:
             multipeak_setting = {"kymograph" : {}}
             multipeak_setting["kymograph"]["MultiPeak"] = self.params_yaml["MultiPeak"]
             try:
@@ -1608,6 +1616,68 @@ class Window(QtWidgets.QMainWindow):
         ax.set_ylabel('pixels')
         ax.legend()
         plt.show()
+
+    def plottype_multipeak(self):
+        left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
+        right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
+        df_gb = self.df_peaks_linked.groupby("particle")
+        group_sel_col1 = df_gb.get_group(left_peak_no)
+        group_sel_col1 = group_sel_col1.reset_index(drop=True)
+        if self.numColors == "2":
+            df_gb = self.df_peaks_linked_sm.groupby("particle")
+            group_sel_col2 = df_gb.get_group(right_peak_no)
+            group_sel_col2 = group_sel_col2.reset_index(drop=True)
+        if self.multipeak_dialog.plottype_combobox.currentText() == "MSDmoving":
+            print("plot MSD")
+            _, ax = plt.subplots()
+            n=50
+            ind = int(n/2)
+            msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
+            frames = group_sel_col1['FrameNumber'].values[ind:-ind]
+            ax.plot(frames, msd_moving, 'g', label='color_1')
+            if self.numColors == "2":
+                msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
+                frames = group_sel_col2['FrameNumber'].values[ind:-ind]
+                ax.plot(frames, msd_moving, 'm', label='color_2')
+            ax.set_xlabel("Frame Number")
+            ax.set_ylabel("Moving MSD(" + str(n) + " points)")
+            ax.legend()
+            plt.show()
+        if self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
+            print("plot MSD")
+            _, ax = plt.subplots()
+            msd = kymograph.msd_1d_nb1(group_sel_col1['x'].values)
+            plt.plot(msd, 'g', label="MSD color-1")
+            if self.numColors == "2":
+                msd = kymograph.msd_1d_nb1(group_sel_col2['x'].values)
+                plt.plot(msd, 'm', label="MSD color-1")
+            ax.set_xlabel("Frame Number")
+            ax.set_ylabel("MSD")
+            ax.set_yscale('log')
+            ax.legend()
+            plt.show()
+        if self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol1":
+            print("plot TimeTrace")
+            _, ax = plt.subplots()
+            trace_col1 = 7 * np.average(self.kymo_left_loop, axis=1)
+            trace_col1_bg = trace_col1# - np.average(group_sel_col1["PeakIntensity"].values)
+            ax.plot(group_sel_col1["FrameNumber"], group_sel_col1["PeakIntensity"], label="Peak")
+            ax.plot(trace_col1_bg, label="Background")
+            ax.set_xlabel("Frame Number")
+            ax.set_ylabel("Intensity")
+            ax.legend()
+            plt.show()
+        if self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol2" and self.numColors == "2":
+            print("plot TimeTrace")
+            _, ax = plt.subplots()
+            trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
+            trace_col2_bg = trace_col2# - np.average(group_sel_col2["PeakIntensity"].values)
+            ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
+            ax.plot(trace_col2_bg, label="Background")
+            ax.set_xlabel("Frame Number")
+            ax.set_ylabel("Intensity")
+            ax.legend()
+            plt.show()
 
     def save_hdf5(self, filepath_hdf5):
         with h5py.File(filepath_hdf5, 'w') as h5_analysis:

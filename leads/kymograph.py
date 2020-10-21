@@ -1,5 +1,6 @@
 import os, glob
 import numpy as np
+from numba import jit
 import pandas as pd
 import h5py
 from scipy.ndimage import median_filter, white_tophat, black_tophat
@@ -412,6 +413,30 @@ def force_wlc(rel_ext, Plen=50):
     sqt = 1 / (4 * (1 - rel_ext)**2)
     F = (kbT/Plen)*(sqt - 0.25 + rel_ext)
     return F
+
+
+def msd_moving(x, n=5):
+    diff = np.diff(x)
+    diff_sq = diff**2
+    MSD = moving_average(diff_sq, n)
+    return MSD
+
+
+def moving_average(a, n=3) :
+    ret = np.cumsum(a, dtype=float)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret[n - 1:] / n
+
+
+@jit(nopython = True)
+def msd_1d_nb1(x):
+    result = np.zeros_like(x)
+    for delta in range(1,len(x)):
+        thisresult = 0
+        for i in range(delta,len(x)):
+            thisresult += (x[i] - x[i-delta])**2
+        result[delta] = thisresult / (len(x) - delta)
+    return result
 
 
 RELATIVE_EXTENSION = np.array([0.23753, 0.26408, 0.37554, 0.49173, 0.63215, 0.70054, 0.73801,
