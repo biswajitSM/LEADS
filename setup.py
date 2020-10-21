@@ -20,6 +20,7 @@ setuptools.setup(
     python_requires = '>=3.7',
     install_requires = [
         "numpy",
+        "numba",
         "pandas",
         "scipy",
         "scikit-image",
