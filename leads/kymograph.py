@@ -64,6 +64,21 @@ def median_bkg_substration(txy_array, size_med=5, size_bgs=10, light_bg=False):
     return array_processed
 
 
+def bkg_substration(txy_array, size_bgs=10, light_bg=False):
+    '''
+    Background substraction
+    '''
+    array_processed = np.zeros_like(txy_array)
+    for i in range(txy_array.shape[0]):
+        img = txy_array[i]
+        if light_bg:
+            img_bgs = black_tophat(img, size=size_bgs)
+        else:
+            img_bgs = white_tophat(img, size=size_bgs)
+        array_processed[i, :, :] = img_bgs
+    return array_processed
+
+
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
                       smooth_length=7, prominence_min=1/2, peak_width=(None, None),
                       pix_width=11, plotting=False,
@@ -87,7 +102,10 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     prominence_list = []
     for i in range(kym_arr_cropped.shape[1]):
         line1d = kym_arr_cropped[:, i]
-        line1d_smth = savgol_filter(line1d, window_length=smooth_length, polyorder=1)
+        if smooth_length > 2:
+            line1d_smth = savgol_filter(line1d, window_length=smooth_length, polyorder=1)
+        else:
+            line1d_smth = line1d
         peaks, properties = find_peaks(line1d_smth,
                 prominence=(None, None), width=peak_width) #min(line1d_smth), width=(pix_rad, 3*pix_rad)
         prom_bool = properties['prominences'] > (prominence_min * max(line1d_smth))

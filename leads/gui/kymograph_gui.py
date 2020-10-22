@@ -150,7 +150,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # Smoothing length
         general_grid.addWidget(QtWidgets.QLabel("Smoothing Length:"), 4, 2)
         self.smoothlength_spinbox = QtWidgets.QSpinBox()
-        self.smoothlength_spinbox.setRange(3, 1e3)
+        self.smoothlength_spinbox.setRange(1, 1e3)
         self.smoothlength_spinbox.setValue(7)
         self.smoothlength_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.smoothlength_spinbox, 4, 3)
@@ -533,11 +533,13 @@ class MainWidget(QtWidgets.QWidget):
         self.bottomlayout.addLayout(grid_btn1, 0, 1)
         self.detectLoopsBtn = QtWidgets.QPushButton("Detect loops")
         self.detectLoopsBtn.setShortcut("Ctrl+D")
-        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0)
+        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0, 1, 2)
         self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
         self.processImageCheckBox.setChecked(True)
         grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
-
+        self.processImageComboBox = QtWidgets.QComboBox()
+        self.processImageComboBox.addItems(["Median", "N2V"])
+        grid_btn1.addWidget(self.processImageComboBox, 1, 1)
         # Frame number: start and end
         grid_frame = QtWidgets.QGridLayout()
         self.bottomlayout.addLayout(grid_frame, 0, 2)
@@ -664,6 +666,7 @@ class Window(QtWidgets.QMainWindow):
     def connect_signals_init(self):
         self.ui.numColorsComboBox.currentIndexChanged.connect(self.change_num_colors)
         self.ui.processImageCheckBox.stateChanged.connect(self.processed_image_check)
+        self.ui.processImageComboBox.currentIndexChanged.connect(self.processed_image_check)
         self.ui.mergeColorsCheckBox.stateChanged.connect(self.merge_colors)
         self.ui.swapColorsCheckBox.stateChanged.connect(self.swap_colors)
         self.ui.detectLoopsBtn.clicked.connect(self.detect_loops)
@@ -1036,25 +1039,33 @@ class Window(QtWidgets.QMainWindow):
             self.set_img_stack()
 
     def get_processed_image(self):
-        fpath_processed = os.path.join(self.folderpath, self.filename_base + '_processed.tif')
-        if os.path.isfile(fpath_processed):
-            self.image_meta = read_img_stack(fpath_processed)
-        else:
-            if self.numColors == "2":
-                self.imgarr_left = median_bkg_substration(self.imgarr_left)
-                self.imgarr_right = median_bkg_substration(self.imgarr_right)
-                comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
-                                           self.imgarr_right[:,np.newaxis,:,:]),
-                                           axis=1)
-                imwrite(fpath_processed, comb_arr, imagej=True,
-                        metadata={'axis': 'TCYX', 'channels': self.numColors,
-                        'mode': 'composite',})
-            elif self.numColors == "1":
-                self.imgarr_left = median_bkg_substration(self.imgarr_left)
-                imwrite(fpath_processed, self.imgarr_left, imagej=True,
-                        metadata={'axis': 'TCYX', 'channels': self.numColors,
-                        'mode': 'composite',})
-            self.image_meta = read_img_stack(fpath_processed)
+        if self.ui.processImageComboBox.currentText() == "Median":
+            fpath_processed = os.path.join(self.folderpath, self.filename_base + '_processed.tif')
+            if os.path.isfile(fpath_processed):
+                self.image_meta = read_img_stack(fpath_processed)
+            else:
+                if self.numColors == "2":
+                    self.imgarr_left = median_bkg_substration(self.imgarr_left)
+                    self.imgarr_right = median_bkg_substration(self.imgarr_right)
+                    comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
+                                            self.imgarr_right[:,np.newaxis,:,:]),
+                                            axis=1)
+                    imwrite(fpath_processed, comb_arr, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                elif self.numColors == "1":
+                    self.imgarr_left = median_bkg_substration(self.imgarr_left)
+                    imwrite(fpath_processed, self.imgarr_left, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                self.image_meta = read_img_stack(fpath_processed)
+        elif self.ui.processImageComboBox.currentText() == "N2V":
+            fpath_processed = os.path.join(self.folderpath, self.filename_base + '_N2V_processed.tif')
+            if os.path.isfile(fpath_processed):
+                self.image_meta = read_img_stack(fpath_processed)
+            else:
+                self.image_meta = read_img_stack(self.filepath)
+                print("N2V processed file doesn't exist")
         return self.image_meta
 
     def update_kymo(self):
