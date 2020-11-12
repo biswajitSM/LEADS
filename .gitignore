@@ -1,7 +1,7 @@
 *.code-workspace
 __pycache__/
 temp/
-*.bat
+development/
 *.idea
 *.vscode
 *.ipynb_checkpoints
