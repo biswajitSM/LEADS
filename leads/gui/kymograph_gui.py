@@ -269,7 +269,10 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # choose and plot types
         self.plottype_pushbutton = QtWidgets.QPushButton("Plot")
         self.plottype_combobox = QtWidgets.QComboBox()
-        self.plottype_combobox.addItems(["MSDmoving", "MSDlagtime", "TimeTraceCol1", "TimeTraceCol2"])
+        self.plottype_combobox.addItems(["MSDmoving", "MSDlagtime",
+                                         "MSDlagtime-AllPeaks",
+                                         "TimeTraceCol1", "TimeTraceCol2",
+                                         ])
         plot_grid.addWidget(self.plottype_pushbutton, 2, 2)
         plot_grid.addWidget(self.plottype_combobox, 2, 3)
 
@@ -572,6 +575,7 @@ class MainWidget(QtWidgets.QWidget):
         self.saveSectionBtn = QtWidgets.QPushButton("Save section")
         self.saveSectionComboBox = QtWidgets.QComboBox()
         self.saveSectionComboBox.addItems(["d0left:video", "d0right:video",
+                                           "ROI:tif",
                                            "d1left:tif", "d1right:tif",
                                            "d2left:tif", "d2right:tif",
                                            ])
@@ -1654,7 +1658,7 @@ class Window(QtWidgets.QMainWindow):
             ax.set_ylabel("Moving MSD(" + str(n) + " points)")
             ax.legend()
             plt.show()
-        if self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
             print("plot MSD")
             _, ax = plt.subplots()
             msd = kymograph.msd_1d_nb1(group_sel_col1['x'].values)
@@ -1667,7 +1671,28 @@ class Window(QtWidgets.QMainWindow):
             ax.set_yscale('log')
             ax.legend()
             plt.show()
-        if self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol1":
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime-AllPeaks":
+            if self.numColors == "1":
+                fig,(ax1) = plt.subplots(nrows=1, ncols=1)
+                _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked,
+                                pixelsize = self.pixelSize,
+                                fps=int(self.numColors) * (1/self.acquisitionTime),
+                                max_lagtime=100, axis=ax1)
+                ax1.set_title("Color 1")
+            elif self.numColors == "2":
+                fig,(ax1, ax2) = plt.subplots(nrows=1, ncols=2)
+                _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked,
+                                pixelsize = self.pixelSize,
+                                fps=int(self.numColors) * (1/self.acquisitionTime),
+                                max_lagtime=100, axis=ax1)
+                _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked_sm,
+                                pixelsize = self.pixelSize,
+                                fps=int(self.numColors) * (1/self.acquisitionTime),
+                                max_lagtime=100, axis=ax2)
+                ax1.set_title("Color 1")
+                ax2.set_title("Color 2")
+            plt.show()
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol1":
             print("plot TimeTrace")
             _, ax = plt.subplots()
             trace_col1 = 7 * np.average(self.kymo_left_loop, axis=1)
@@ -1678,7 +1703,7 @@ class Window(QtWidgets.QMainWindow):
             ax.set_ylabel("Intensity")
             ax.legend()
             plt.show()
-        if self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol2" and self.numColors == "2":
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol2" and self.numColors == "2":
             print("plot TimeTrace")
             _, ax = plt.subplots()
             trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
@@ -1764,6 +1789,24 @@ class Window(QtWidgets.QMainWindow):
             for file in filelist_png:
                 os.remove(file)
             print("Video conversion FINISHED")
+        # save ROIleft as tif
+        elif self.ui.saveSectionComboBox.currentText() == "ROI:tif":
+            filename = self.folderpath+'/'+self.filename_base + '_ROI.tif'
+            if self.numColors == "1":
+                roi_data = self.roirect_left.getArrayRegion(
+                                    self.imgarr_left,
+                                    self.imv00.imageItem, axes=(1, 2))
+            elif self.numColors == "2":
+                roi_data_1 = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                    self.imv00.imageItem, axes=(1, 2))
+                roi_data_2 = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                    self.imv01.imageItem, axes=(1, 2))
+                roi_data = np.concatenate((
+                                          roi_data_2[:, np.newaxis, :, :],
+                                          roi_data_1[:, np.newaxis, :, :],
+                                          ), axis=1)
+            imwrite(filename, roi_data.astype(np.uint16), imagej=True,
+                    metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
         # save left full kymo : d1left
         elif self.ui.saveSectionComboBox.currentText() == "d1left:tif":
             filename = self.folderpath+'/'+self.filename_base + '_left_kymo.tif'

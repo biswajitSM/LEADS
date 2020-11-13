@@ -256,7 +256,7 @@ def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_len
         for name in gb_names:
             gp_sel = peaks_linked_gb.get_group(name)
             axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
-            axis.text(gp_sel["frame"].values[0], np.average(gp_sel["x"].values), str(name))
+            axis.text(gp_sel["frame"].values[0], np.average(gp_sel["x"].values[:10]), str(name))
         plt.show()
     peaks_linked = peaks_linked.reset_index(drop=True)
     return peaks_linked
@@ -445,6 +445,19 @@ def moving_average(a, n=3) :
     ret[n:] = ret[n:] - ret[:-n]
     return ret[n - 1:] / n
 
+def msd_lagtime_allpeaks(df_linked_peaks, pixelsize, fps, max_lagtime=100, axis=None):
+    df_linked_peaks['y'] = 1
+    imsd = trackpy.imsd(df_linked_peaks, mpp=pixelsize, fps=fps, max_lagtime=max_lagtime)
+    if axis is None:
+        fig, axis = plt.subplots()
+    for col in imsd.columns:
+        axis.plot(imsd.index, imsd[col], label=col)
+    axis.set_yscale('log')
+    axis.set_xscale('log')
+    axis.set_xlabel('lag time [s]')
+    axis.set_ylabel(r'$\langle \Delta r^2 \rangle$ [$\mu$m$^2$]');
+    axis.legend()
+    return imsd
 
 @jit(nopython = True)
 def msd_1d_nb1(x):
