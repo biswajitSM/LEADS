@@ -605,7 +605,8 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         # Init GUI
-        self.setWindowTitle("LEADS : Kymograph Analysis")
+        self.title_string = "LEADS : Kymograph Analysis"
+        self.setWindowTitle(self.title_string)
         this_directory = os.path.dirname(os.path.realpath(__file__))
         icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar.png")
         icon = QtGui.QIcon(icon_path)
@@ -892,6 +893,7 @@ class Window(QtWidgets.QMainWindow):
                                  "Tif File (*.tif)").openFileNameDialog()
         # set paths anfile names
         self.filepath = filepath
+        self.setWindowTitle(self.title_string + '-' + self.filepath)
         self.folderpath = os.path.dirname(self.filepath)
         filename = os.path.basename(self.filepath)
         (self.filename_base, ext) = os.path.splitext(filename)
@@ -1218,9 +1220,12 @@ class Window(QtWidgets.QMainWindow):
     def region_noLoop_changed(self):
         minX, maxX = self.region3_noLoop.getRegion()
         self.kymo_left_noLoop = self.kymo_left[int(minX):int(maxX), :]
+        # background set to 0
+        self.kymo_left_noLoop = self.kymo_left_noLoop - np.min(np.average(self.kymo_left_noLoop, axis=0))
         self.imv20.setImage(self.kymo_left_noLoop)
         if self.numColors == "2":
             self.kymo_right_noLoop = self.kymo_right[int(minX):int(maxX), :]
+            self.kymo_right_noLoop = self.kymo_right_noLoop - np.min(np.average(self.kymo_right_noLoop, axis=0))
             if self.ui.mergeColorsCheckBox.isChecked():
                 kymo_noLoop_comb = np.concatenate((self.kymo_right_noLoop[:, :, np.newaxis],
                                         self.kymo_left_noLoop[:, :, np.newaxis],
@@ -1233,9 +1238,12 @@ class Window(QtWidgets.QMainWindow):
     def region_Loop_changed(self):
         minX, maxX = self.region3_Loop.getRegion()
         self.kymo_left_loop = self.kymo_left[int(minX):int(maxX), :]
+        # background set to 0
+        self.kymo_left_loop = self.kymo_left_loop - np.min(np.average(self.kymo_left_loop, axis=0))
         self.imv21.setImage(self.kymo_left_loop)
         if self.numColors == "2":
             self.kymo_right_loop = self.kymo_right[int(minX):int(maxX), :]
+            self.kymo_right_loop = self.kymo_right_loop - np.min(np.average(self.kymo_right_loop, axis=0))
             if self.ui.mergeColorsCheckBox.isChecked():
                 kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
                                         self.kymo_left_loop[:, :, np.newaxis],
@@ -1720,6 +1728,7 @@ class Window(QtWidgets.QMainWindow):
             # save parameters
             params_group = h5_analysis.create_group("parameters")
             hdf5dict.dump(self.params_yaml, params_group)
+            h5_analysis["filepath"] = self.filepath
             if self.kymo_left is not None:
                 h5_analysis["Left Kymograph"] = self.kymo_left.T
                 h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
@@ -1766,7 +1775,9 @@ class Window(QtWidgets.QMainWindow):
             makevideo.png_to_video_cv2(temp_folder, filename, fps=int(frame_rate), scaling=4)
             for file in filelist_png:
                 os.remove(file)
+            # subprocess.call([filename])
             print("Video conversion FINISHED")
+
         # save left video : d0right
         elif self.ui.saveSectionComboBox.currentText() == "d0right:video":
             roi_state = self.roirect_right.getState()
