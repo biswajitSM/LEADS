@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import numpy as np
 from scipy import ndimage, misc
@@ -36,7 +37,8 @@ def IdentifyRelevantDirectories(directory, num_colors=None):
     for i in trange(len(sub_dirs), desc='Check for ROI files'):
         roi_file_list = glob.glob(sub_dirs[i] + '/*.roi', recursive = False)
 
-         # only consider if there are any roi files and if these roi files do not contain two "-f" in their name (those are the processed ones)
+         # only consider if there are any roi files and if these roi files do 
+         # not contain two "-f" in their name (those are the processed ones)
         if roi_file_list:
             if (not any(roi_file_list_item.count('-f')>1 for roi_file_list_item in roi_file_list)):
                 sub_dirs_updated.append(sub_dirs[i])
@@ -75,8 +77,19 @@ def IdentifyRelevantDirectories(directory, num_colors=None):
     return sub_dirs
 
 # ---------------------------------------------------------------
-def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
-    
+def GetROIDescription(roi_file_list, descriptions=[]):
+    # the format is something like xxxxxxxx_description.roi
+    # find from the underscore to the dot to get the description and convert to small letters
+    for k in range(len(roi_file_list)):        
+        descriptions.append( roi_file_list[k].rsplit("_",1)[-1].split(".")[0].lower() )
+    return descriptions
+
+# ---------------------------------------------------------------
+def crop(dir, sub_dir, roi_coord_list, roi_original_names, 
+    ROIdescriptions, num_colors, nDir, numDirs):
+    # dir is the directory where ROIs are stored
+    # sub_dir is where the crops go
+
     folderpath = sub_dir
     
     # default. can be changed in the future (20200918)
@@ -92,6 +105,7 @@ def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
         os.makedirs(dir_to_save)
 
     names_roi_tosave = []
+    names_roi_tosave_no_frames = []
     img_array_all = {}
     for i in range(len(roi_coord_list)):  
         rect = roi_coord_list[i]
@@ -107,8 +121,12 @@ def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + 'd-f' + str(frame_start) + '-f' +\
-              str(frame_end)
+              str(frame_end) + '_' + ROIdescriptions[i]
         names_roi_tosave.append(nam)
+        nam_no_frames = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
+              '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
+              '-a' + str(rect_params['angle']) + '_' + ROIdescriptions[i]
+        names_roi_tosave_no_frames.append(nam_no_frames)
     rect_keys = list(img_array_all.keys())
 
     # go through each roi name and see if it already exists. If yes, skip it
@@ -130,7 +148,9 @@ def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
         for i in range(len(roi_coord_list)):
             if (not skipROI[i]):
                 roi_ij = ImagejRoi.frompoints(rect_shape_to_roi(roi_coord_list[i]))
-                roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi'))
+                roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi')) # saving the ROI in the subfolder
+                roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
+                os.remove(os.path.join(dir, roi_original_names[i])) # remove the original file
         return
 
 
@@ -153,7 +173,9 @@ def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
     for i in range(len(roi_coord_list)):
         if (not skipROI[i]):
             roi_ij = ImagejRoi.frompoints(rect_shape_to_roi(roi_coord_list[i]))
-            roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi'))
+            roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi'))# saving the ROI in the subfolder
+            roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
+            os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file
         if (not skipIMG[i]):
             imwrite(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),
                     img_array_all[rect_keys[i]], imagej=True,
@@ -161,9 +183,10 @@ def crop(sub_dir, roi_coord_list, num_colors, nDir, numDirs):
                     'mode': 'composite',})
     
 # ---------------------------------------------------------------
-def crop_from_directory(directory=None, num_colors=None):
+def crop_from_directory(directory=None, num_colors=None, sort_FOVs=None):
     '''
     crops from all the subfolders with images and corresponding ROIs
+    FOVs can be sorted by their description into another folder while keeping their name and source path
     '''
     if directory is None:
         directory = ChooseDirectory()
@@ -171,15 +194,20 @@ def crop_from_directory(directory=None, num_colors=None):
     if num_colors is None: 
         num_colors = inputNumber("How many colors? ")
 
+    if sort_FOVs is None: 
+        sort_FOVs = inputBool("Sort FOVs by description [0 or 1]? ")    
+
     # Get relevant subdirectories
     # sub_dirs, tags = IdentifyRelevantDirectories(directory, num_colors)
     sub_dirs = IdentifyRelevantDirectories(directory, num_colors)
 
     # go through each sub-directory and get all .roi files
     print('Starting cropping routine...')
+    ROIdescriptions = []
     for i in range(len(sub_dirs)):
         roi_file_list = glob.glob(sub_dirs[i] + "/*.roi", recursive = False)
-        roi_coord_list = LoadROIs(roi_file_list)
+        ROIdescriptions.extend( GetROIDescription(roi_file_list) )
+        roi_coord_list, roi_original_names = LoadROIs(roi_file_list)
 
         # there might be several subfolders to which this ROI is to be applied. 
         # Get all of those subfolders 
@@ -198,7 +226,8 @@ def crop_from_directory(directory=None, num_colors=None):
                 print('- ', subfolder)
 
         for sf in range(len(subfolders)):
-            crop(subfolders[sf], roi_coord_list, num_colors, sf, len(subfolders))
+            crop(sub_dirs[i], subfolders[sf], roi_coord_list, roi_original_names,
+            ROIdescriptions, num_colors, sf, len(subfolders))
         print()
         
     print('Cropping is finished.')
@@ -206,10 +235,13 @@ def crop_from_directory(directory=None, num_colors=None):
 # ---------------------------------------------------------------
 def LoadROIs(roi_file_list):
     roi_file_list_updated = []
+    roi_original_names_updated = []
     for j in range(len(roi_file_list)):    
         if (roi_file_list[j].count('-f')<2):
             roi_file_list_updated.append(roi_file_list[j])
+            roi_original_names_updated.append(roi_file_list[j])
     roi_file_list = roi_file_list_updated
+    roi_original_names = roi_original_names_updated
     
     roi_coord_list = []
     for roi_file in roi_file_list:
@@ -218,7 +250,7 @@ def LoadROIs(roi_file_list):
         roi_coord = np.array([roi_coord[2], roi_coord[1], roi_coord[0], roi_coord[3]], dtype=np.float32)
         roi_coord[roi_coord<0] = 1
         roi_coord_list.append(roi_coord)
-    return roi_coord_list
+    return roi_coord_list, roi_original_names
 
 # ---------------------------------------------------------------
 def ChooseDirectory():
@@ -230,6 +262,8 @@ def ChooseDirectory():
         pass
     _ = QApplication([])
     directory = io.FileDialog(directory, 'Please select a directory').openDirectoryDialog()
+    if not directory:
+        sys.exit("No direcotry specified. Exiting.")
     print('Directory: '+directory+'\n')
     settings["crop"]["PWD BATCH"] = directory
     io.save_user_settings(settings)
@@ -246,6 +280,22 @@ def inputNumber(message):
     else:
        return userInput 
        break 
+
+# ---------------------------------------------------------------
+def inputBool(message):
+  while True:
+    try:
+       userInput = int(input(message))       
+    except ValueError:
+       print("Not an integer! Write either 0 or 1.")
+       continue
+    else:
+        if userInput>=0:
+            userInput = False
+        else:
+            userInput = True
+        return userInput 
+        break 
 
 # ---------------------------------------------------------------    
 if __name__ == "__main__":
