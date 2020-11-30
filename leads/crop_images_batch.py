@@ -2,6 +2,8 @@ import os
 import sys
 import glob
 import numpy as np
+from pathlib import Path
+import shutil
 from scipy import ndimage, misc
 import skimage as sk
 from skimage.transform import rotate
@@ -85,8 +87,8 @@ def GetROIDescription(roi_file_list, descriptions=[]):
     return descriptions
 
 # ---------------------------------------------------------------
-def crop(dir, sub_dir, roi_coord_list, roi_original_names, 
-    ROIdescriptions, num_colors, nDir, numDirs):
+def crop(dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names, 
+    ROIdescriptions, sort_directory, num_colors, sort_FOVs, nDir, numDirs):
     # dir is the directory where ROIs are stored
     # sub_dir is where the crops go
 
@@ -116,8 +118,8 @@ def crop(dir, sub_dir, roi_coord_list, roi_original_names,
                                        dtype=np.uint16)        
         # name = pix_x-pix_y-length-width-angle-frame_start-frame_end
         rect_0 = rect[0].astype(int)
-        if i < 10: sl_no = str(0) + str(i)
-        else: sl_no = str(i)
+        # if i < 10: sl_no = str(0) + str(i)
+        # else: sl_no = str(i)
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + 'd-f' + str(frame_start) + '-f' +\
@@ -129,20 +131,48 @@ def crop(dir, sub_dir, roi_coord_list, roi_original_names,
         names_roi_tosave_no_frames.append(nam_no_frames)
     rect_keys = list(img_array_all.keys())
 
+    # if we sort, figure out the name of each file in the sorted directory:
+    # we first need the file's superior dir, the current dir, and sub_dir
+    name_sorted = []
+    print(sort_FOVs)
+    if sort_FOVs:
+        sorted_dir = []
+        for i in range(len(roi_coord_list)):
+            child  = Path(roi_file_list[i]).parent
+            parent = child.parent.parts[-1]
+            child = child.parts[-1]
+            # create a dir to save the FOV to if it doesnt exist yet
+            sorted_dir.append( os.path.join(sort_directory, ROIdescriptions[i]) )
+            if not os.path.isdir(sorted_dir[-1]):
+                os.makedirs(sorted_dir[-1])
+            name_sorted.append( 
+                os.path.join(sorted_dir[-1],\
+                parent + '_' + child + '_' +\
+                names_roi_tosave_no_frames[i]) )
+
     # go through each roi name and see if it already exists. If yes, skip it
-    skipROI = []
-    skipIMG = []
+    skipROI  = []
+    skipIMG  = []
+    skipSORT = []
     for i in range(len(roi_coord_list)):
         ROIpath = os.path.join(dir_to_save, names_roi_tosave[i]+'.roi')
         IMGpath = os.path.join(dir_to_save, names_roi_tosave[i]+'.tif')
-        if os.path.isfile(ROIpath):
+        if os.path.isfile(ROIpath): # check if ROIs exist
             skipROI.append(True)
         else:
             skipROI.append(False)
-        if os.path.isfile(IMGpath):
+        if os.path.isfile(IMGpath): # check if images exist
             skipIMG.append(True)
         else:
             skipIMG.append(False)
+        if sort_FOVs:
+            if os.path.isfile(name_sorted[i]): # check if images exist
+                skipSORT.append(True)
+            else:
+                skipSORT.append(False)
+        else:
+            skipSORT.append(True)
+
     if all(skipIMG):
         print('All crops already exist in subfolder '+str(nDir+1)+'/'+str(numDirs)+'.')
         for i in range(len(roi_coord_list)):
@@ -151,8 +181,13 @@ def crop(dir, sub_dir, roi_coord_list, roi_original_names,
                 roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi')) # saving the ROI in the subfolder
                 roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
                 os.remove(os.path.join(dir, roi_original_names[i])) # remove the original file
+            if (not skipSORT[i]):
+                roi_ij = ImagejRoi.frompoints(rect_shape_to_roi(roi_coord_list[i]))
+                roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
+                # copying the images from the dir to the sorted one
+                shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),\
+                     name_sorted[i]+'.tif') # copy the file to the sorted dir
         return
-
 
     #imgseq = imgseq[frame_start:frame_end]
     for col in range(num_colors):        
@@ -175,12 +210,17 @@ def crop(dir, sub_dir, roi_coord_list, roi_original_names,
             roi_ij = ImagejRoi.frompoints(rect_shape_to_roi(roi_coord_list[i]))
             roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi'))# saving the ROI in the subfolder
             roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
-            os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file
+            os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
         if (not skipIMG[i]):
             imwrite(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),
                     img_array_all[rect_keys[i]], imagej=True,
                     metadata={'axis': 'TCYX', 'channels': num_colors,
                     'mode': 'composite',})
+        if (not skipSORT[i]):
+                roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
+                shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),\
+                     name_sorted[i]+'.tif') # copy the file to the sorted dir
+
     
 # ---------------------------------------------------------------
 def crop_from_directory(directory=None, num_colors=None, sort_FOVs=None):
@@ -189,13 +229,20 @@ def crop_from_directory(directory=None, num_colors=None, sort_FOVs=None):
     FOVs can be sorted by their description into another folder while keeping their name and source path
     '''
     if directory is None:
-        directory = ChooseDirectory()
+        directory = ChooseDirectory_Crop()
+        if not os.path.isdir(directory):
+                os.makedirs(directory)
     
     if num_colors is None: 
         num_colors = inputNumber("How many colors? ")
 
+    sort_directory = None
     if sort_FOVs is None: 
-        sort_FOVs = inputBool("Sort FOVs by description [0 or 1]? ")    
+        sort_FOVs = inputBool("Sort FOVs by description [0 or 1]? ")
+        if sort_FOVs:
+            sort_directory = ChooseDirectory_Sort()
+            if not os.path.isdir(sort_directory):
+                    os.makedirs(sort_directory)
 
     # Get relevant subdirectories
     # sub_dirs, tags = IdentifyRelevantDirectories(directory, num_colors)
@@ -203,10 +250,9 @@ def crop_from_directory(directory=None, num_colors=None, sort_FOVs=None):
 
     # go through each sub-directory and get all .roi files
     print('Starting cropping routine...')
-    ROIdescriptions = []
     for i in range(len(sub_dirs)):
         roi_file_list = glob.glob(sub_dirs[i] + "/*.roi", recursive = False)
-        ROIdescriptions.extend( GetROIDescription(roi_file_list) )
+        ROIdescriptions = GetROIDescription(roi_file_list)
         roi_coord_list, roi_original_names = LoadROIs(roi_file_list)
 
         # there might be several subfolders to which this ROI is to be applied. 
@@ -226,8 +272,8 @@ def crop_from_directory(directory=None, num_colors=None, sort_FOVs=None):
                 print('- ', subfolder)
 
         for sf in range(len(subfolders)):
-            crop(sub_dirs[i], subfolders[sf], roi_coord_list, roi_original_names,
-            ROIdescriptions, num_colors, sf, len(subfolders))
+            crop(sub_dirs[i], subfolders[sf], roi_coord_list, roi_file_list, roi_original_names,
+            ROIdescriptions, sort_directory, num_colors, sort_FOVs, sf, len(subfolders))
         print()
         
     print('Cropping is finished.')
@@ -253,7 +299,7 @@ def LoadROIs(roi_file_list):
     return roi_coord_list, roi_original_names
 
 # ---------------------------------------------------------------
-def ChooseDirectory():
+def ChooseDirectory_Crop():
     settings = io.load_user_settings()
     try:
         directory = settings["crop"]["PWD BATCH"]
@@ -261,14 +307,31 @@ def ChooseDirectory():
         directory = None
         pass
     _ = QApplication([])
-    directory = io.FileDialog(directory, 'Please select a directory').openDirectoryDialog()
+    directory = io.FileDialog(directory, 'Please select a directory to crop from').openDirectoryDialog()
     if not directory:
         sys.exit("No direcotry specified. Exiting.")
-    print('Directory: '+directory+'\n')
+    print('Directory to crop from: '+directory+'\n')
     settings["crop"]["PWD BATCH"] = directory
     io.save_user_settings(settings)
     return directory
 
+# ---------------------------------------------------------------
+def ChooseDirectory_Sort():
+    settings = io.load_user_settings()
+    try:
+        directory = settings["crop"]["PWD BATCH SORT"]
+    except:
+        directory = None
+        pass
+    _ = QApplication([])
+    directory = io.FileDialog(directory, 'Please select a directory to store sorted FOVs').openDirectoryDialog()
+    if not directory:
+        sys.exit("No direcotry specified. Exiting.")
+    print('Directory to save sorted FOVs: '+directory+'\n')
+    settings["crop"]["PWD BATCH SORT"] = directory
+    io.save_user_settings(settings)
+    return directory
+    
 # ---------------------------------------------------------------
 def inputNumber(message):
   while True:
@@ -290,10 +353,10 @@ def inputBool(message):
        print("Not an integer! Write either 0 or 1.")
        continue
     else:
-        if userInput>=0:
-            userInput = False
-        else:
+        if userInput>0:
             userInput = True
+        else:
+            userInput = False
         return userInput 
         break 
 
