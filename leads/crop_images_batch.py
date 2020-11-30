@@ -83,7 +83,7 @@ def GetROIDescription(roi_file_list, descriptions=[]):
     # the format is something like xxxxxxxx_descrip_ti_on.roi
     # find from the underscore to the dot to get the description and convert to small letters
     for k in range(len(roi_file_list)):      
-        split_list = roi_file_list[k].rsplit("_")
+        split_list = os.path.basename( roi_file_list[k] ).rsplit("_") # we only want the filename
         merged_list = ""
         for l in range(1, len(split_list)):
             merged_list += split_list[l]
@@ -140,7 +140,6 @@ def crop(dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names,
     # if we sort, figure out the name of each file in the sorted directory:
     # we first need the file's superior dir, the current dir, and sub_dir
     name_sorted = []
-    print(sort_FOVs)
     if sort_FOVs:
         sorted_dir = []
         for i in range(len(roi_coord_list)):
@@ -214,7 +213,7 @@ def crop(dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names,
     for i in range(len(roi_coord_list)):
         if (not skipROI[i]):
             roi_ij = ImagejRoi.frompoints(rect_shape_to_roi(roi_coord_list[i]))
-            roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi'))# saving the ROI in the subfolder
+            roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi')) # saving the ROI in the subfolder
             roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
             os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
         if (not skipIMG[i]):
