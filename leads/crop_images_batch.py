@@ -79,9 +79,10 @@ def IdentifyRelevantDirectories(directory, num_colors=None):
     return sub_dirs
 
 # ---------------------------------------------------------------
-def GetROIDescription(roi_file_list, descriptions=[]):
+def GetROIDescription(roi_file_list):
     # the format is something like xxxxxxxx_descrip_ti_on.roi
     # find from the underscore to the dot to get the description and convert to small letters
+    descriptions = []
     for k in range(len(roi_file_list)):      
         split_list = os.path.basename( roi_file_list[k] ).rsplit("_") # we only want the filename
         merged_list = ""
@@ -124,8 +125,6 @@ def crop(dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names,
                                        dtype=np.uint16)        
         # name = pix_x-pix_y-length-width-angle-frame_start-frame_end
         rect_0 = rect[0].astype(int)
-        # if i < 10: sl_no = str(0) + str(i)
-        # else: sl_no = str(i)
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + 'd-f' + str(frame_start) + '-f' +\
