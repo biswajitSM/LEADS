@@ -105,9 +105,8 @@ def crop(dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names,
     frame_start = 0
     imgseq = pims.ImageSequence(folderpath+os.path.sep+'*.tif')
     frame_end = len(imgseq)
-    num_frames = frame_end-frame_start
-    num_frames_update = num_colors * ((frame_end - frame_start) // num_colors)
-    frame_end = frame_start + num_frames_update
+    num_frames = num_colors * ((frame_end - frame_start) // num_colors)
+    frame_end = frame_start + num_frames
        
     dir_to_save = os.path.join(folderpath+'_analysis')
     if not os.path.isdir(dir_to_save):
@@ -120,7 +119,7 @@ def crop(dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names,
         rect = roi_coord_list[i]
         rect_params = get_rect_params(rect) 
         key = 'arr' + str(i)
-        img_array_all[key] = np.zeros((round(num_frames_update/num_colors), num_colors,
+        img_array_all[key] = np.zeros((round(num_frames/num_colors), num_colors,
                                        rect_params['width'], rect_params['length']),
                                        dtype=np.uint16)        
         # name = pix_x-pix_y-length-width-angle-frame_start-frame_end
@@ -196,7 +195,7 @@ def crop(dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names,
     #imgseq = imgseq[frame_start:frame_end]
     for col in range(num_colors):        
         
-        for i in trange(round(num_frames_update/num_colors), desc='Cropping color '+str(col+1)+'/'+str(num_colors)+' in subfolder '+str(nDir+1)+'/'+str(numDirs)+'...'):
+        for i in trange(round(num_frames/num_colors), desc='Cropping color '+str(col+1)+'/'+str(num_colors)+' in subfolder '+str(nDir+1)+'/'+str(numDirs)+'...'):
             frame_index = i*num_colors+col
             if num_colors>1:
                 if col==0:
@@ -345,8 +344,7 @@ def inputNumber(message):
        print("Not an integer! Try again.")
        continue
     else:
-       return userInput 
-       break 
+       return userInput
 
 # ---------------------------------------------------------------
 def inputBool(message):
@@ -362,7 +360,6 @@ def inputBool(message):
         else:
             userInput = False
         return userInput 
-        break 
 
 # ---------------------------------------------------------------    
 if __name__ == "__main__":
