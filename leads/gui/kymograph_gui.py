@@ -797,7 +797,8 @@ class Window(QtWidgets.QMainWindow):
         self.imv11 = pg.ImageView(view=self.plot4)
         self.imv11.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_cmap(self.imv11)
-        self.infline_right = pg.InfiniteLine(movable=True, angle=90, pen=(3, 9))
+        self.infline_right = pg.InfiniteLine(movable=True, angle=90, pen=(3, 9), label='x={value:0.0f}',
+            labelOpts={'position':0.75, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
         self.infline_right.addMarker(marker='v', position=0.7, size=10)
         self.infline_right.addMarker(marker='^', position=0.3, size=10)
         self.imv11.addItem(self.infline_right)
@@ -1106,12 +1107,14 @@ class Window(QtWidgets.QMainWindow):
     def on_frame_change_imv00(self):
         frame_imv00 = self.imv00.currentIndex
         self.imv00_text.setText(str(np.round(frame_imv00 * self.acquisitionTime, 1)) + ' s')
+        self.infline_left.setValue(frame_imv00)
         if self.numColors:
             self.imv01.setCurrentIndex(frame_imv00)
             self.imv01_text.setText(str(np.round(frame_imv00 * self.acquisitionTime, 1)) + ' s')
 
     def on_frame_change_imv01(self):
         frame_imv01 = self.imv01.currentIndex
+        self.imv00.setCurrentIndex(frame_imv01)
         self.imv01_text.setText(str(np.round(frame_imv01 * self.acquisitionTime, 1)) + ' s')
 
     def roi_changed(self):
