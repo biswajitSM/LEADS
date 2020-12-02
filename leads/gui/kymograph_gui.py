@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 plt.style.use('seaborn')
 from scipy.signal import savgol_filter
 import h5py
-    
+import tqdm
+
 DEFAULTS = {
     "ColorMap" : 'plasma',
     }
@@ -543,11 +544,18 @@ class MainWidget(QtWidgets.QWidget):
         self.processImageComboBox = QtWidgets.QComboBox()
         self.processImageComboBox.addItems(["Median", "N2V"])
         grid_btn1.addWidget(self.processImageComboBox, 1, 1)
+        # Kymograph
+        grid_kymo = QtWidgets.QGridLayout()
+        self.bottomlayout.addLayout(grid_kymo, 0, 2)
+        self.RealTimeKymoCheckBox = QtWidgets.QCheckBox("RealTimeKymo")
+        self.RealTimeKymoCheckBox.setChecked(True)
+        self.updateKymoBtn = QtWidgets.QPushButton("UpdateKymo")
+        self.updateKymoBtn.setShortcut("Ctrl+U")
+        grid_kymo.addWidget(self.RealTimeKymoCheckBox, 0, 0)
+        grid_kymo.addWidget(self.updateKymoBtn, 1, 0)
         # Frame number: start and end
         grid_frame = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_frame, 0, 2)
-        grid_frame.addWidget(QtWidgets.QLabel("FrameStart:"), 0, 0)
-        grid_frame.addWidget(QtWidgets.QLabel("FrameEnd:"), 1, 0)
+        self.bottomlayout.addLayout(grid_frame, 0, 3)
         self.frameStartSpinBox = QtWidgets.QSpinBox()
         self.frameStartSpinBox.setRange(0, 1e5)
         self.frameStartSpinBox.setValue(0)
@@ -556,19 +564,16 @@ class MainWidget(QtWidgets.QWidget):
         self.frameEndSpinBox.setRange(-1, 1e5)
         self.frameEndSpinBox.setValue(-1)
         self.frameEndSpinBox.setKeyboardTracking(False)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameStart:"), 0, 0)
+        grid_frame.addWidget(QtWidgets.QLabel("FrameEnd:"), 0, 2)
         grid_frame.addWidget(self.frameStartSpinBox, 0, 1)
-        grid_frame.addWidget(self.frameEndSpinBox, 1, 1)
-
-        # Kymograph
-        grid_kymo = QtWidgets.QGridLayout()
-        self.bottomlayout.addLayout(grid_kymo, 0, 4)
-        self.RealTimeKymoCheckBox = QtWidgets.QCheckBox("RealTimeKymo")
-        self.RealTimeKymoCheckBox.setChecked(True)
-        self.updateKymoBtn = QtWidgets.QPushButton("UpdateKymo")
-        self.updateKymoBtn.setShortcut("Ctrl+U")
-        grid_kymo.addWidget(self.RealTimeKymoCheckBox, 0, 0)
-        grid_kymo.addWidget(self.updateKymoBtn, 1, 0)
-
+        grid_frame.addWidget(self.frameEndSpinBox, 0, 3)
+        self.save_nth_frameSpinBox = QtWidgets.QSpinBox()
+        self.save_nth_frameSpinBox.setRange(1, 1e5)
+        self.save_nth_frameSpinBox.setValue(1)
+        self.save_nth_frameSpinBox.setKeyboardTracking(False)
+        grid_frame.addWidget(QtWidgets.QLabel("Save nth frames:"), 1, 0, 1, 2)
+        grid_frame.addWidget(self.save_nth_frameSpinBox, 1, 2)
         # save section
         grid_save = QtWidgets.QGridLayout()
         self.bottomlayout.addLayout(grid_save, 0, 5)
@@ -1754,18 +1759,21 @@ class Window(QtWidgets.QMainWindow):
         temp_folder = os.path.abspath(os.path.join(self.folderpath, 'temp'))
         if not os.path.isdir(temp_folder):
             os.mkdir(temp_folder)
+        nth_frame_to_save = self.ui.save_nth_frameSpinBox.value()
         # save left video : d0left
         if self.ui.saveSectionComboBox.currentText() == "d0left:video":
             roi_state = self.roirect_left.getState()
             self.roirect_left.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
+            pbar = tqdm.tqdm(total = 1 + int(self.imgarr_left.shape[0]/nth_frame_to_save))
             i = 0
             while i < self.imgarr_left.shape[0]:
                 self.imv00.setCurrentIndex(i)
                 exporter = pyqtgraph.exporters.ImageExporter(self.imv00.imageItem)
                 exporter.export(os.path.join(temp_folder, 'temp_'+str(i)+'.png'))
                 # self.imv00.jumpFrames(1)
-                i += 1
+                i += nth_frame_to_save
+                pbar.update(1)
             self.roirect_left.setState(roi_state) #set back to its previous state
             filelist_png = glob.glob(temp_folder+'/temp_*.png')
             frame_rate = str(self.ui.saveFramerateSpinBox.value())
@@ -1776,6 +1784,7 @@ class Window(QtWidgets.QMainWindow):
             for file in filelist_png:
                 os.remove(file)
             # subprocess.call([filename])
+            pbar.close()
             print("Video conversion FINISHED")
 
         # save left video : d0right
@@ -1783,13 +1792,15 @@ class Window(QtWidgets.QMainWindow):
             roi_state = self.roirect_right.getState()
             self.roirect_right.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
+            pbar = tqdm.tqdm(total = 1 + int(self.imgarr_right.shape[0]/nth_frame_to_save))
             i = 0
-            while i < self.imgarr_left.shape[0]:
+            while i < self.imgarr_right.shape[0]:
                 self.imv01.setCurrentIndex(i)
                 exporter = pyqtgraph.exporters.ImageExporter(self.imv01.imageItem)
                 exporter.export(os.path.join(temp_folder, 'temp_'+str(i)+'.png'))
                 # self.imv00.jumpFrames(1)
-                i += 1
+                i += nth_frame_to_save
+                pbar.update(1)
             self.roirect_right.setState(roi_state) #set back to its previous state
             filelist_png = glob.glob(temp_folder+'/temp_*.png')
             frame_rate = str(self.ui.saveFramerateSpinBox.value())
@@ -1799,6 +1810,7 @@ class Window(QtWidgets.QMainWindow):
             makevideo.png_to_video_cv2(temp_folder, filename, fps=int(frame_rate), scaling=4)
             for file in filelist_png:
                 os.remove(file)
+            pbar.close()
             print("Video conversion FINISHED")
         # save ROIleft as tif
         elif self.ui.saveSectionComboBox.currentText() == "ROI:tif":
