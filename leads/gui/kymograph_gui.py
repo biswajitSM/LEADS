@@ -523,7 +523,7 @@ class MainWidget(QtWidgets.QWidget):
         self.bottomlayout.addLayout(grid_numc, 0, 0)
         grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
         self.numColorsComboBox = QtWidgets.QComboBox()
-        self.numColorsComboBox.addItems(["2", "1"])
+        self.numColorsComboBox.addItems(["2", "1", "3"])
         grid_numc.addWidget(self.numColorsComboBox, 0, 1)
         # Current ROI width
         grid_roi = QtWidgets.QGridLayout()
@@ -701,6 +701,8 @@ class Window(QtWidgets.QMainWindow):
         self.LineROIwidth = self.parameters_dialog.roi_spinbox.value()
         self.pixelSize = 1e-3 * self.parameters_dialog.pix_spinbox.value()
         self.acquisitionTime = 1e-3 * int(self.numColors) * self.parameters_dialog.aqt_spinbox.value()
+        # plot elements
+        self.d0_col3 = None
         # get paramters from multipeak dialog
         self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
         self.dna_length_kb = self.multipeak_dialog.DNAlength_spinbox.value()
@@ -831,6 +833,54 @@ class Window(QtWidgets.QMainWindow):
         self.imv01_text = pg.TextItem(text="")
         self.imv01_text.setParentItem(self.imv01.imageItem)
 
+    def add_col3_imvs(self):
+        self.imv02 = pg.ImageView(name='color 2')
+        self.imv02.setPredefinedGradient(DEFAULTS["ColorMap"])
+        self.hide_imgv_roi_norm(self.imv02)
+        self.imv02.playRate = 7
+        self.roirect_col3 = pg.LineROI([20, 20], [40, 20], width=11, pen=(3, 9))        
+        self.imv02.addItem(self.roirect_col3)
+
+        self.plot_kymo_col3 = pg.PlotItem(name='red_kymo')
+        self.plot_kymo_col3.hideAxis('left')#; self.plot4.hideAxis('bottom')
+        self.plot_kymo_col3.setXLink(self.plot3); self.plot_kymo_col3.setYLink(self.plot3)
+        self.imv12 = pg.ImageView(view=self.plot_kymo_col3)
+        self.imv12.setPredefinedGradient(DEFAULTS["ColorMap"])
+        self.hide_imgv_cmap(self.imv12)
+        self.infline_col3 = pg.InfiniteLine(movable=True, angle=90, pen=(3, 9), label='x={value:0.0f}',
+            labelOpts={'position':0.75, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
+        self.infline_col3.addMarker(marker='v', position=0.7, size=10)
+        self.infline_col3.addMarker(marker='^', position=0.3, size=10)
+        self.imv12.addItem(self.infline_col3)
+        
+        self.imv24 = pg.ImageView()
+        self.imv24.setPredefinedGradient(DEFAULTS["ColorMap"])
+        self.hide_imgv_cmap(self.imv24)
+        self.imv25 = pg.ImageView()
+        self.imv25.setPredefinedGradient(DEFAULTS["ColorMap"])
+        self.hide_imgv_roi_norm(self.imv25)
+        
+        # invert Y-axis of kymos
+        self.imv12.view.invertY(False)
+        self.imv24.view.invertY(False)
+        self.imv25.view.invertY(False)
+
+        self.d0_col3 = pg_da.Dock("d0col3-single molecule")
+        self.d0_col3.addWidget(self.imv02)
+        self.d1_col3 = pg_da.Dock("d1col3-Kymograph single molecule")
+        self.d1_col3.addWidget(self.imv12)
+        self.d2_col3 = pg_da.Dock("d2col3-single molecule on NoLoop and Loop")
+        self.d2_col3.addWidget(self.imv24, 0, 0, 1, 1)
+        self.d2_col3.addWidget(self.imv25, 0, 1, 1, 5)
+
+        self.dockarea.addDock(self.d0_col3, 'right')
+        self.dockarea.addDock(self.d1_col3, 'bottom', self.d0_col3)
+        self.dockarea.addDock(self.d2_col3, 'bottom', self.d1_col3)
+
+        # add text (fps) to images
+        self.imv02_text = pg.TextItem(text="")
+        self.imv02_text.setParentItem(self.imv02.imageItem)
+
     def remove_all_widgets(self):
         try:
             self.d0_left.close()
@@ -843,6 +893,10 @@ class Window(QtWidgets.QMainWindow):
             self.d2_right.close()
             if self.plot_loop_errbar is not None:
                 self.d3_right.close()
+            if self.d0_col3 is not None:
+                self.d0_col3.close()
+                self.d1_col3.close()
+                self.d2_col3.close()
         except: print('already removed')
 
     def restore_default_dockstate(self):
@@ -926,15 +980,30 @@ class Window(QtWidgets.QMainWindow):
         print("Loading and processing the image ...")
         start_time = time.time()
         if self.image_meta["num_colors"] == 1 and self.numColors == "2":
+            print("Only one channel exists in the tif stack!\n \
+                Can't display two colors")
             self.ui.numColorsComboBox.setCurrentText("1")
-        if self.numColors == "2":
+        elif self.image_meta["num_colors"] == 2 and self.numColors == "3":
+            print("Only two(2) channels exists in the tif stack!\n \
+                Can't display 3 colors")
+            self.ui.numColorsComboBox.setCurrentText("2")
+        if self.numColors == "3":
             self.imgarr_left = self.image_meta['img_arr_color_0'][self.frame_start:self.frame_end, ...]
             self.imgarr_right = self.image_meta['img_arr_color_1'][self.frame_start:self.frame_end, ...]
-        elif self.numColors == "1":
+            self.imgarr_col3 = self.image_meta['img_arr_color_2'][self.frame_start:self.frame_end, ...]
+            self.imv02.setImage(self.imgarr_col3)
+            if self.ui.mergeColorsCheckBox.isChecked():
+                arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
+                                            self.imgarr_left[:, :, :, np.newaxis],
+                                            self.imgarr_col3[:, :, :, np.newaxis],),
+                                            axis=3)
+                self.imv01.setImage(arr_combined, levelMode='rgba')
+            else:
+                self.imv01.setImage(self.imgarr_right)
+            self.imv01.showMaximized()
+        elif self.numColors == "2":
             self.imgarr_left = self.image_meta['img_arr_color_0'][self.frame_start:self.frame_end, ...]
-        self.imv00.setImage(self.imgarr_left)
-        self.imv00.showMaximized()
-        if self.numColors == "2":
+            self.imgarr_right = self.image_meta['img_arr_color_1'][self.frame_start:self.frame_end, ...]
             if self.ui.mergeColorsCheckBox.isChecked():
                 arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
                                             self.imgarr_left[:, :, :, np.newaxis],
@@ -944,6 +1013,20 @@ class Window(QtWidgets.QMainWindow):
             else:
                 self.imv01.setImage(self.imgarr_right)
             self.imv01.showMaximized()
+        elif self.numColors == "1":
+            self.imgarr_left = self.image_meta['img_arr_color_0'][self.frame_start:self.frame_end, ...]
+        self.imv00.setImage(self.imgarr_left)
+        self.imv00.showMaximized()
+        # if self.numColors == "2":
+        #     if self.ui.mergeColorsCheckBox.isChecked():
+        #         arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
+        #                                     self.imgarr_left[:, :, :, np.newaxis],
+        #                                     np.zeros_like(self.imgarr_right[:, :, :, np.newaxis])),
+        #                                     axis=3)
+        #         self.imv01.setImage(arr_combined, levelMode='rgba')
+        #     else:
+        #         self.imv01.setImage(self.imgarr_right)
+        #     self.imv01.showMaximized()
         self.roi_changed()
         self.region_Loop_changed()
         self.region_noLoop_changed()
@@ -1088,12 +1171,35 @@ class Window(QtWidgets.QMainWindow):
         self.kymo_left = np.sum(roi1_data, axis=2)
         # self.kymo_left = self.kymo_left / np.max(self.kymo_left)
         self.imv10.setImage(self.kymo_left)
-        if self.numColors == "2":
+        if self.numColors == "3":
+            # get kymo of color 2
             self.roirect_right.setState(self.roirect_left.getState())
-            roi2_data = self.roirect_right.getArrayRegion(self.imgarr_right,
+            roi_data = self.roirect_right.getArrayRegion(self.imgarr_right,
                                                 self.imv01.imageItem, axes=(1, 2))                                                       
-            self.kymo_right = np.sum(roi2_data, axis=2)
-            # self.kymo_right = self.kymo_right / np.max(self.kymo_right)
+            self.kymo_right = np.sum(roi_data, axis=2)
+            self.kymo_right = self.kymo_right / np.max(self.kymo_right)
+            # get kymo of color 2
+            self.roirect_col3.setState(self.roirect_left.getState())
+            roi_data = self.roirect_col3.getArrayRegion(self.imgarr_col3,
+                                                self.imv02.imageItem, axes=(1, 2))
+            self.kymo_col3 = np.sum(roi_data, axis=2)
+            self.kymo_col3 = self.kymo_col3 / np.max(self.kymo_col3)
+            self.imv12.setImage(self.kymo_col3)
+            if self.ui.mergeColorsCheckBox.isChecked():
+                self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+                                                 self.kymo_left[:, :, np.newaxis],
+                                                 self.kymo_col3[:, :, np.newaxis],),
+                                                 axis=2)
+                self.imv11.setImage(self.kymo_comb, levelMode='rgba')
+                self.imv11.ui.histogram.show()
+            else:
+                self.imv11.setImage(self.kymo_right)
+        elif self.numColors == "2":
+            self.roirect_right.setState(self.roirect_left.getState())
+            roi_data = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))                                                       
+            self.kymo_right = np.sum(roi_data, axis=2)
+            self.kymo_right = self.kymo_right / np.max(self.kymo_right)
             if self.ui.mergeColorsCheckBox.isChecked():
                 self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
                                     self.kymo_left[:, :, np.newaxis],
@@ -1222,6 +1328,11 @@ class Window(QtWidgets.QMainWindow):
             self.add_col1_imvs()
             self.add_col2_imvs()
             self.connect_signals()
+        elif self.numColors == "3":
+            self.remove_all_widgets()
+            self.add_col1_imvs()
+            self.add_col2_imvs()
+            self.add_col3_imvs()
         self.scalebar_img = None
         self.defaultDockState = self.dockarea.saveState()
         
@@ -1231,7 +1342,21 @@ class Window(QtWidgets.QMainWindow):
         # background set to 0
         self.kymo_left_noLoop = self.kymo_left_noLoop - np.min(np.average(self.kymo_left_noLoop, axis=0))
         self.imv20.setImage(self.kymo_left_noLoop)
-        if self.numColors == "2":
+        if self.numColors == "3":
+            self.kymo_right_noLoop = self.kymo_right[int(minX):int(maxX), :]
+            self.kymo_right_noLoop = self.kymo_right_noLoop - np.min(np.average(self.kymo_right_noLoop, axis=0))
+            self.kymo_col3_noLoop = self.kymo_col3[int(minX):int(maxX), :]
+            self.kymo_col3_noLoop = self.kymo_col3_noLoop - np.min(np.average(self.kymo_col3_noLoop, axis=0))
+            self.imv24.setImage(self.kymo_col3_noLoop)
+            if self.ui.mergeColorsCheckBox.isChecked():
+                kymo_noLoop_comb = np.concatenate((self.kymo_right_noLoop[:, :, np.newaxis],
+                                        self.kymo_left_noLoop[:, :, np.newaxis],
+                                        self.kymo_col3_noLoop[:, :, np.newaxis],),
+                                        axis=2)
+                self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
+            else:
+                self.imv22.setImage(self.kymo_right_noLoop)
+        elif self.numColors == "2":
             self.kymo_right_noLoop = self.kymo_right[int(minX):int(maxX), :]
             self.kymo_right_noLoop = self.kymo_right_noLoop - np.min(np.average(self.kymo_right_noLoop, axis=0))
             if self.ui.mergeColorsCheckBox.isChecked():
@@ -1249,7 +1374,21 @@ class Window(QtWidgets.QMainWindow):
         # background set to 0
         self.kymo_left_loop = self.kymo_left_loop - np.min(np.average(self.kymo_left_loop, axis=0))
         self.imv21.setImage(self.kymo_left_loop)
-        if self.numColors == "2":
+        if self.numColors == "3":
+            self.kymo_col3_loop = self.kymo_col3[int(minX):int(maxX), :]
+            self.kymo_col3_loop = self.kymo_col3_loop - np.min(np.average(self.kymo_col3_loop, axis=0))
+            self.kymo_right_loop = self.kymo_right[int(minX):int(maxX), :]
+            self.kymo_right_loop = self.kymo_right_loop - np.min(np.average(self.kymo_right_loop, axis=0))
+            self.imv25.setImage(self.kymo_col3_loop)
+            if self.ui.mergeColorsCheckBox.isChecked():
+                kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
+                                        self.kymo_left_loop[:, :, np.newaxis],
+                                        self.kymo_col3_loop[:, :, np.newaxis],),
+                                        axis=2)
+                self.imv23.setImage(kymo_loop_comb, levelMode='rgba')
+            else:
+                self.imv23.setImage(self.kymo_right_loop)
+        elif self.numColors == "2":
             self.kymo_right_loop = self.kymo_right[int(minX):int(maxX), :]
             self.kymo_right_loop = self.kymo_right_loop - np.min(np.average(self.kymo_right_loop, axis=0))
             if self.ui.mergeColorsCheckBox.isChecked():
@@ -1267,28 +1406,52 @@ class Window(QtWidgets.QMainWindow):
     def merge_colors(self):
         # rgba images need to have 3 colors (arr[t, x, y, c]). c must be 3 
         if self.ui.mergeColorsCheckBox.isChecked():
-            arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
-                                        self.imgarr_left[:, :, :, np.newaxis],
-                                        np.zeros_like(self.imgarr_right[:, :, :, np.newaxis])),
-                                        axis=3)
-            self.imv01.setImage(arr_combined, levelMode='rgba')
-            self.imv01.showMaximized()
-            self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
-                                    self.kymo_left[:, :, np.newaxis],
-                                    np.zeros_like(self.kymo_right[:, :, np.newaxis])),
-                                    axis=2)
-            self.imv11.setImage(self.kymo_comb, levelMode='rgba')
-            self.imv11.ui.histogram.show()
-            self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
-                                    self.kymo_left_loop[:, :, np.newaxis],
-                                    np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
-                                    axis=2)
-            kymo_noLoop_comb = np.concatenate((self.kymo_right_noLoop[:, :, np.newaxis],
-                                    self.kymo_left_noLoop[:, :, np.newaxis],
-                                    np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
-                                    axis=2)
-            self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
-            self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
+            if self.numColors == "3":
+                arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
+                                            self.imgarr_left[:, :, :, np.newaxis],
+                                            self.imgarr_col3[:, :, :, np.newaxis],),
+                                            axis=3)
+                self.imv01.setImage(arr_combined, levelMode='rgba')
+                self.imv01.showMaximized()
+                self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+                                        self.kymo_left[:, :, np.newaxis],
+                                        self.kymo_col3[:, :, np.newaxis],),
+                                        axis=2)
+                self.imv11.setImage(self.kymo_comb, levelMode='rgba')
+                self.imv11.ui.histogram.show()
+                self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
+                                        self.kymo_left_loop[:, :, np.newaxis],
+                                        self.kymo_col3_loop[:, :, np.newaxis],),#CHANGE to proper array
+                                        axis=2)
+                kymo_noLoop_comb = np.concatenate((self.kymo_right_noLoop[:, :, np.newaxis],
+                                        self.kymo_left_noLoop[:, :, np.newaxis],
+                                        self.kymo_col3_noLoop[:, :, np.newaxis],),
+                                        axis=2)
+                self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
+                self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
+            if self.numColors == "2":
+                arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
+                                            self.imgarr_left[:, :, :, np.newaxis],
+                                            np.zeros_like(self.imgarr_right[:, :, :, np.newaxis])),
+                                            axis=3)
+                self.imv01.setImage(arr_combined, levelMode='rgba')
+                self.imv01.showMaximized()
+                self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+                                        self.kymo_left[:, :, np.newaxis],
+                                        np.zeros_like(self.kymo_right[:, :, np.newaxis])),
+                                        axis=2)
+                self.imv11.setImage(self.kymo_comb, levelMode='rgba')
+                self.imv11.ui.histogram.show()
+                self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
+                                        self.kymo_left_loop[:, :, np.newaxis],
+                                        np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
+                                        axis=2)
+                kymo_noLoop_comb = np.concatenate((self.kymo_right_noLoop[:, :, np.newaxis],
+                                        self.kymo_left_noLoop[:, :, np.newaxis],
+                                        np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
+                                        axis=2)
+                self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
+                self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
         else:
             # set back the imagedata
             self.imv01.setImage(self.imgarr_right, levelMode='mono')
@@ -1320,7 +1483,7 @@ class Window(QtWidgets.QMainWindow):
         self.d3_left.addWidget(self.plot_loop_errbar, 0, 0)
         self.d3_left.addWidget(self.plot_loop_kinetics, 0, 1)
         self.dockarea.addDock(self.d3_left, 'bottom', self.d2_left)
-        if self.numColors == "2":
+        if self.numColors == "2" or "3":
             self.d3_right = pg_da.Dock("Single Molecule detections")
             self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
             self.plot_loop_vs_sm = pg.PlotItem()
@@ -1342,6 +1505,9 @@ class Window(QtWidgets.QMainWindow):
                                     movable=False, angle=0, pen=(3, 9))
             self.plotSmolPosData = self.plot_loop_vs_sm.scatterPlot(
                     symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
+            if self.numColors == "3":
+                self.d3_right = pg_da.Dock("Color 3 detections")
+                self.dockarea.addDock(self.d3_right, 'bottom', self.d2_col3)
 
         # adding errorbar plot items for data updating later
         self.errbar_loop = pg.ErrorBarItem(beam=0.5, pen=pg.mkPen('r'))
@@ -1412,7 +1578,7 @@ class Window(QtWidgets.QMainWindow):
                 frame_width = self.loop_region_right - self.loop_region_left,
                 dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
                 )
-        if self.numColors == "2":
+        if self.numColors == "2" or "3":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
                 prominence_min=self.peak_prominence_smol,
@@ -1424,7 +1590,7 @@ class Window(QtWidgets.QMainWindow):
                                      self.all_peaks_dict["All Peaks"]["PeakPosition"])
 
     def params_change_smol_detection(self):
-        if self.numColors == "2":
+        if self.numColors == "2" or "3":
             self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
             if self.multipeak_dialog.smol_preview_checkbox.isChecked():
                 self.preview_smol_peaks_on_params_change()
@@ -1436,7 +1602,7 @@ class Window(QtWidgets.QMainWindow):
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
         min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
         max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
-        if self.numColors == "2":
+        if self.numColors == "2" or "3":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
                 prominence_min=self.peak_prominence_smol,
@@ -1484,7 +1650,7 @@ class Window(QtWidgets.QMainWindow):
                         self.max_peak_dict["Max Peak"]["PeakIntUpFiltered"])
         self.plot_data_loopDown_filt.setData(frame_no,
                         self.max_peak_dict["Max Peak"]["PeakIntDownFiltered"])
-        if self.numColors == "2":
+        if self.numColors == "2" or "3":
             # self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
             #     self.loop_region_left, -self.loop_region_right,
             #     prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size, plotting=False,
