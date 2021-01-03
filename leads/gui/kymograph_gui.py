@@ -11,7 +11,7 @@ from ..kymograph import (read_img_seq, read_img_stack,
 from .. import kymograph
 from .. import io
 from ..utils import hdf5dict, makevideo
-import os, sys, glob, time, subprocess
+import os, sys, glob, time, subprocess, webbrowser
 import yaml
 import matplotlib.pyplot as plt
 plt.style.use('seaborn')
@@ -20,7 +20,7 @@ import h5py
 import tqdm
 
 DEFAULTS = {
-    "ColorMap" : 'plasma',
+    "ColorMap" : 'jet',
     }
 DEFAULT_PARAMETERS = {
     "Acquisition Time" : 100, # in millisecond
@@ -37,6 +37,11 @@ DEFAULT_PARAMETERS = {
 
 pg.setConfigOption('background', pg.mkColor((0, 0, 0, 0))) # 'w' for white and 'k' for black background
 pg.setConfigOption('imageAxisOrder', 'col-major') # the row and cols are reversed
+grads = pyqtgraph.graphicsItems.GradientEditorItem.Gradients
+grads['parula'] = {'ticks': [(0.0, (53, 42, 134, 255)), (0.25, (19, 128, 213, 255)), (0.5, (37, 180, 169, 255)), (0.75, (191, 188, 96, 255)), (1.0, (248, 250, 13, 255))], 'mode': 'rgb'}
+grads['jet'] = {'ticks': [[0.0, [0, 0, 127]], [0.11, [0, 0, 255]], [0.125, [0, 0, 255]], [0.34, [0, 219, 255]], [0.35, [0, 229, 246]], [0.375, [20, 255, 226]], [0.64, [238, 255, 8]], [0.65, [246, 245, 0]], [0.66, [255, 236, 0.0]], [0.89, [255, 18, 0]], [0.91, [231, 0, 0]], [1, [127, 0, 0]]], 'mode': 'rgb'}
+grads['seismic'] = {'ticks': [[0.0, [0, 0, 76]], [0.25, [0, 0, 255]], [0.5, [255, 255, 255]], [0.75, [255, 0, 0]], [1.0, [127, 0, 0]]], 'mode': 'rgb'}
+
 
 class ParametersDialog(QtWidgets.QDialog):
     """ The dialog showing parameters """
@@ -598,9 +603,12 @@ class MainWidget(QtWidgets.QWidget):
         # swap or merge colors
         grid_colors = QtWidgets.QGridLayout()
         self.bottomlayout.addLayout(grid_colors, 0, 6)
-        self.swapColorsCheckBox = QtWidgets.QCheckBox("Swap colors")
+        self.swapColorsBtn = QtWidgets.QPushButton("Swap colors")
         self.mergeColorsCheckBox = QtWidgets.QCheckBox("Merge colors")
-        grid_colors.addWidget(self.swapColorsCheckBox, 0, 0)
+        self.swapColorsComboBox = QtWidgets.QComboBox()
+        self.swapColorsComboBox.addItems(["1<->2", "2<->3", "1<->3"])
+        grid_colors.addWidget(self.swapColorsBtn, 0, 0)
+        grid_colors.addWidget(self.swapColorsComboBox, 0, 1)
         grid_colors.addWidget(self.mergeColorsCheckBox, 1, 0)
 
 
@@ -672,13 +680,26 @@ class Window(QtWidgets.QMainWindow):
         roi_action = analyze_menu.addAction("ROI Analysis / Control")
         roi_action.setShortcut("Ctrl+R")
         roi_action.triggered.connect(self.roi_dialog.show)
+        """ Image """
+        image_menu = menu_bar.addMenu("Image")
+        normalize_img_action = image_menu.addAction("Normalize Images")
+        normalize_img_action.triggered.connect(self.normalize_images)
+        normalize_kymo_action = image_menu.addAction("Normalize Kymographs")
+        normalize_kymo_action.triggered.connect(lambda x: print("coming soon! Work is in progress!"))
+        
+        """ Help """
+        help_menu = menu_bar.addMenu("Help")
+        keyboardshortcuts_action = help_menu.addAction(" Keyboard Shortcuts")
+        keyboardshortcuts_action.triggered.connect(lambda x: print("coming soon! Work is in progress!"))
+        project_site_action = help_menu.addAction("Go to the project site")
+        project_site_action.triggered.connect(lambda x: webbrowser.open('https://github.com/biswajitSM/LEADS'))
 
     def connect_signals_init(self):
         self.ui.numColorsComboBox.currentIndexChanged.connect(self.change_num_colors)
         self.ui.processImageCheckBox.stateChanged.connect(self.processed_image_check)
         self.ui.processImageComboBox.currentIndexChanged.connect(self.processed_image_check)
         self.ui.mergeColorsCheckBox.stateChanged.connect(self.merge_colors)
-        self.ui.swapColorsCheckBox.stateChanged.connect(self.swap_colors)
+        self.ui.swapColorsBtn.clicked.connect(self.swap_colors)
         self.ui.detectLoopsBtn.clicked.connect(self.detect_loops)
         self.ui.saveSectionBtn.clicked.connect(self.save_section)
         self.ui.frameStartSpinBox.valueChanged.connect(self.frames_changed) #keyboardTracking=False, so works when entered
@@ -729,6 +750,7 @@ class Window(QtWidgets.QMainWindow):
         self.imv00.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_roi_norm(self.imv00)
         self.imv00.fps = 7
+        # self.imv00.imageItem.setLookupTable(colormaps.pgcmap_parula.getLookupTable())
         self.roirect_left = pg.LineROI([20, 20], [40, 20], width=11, pen=(3, 9))
         # self.roirect_left = pg.MultiLineROI([[10, 30], [30, 50], [50, 30]], width=5, pen=(2,9))
         self.imv00.addItem(self.roirect_left)
@@ -912,7 +934,7 @@ class Window(QtWidgets.QMainWindow):
         if self.scalebar_img is not None:
             self.scalebar_img.size = 2/self.pixelSize
             self.scalebar_img.updateBar()
-            if self.numColors == "2":
+            if self.numColors == "2" or "3":
                 self.scalebar_img2.size = 2/self.pixelSize
                 self.scalebar_img2.updateBar()
                 self.scalebar_kymoloop_right.size = 10/self.acquisitionTime
@@ -932,7 +954,7 @@ class Window(QtWidgets.QMainWindow):
             # scalebar_kymoloop_left.text.setText('10 sec')
             # scalebar_kymoloop_left.setParentItem(self.imv21.view)
             # scalebar_kymoloop_left.anchor((1, 1), (1, 1), offset=(-40, -40))
-            if self.numColors == "2":
+            if self.numColors == "2" or "3":
                 self.scalebar_img2 = pg.ScaleBar(size=2/self.pixelSize, suffix='um') #2 um
                 self.scalebar_img2.text.setText('2 um')
                 self.scalebar_img2.setParentItem(self.imv01.view)
@@ -983,6 +1005,10 @@ class Window(QtWidgets.QMainWindow):
             print("Only one channel exists in the tif stack!\n \
                 Can't display two colors")
             self.ui.numColorsComboBox.setCurrentText("1")
+        elif self.image_meta["num_colors"] == 1 and self.numColors == "3":
+            print("Only one(1) channels exists in the tif stack!\n \
+                Can't display 3 colors")
+            self.ui.numColorsComboBox.setCurrentText("1")
         elif self.image_meta["num_colors"] == 2 and self.numColors == "3":
             print("Only two(2) channels exists in the tif stack!\n \
                 Can't display 3 colors")
@@ -1017,16 +1043,6 @@ class Window(QtWidgets.QMainWindow):
             self.imgarr_left = self.image_meta['img_arr_color_0'][self.frame_start:self.frame_end, ...]
         self.imv00.setImage(self.imgarr_left)
         self.imv00.showMaximized()
-        # if self.numColors == "2":
-        #     if self.ui.mergeColorsCheckBox.isChecked():
-        #         arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
-        #                                     self.imgarr_left[:, :, :, np.newaxis],
-        #                                     np.zeros_like(self.imgarr_right[:, :, :, np.newaxis])),
-        #                                     axis=3)
-        #         self.imv01.setImage(arr_combined, levelMode='rgba')
-        #     else:
-        #         self.imv01.setImage(self.imgarr_right)
-        #     self.imv01.showMaximized()
         self.roi_changed()
         self.region_Loop_changed()
         self.region_noLoop_changed()
@@ -1210,6 +1226,10 @@ class Window(QtWidgets.QMainWindow):
             else:
                 self.imv11.setImage(self.kymo_right)
 
+    def normalize_images(self):
+        self.imgarr_left = 1000*self.imgarr_left/self.imgarr_left.max()
+        self.imv00.setImage(self.imgarr_left)
+
     def on_frame_change_imv00(self):
         frame_imv00 = self.imv00.currentIndex
         self.imv00_text.setText(str(np.round(frame_imv00 * self.acquisitionTime, 1)) + ' s')
@@ -1292,10 +1312,13 @@ class Window(QtWidgets.QMainWindow):
         frame_numer = int(self.infline_left.value())
         if frame_numer >= 0:
             self.imv00.setCurrentIndex(frame_numer)
-            if self.numColors == "2":
+            pos = self.infline_left.getPos()
+            if self.numColors == "2" or "3":
                 self.imv01.setCurrentIndex(frame_numer)
-                pos = self.infline_left.getPos()
                 self.infline_right.setPos(pos)
+                if self.numColors == "3":
+                    self.imv02.setCurrentIndex(frame_numer)
+                    self.infline_col3.setPos(pos)
 
     def infiline_right_update(self):
         frame_numer = int(self.infline_right.value())
@@ -1462,7 +1485,7 @@ class Window(QtWidgets.QMainWindow):
         return
 
     def swap_colors(self):
-        if self.numColors == "2" and self.ui.swapColorsCheckBox.isChecked():
+        if self.numColors == "2"  or "3":
             temp_arr = self.image_meta['img_arr_color_0']
             self.image_meta['img_arr_color_0'] = self.image_meta['img_arr_color_1']
             self.image_meta['img_arr_color_1'] = temp_arr
@@ -1758,7 +1781,7 @@ class Window(QtWidgets.QMainWindow):
                 df_peak_analyzed["PeakUpIntensity"], 'r', label='Peak Up')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 df_peak_analyzed["PeakDownIntensity"], 'b', label='Peak down')
-        if self.numColors == '2':
+        if self.numColors == "2" or "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel = df_gb.get_group(right_peak_no)
             group_sel = group_sel.reset_index(drop=True)
@@ -1804,7 +1827,7 @@ class Window(QtWidgets.QMainWindow):
         group_sel = df_gb.get_group(left_peak_no)
         group_sel = group_sel.reset_index(drop=True)
         ax.plot(group_sel["FrameNumber"], group_sel["x"], 'g', label='DNA')
-        if self.numColors == '2':
+        if self.numColors == "2" or "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel = df_gb.get_group(right_peak_no)
             group_sel = group_sel.reset_index(drop=True)
@@ -1820,7 +1843,7 @@ class Window(QtWidgets.QMainWindow):
         df_gb = self.df_peaks_linked.groupby("particle")
         group_sel_col1 = df_gb.get_group(left_peak_no)
         group_sel_col1 = group_sel_col1.reset_index(drop=True)
-        if self.numColors == "2":
+        if self.numColors == "2" or "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel_col2 = df_gb.get_group(right_peak_no)
             group_sel_col2 = group_sel_col2.reset_index(drop=True)
@@ -1845,7 +1868,7 @@ class Window(QtWidgets.QMainWindow):
             _, ax = plt.subplots()
             msd = kymograph.msd_1d_nb1(group_sel_col1['x'].values)
             plt.plot(msd, 'g', label="MSD color-1")
-            if self.numColors == "2":
+            if self.numColors == "2" or "3":
                 msd = kymograph.msd_1d_nb1(group_sel_col2['x'].values)
                 plt.plot(msd, 'm', label="MSD color-1")
             ax.set_xlabel("Frame Number")
@@ -1861,7 +1884,7 @@ class Window(QtWidgets.QMainWindow):
                                 fps=int(self.numColors) * (1/self.acquisitionTime),
                                 max_lagtime=100, axis=ax1)
                 ax1.set_title("Color 1")
-            elif self.numColors == "2":
+            elif self.numColors == "2" or "3":
                 fig,(ax1, ax2) = plt.subplots(nrows=1, ncols=2)
                 _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked,
                                 pixelsize = self.pixelSize,
