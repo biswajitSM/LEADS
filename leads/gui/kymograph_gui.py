@@ -10,11 +10,11 @@ from ..kymograph import (read_img_seq, read_img_stack,
                 analyze_maxpeak, loop_sm_dist)
 from .. import kymograph
 from .. import io
-from ..utils import hdf5dict, makevideo
+from ..utils import hdf5dict, makevideo, figure_params
 import os, sys, glob, time, subprocess, webbrowser
 import yaml
 import matplotlib.pyplot as plt
-plt.style.use('seaborn')
+plt.rcParams.update(figure_params.params_dict)
 from scipy.signal import savgol_filter
 import h5py
 import tqdm
@@ -41,7 +41,7 @@ grads = pyqtgraph.graphicsItems.GradientEditorItem.Gradients
 grads['parula'] = {'ticks': [(0.0, (53, 42, 134, 255)), (0.25, (19, 128, 213, 255)), (0.5, (37, 180, 169, 255)), (0.75, (191, 188, 96, 255)), (1.0, (248, 250, 13, 255))], 'mode': 'rgb'}
 grads['jet'] = {'ticks': [[0.0, [0, 0, 127]], [0.11, [0, 0, 255]], [0.125, [0, 0, 255]], [0.34, [0, 219, 255]], [0.35, [0, 229, 246]], [0.375, [20, 255, 226]], [0.64, [238, 255, 8]], [0.65, [246, 245, 0]], [0.66, [255, 236, 0.0]], [0.89, [255, 18, 0]], [0.91, [231, 0, 0]], [1, [127, 0, 0]]], 'mode': 'rgb'}
 grads['seismic'] = {'ticks': [[0.0, [0, 0, 76]], [0.25, [0, 0, 255]], [0.5, [255, 255, 255]], [0.75, [255, 0, 0]], [1.0, [127, 0, 0]]], 'mode': 'rgb'}
-
+grads['gnuplot'] = {'ticks': [(0.0, (0, 0, 0)), (0.25, (127, 4, 255)), (0.5, (180, 32, 0)), (0.75, (221, 107, 0)), (1.0, (255, 255, 0))], 'mode': 'rgb'}
 
 class ParametersDialog(QtWidgets.QDialog):
     """ The dialog showing parameters """
