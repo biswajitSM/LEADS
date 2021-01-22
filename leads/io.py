@@ -11,11 +11,22 @@ class FileDialog(QWidget):
         self.title = title
         self.filters = filters
 
+    def openFolderNameDialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        # filename, _ = QFileDialog.getOpenFileName(caption=self.title, directory=self.directory,
+        #                                           filter=self.filters, options=options)
+        filename = QFileDialog.getExistingDirectory(caption=self.title, directory=self.directory,
+                                                   options=options)
+        if filename:
+            print(filename)
+        return filename
+
     def openFileNameDialog(self):
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         filename, _ = QFileDialog.getOpenFileName(caption=self.title, directory=self.directory,
-                                                  filter=self.filters, options=options)
+                                                  filter=self.filters, options=options)        
         if filename:
             print(filename)
         return filename
