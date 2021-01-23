@@ -67,6 +67,10 @@ def process_tifstack(fpath):
     print(f"time took for {base_filename} to process : {time.time() - time_start} secs\n")
 
 def median_tifstack(tif_stack_path):
+    '''
+    filters a tifstack file with dimension 3 or 4;
+    and save the processed file with an extension '{filename}_processed.tif'
+    '''
     outputdir = os.path.dirname(tif_stack_path)
     base_filename = os.path.basename(tif_stack_path)
     fpath_processed = os.path.join(outputdir, base_filename[:-4]+"_processed.tif")
