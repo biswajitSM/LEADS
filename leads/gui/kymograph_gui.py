@@ -29,6 +29,7 @@ DEFAULT_PARAMETERS = {
     "Peak Prominence" : 0.25,
     "DNA Length" : 48.5, # in kilo bases
     "DNA Contour Length" : 16, # in micrometer
+    "DNA Persistence Length": 45, # in nanometer
     "DNA Puncta Diameter" : 9,
     "Search Range" : 10,
     "Memory" : 5,
@@ -137,14 +138,6 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.DNAlength_spinbox.setSuffix(" kb")
         self.DNAlength_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.DNAlength_spinbox, 3, 1)
-        # DNA Contour length
-        general_grid.addWidget(QtWidgets.QLabel("DNA Contour length:"), 4, 0)
-        self.DNAcontourlength_spinbox = QtWidgets.QDoubleSpinBox()
-        self.DNAcontourlength_spinbox.setRange(1, 1e3)
-        self.DNAcontourlength_spinbox.setValue(DEFAULT_PARAMETERS["DNA Contour Length"])
-        self.DNAcontourlength_spinbox.setSuffix(" \u03BCm")
-        self.DNAcontourlength_spinbox.setKeyboardTracking(False)
-        general_grid.addWidget(self.DNAcontourlength_spinbox, 4, 1)
         # Puncta size
         general_grid.addWidget(QtWidgets.QLabel("Puncta diameter:"), 3, 2)
         self.DNApuncta_spinbox = QtWidgets.QSpinBox()
@@ -153,28 +146,54 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.DNApuncta_spinbox.setSuffix(" pixels")
         self.DNApuncta_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.DNApuncta_spinbox, 3, 3)
+        # DNA Contour length
+        general_grid.addWidget(QtWidgets.QLabel("DNA Contour length:"), 4, 0)
+        self.DNAcontourlength_spinbox = QtWidgets.QDoubleSpinBox()
+        self.DNAcontourlength_spinbox.setRange(1, 1e3)
+        self.DNAcontourlength_spinbox.setValue(DEFAULT_PARAMETERS["DNA Contour Length"])
+        self.DNAcontourlength_spinbox.setSuffix(" \u03BCm")
+        self.DNAcontourlength_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.DNAcontourlength_spinbox, 4, 1)
+        # DNA Persistence Length
+        general_grid.addWidget(QtWidgets.QLabel("DNA Persistence length:"), 4, 2)
+        self.DNApersistencelength_spinbox = QtWidgets.QDoubleSpinBox()
+        self.DNApersistencelength_spinbox.setRange(1, 1e3)
+        self.DNApersistencelength_spinbox.setValue(DEFAULT_PARAMETERS["DNA Persistence Length"])
+        self.DNApersistencelength_spinbox.setSuffix(" nm")
+        self.DNApersistencelength_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.DNApersistencelength_spinbox, 4, 3)
+        # Threshold All Peaks : compare peaks on all lines and apply threshold
+        self.peakthreshold_checkbox = QtWidgets.QCheckBox("Threshold All Peaks")
+        self.peakthreshold_checkbox.setChecked(True)
+        general_grid.addWidget(self.peakthreshold_checkbox, 5, 0)
+        self.peakthreshold_spinbox = QtWidgets.QSpinBox()
+        self.peakthreshold_spinbox.setRange(1, 99)
+        self.peakthreshold_spinbox.setValue(5)
+        self.peakthreshold_spinbox.setSuffix(" %Max")
+        self.peakthreshold_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(self.peakthreshold_spinbox, 5, 1)
         # Smoothing length
-        general_grid.addWidget(QtWidgets.QLabel("Smoothing Length:"), 4, 2)
+        general_grid.addWidget(QtWidgets.QLabel("Smoothing Length:"), 5, 2)
         self.smoothlength_spinbox = QtWidgets.QSpinBox()
         self.smoothlength_spinbox.setRange(1, 1e3)
         self.smoothlength_spinbox.setValue(7)
         self.smoothlength_spinbox.setKeyboardTracking(False)
-        general_grid.addWidget(self.smoothlength_spinbox, 4, 3)
+        general_grid.addWidget(self.smoothlength_spinbox, 5, 3)
         # Peak widths: Min and Max
         self.minwidth_spinbox = QtWidgets.QSpinBox()
         self.minwidth_spinbox.setRange(1, 1e2)
         self.minwidth_spinbox.setValue(1)
         self.minwidth_spinbox.setSuffix(" pixels")
         self.minwidth_spinbox.setKeyboardTracking(False)
-        general_grid.addWidget(QtWidgets.QLabel("Min Peak Width:"), 5, 0)
-        general_grid.addWidget(self.minwidth_spinbox, 5, 1)
+        general_grid.addWidget(QtWidgets.QLabel("Min Peak Width:"), 6, 0)
+        general_grid.addWidget(self.minwidth_spinbox, 6, 1)
         self.maxwidth_spinbox = QtWidgets.QSpinBox()
         self.maxwidth_spinbox.setRange(1, 1e3)
         self.maxwidth_spinbox.setValue(20)
         self.maxwidth_spinbox.setSuffix(" pixels")
         self.maxwidth_spinbox.setKeyboardTracking(False)
-        general_grid.addWidget(QtWidgets.QLabel("Max Peak Width:"), 5, 2)
-        general_grid.addWidget(self.maxwidth_spinbox, 5, 3)
+        general_grid.addWidget(QtWidgets.QLabel("Max Peak Width:"), 6, 2)
+        general_grid.addWidget(self.maxwidth_spinbox, 6, 3)
         ## Single molecule peak detection parameters
         singlemolecule_groupbox = QtWidgets.QGroupBox("Single Molecule Parameters")
         vbox.addWidget(singlemolecule_groupbox)
@@ -1796,11 +1815,12 @@ class Window(QtWidgets.QMainWindow):
                 interpolation_bool = True
             else: interpolation_bool = False
             dna_contour_len = self.multipeak_dialog.DNAcontourlength_spinbox.value()
+            persistence_length = self.multipeak_dialog.DNApersistencelength_spinbox.value()
             self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
                     frame_width=self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, dna_length_um=dna_contour_len,
                     pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
-                    interpolation=interpolation_bool)
+                    interpolation=interpolation_bool, dna_persistence_length=persistence_length)
             df_gb = self.linkedpeaks_analyzed.groupby("particle")
             group_sel = df_gb.get_group(left_peak_no)
             group_sel = group_sel.reset_index(drop=True)

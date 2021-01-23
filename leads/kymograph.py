@@ -305,7 +305,7 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
 
 def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
                       dna_length=48.5, dna_length_um=16, pix_width=11, pix_size=0.115,
-                     interpolation=True):
+                     interpolation=True, dna_persistence_length=50):
     '''
     frame_width: same as the DA end to end distance
     pix_size: in micrometer
@@ -340,7 +340,7 @@ def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
     if interpolation:
         F = np.interp(nonpeak_rel_ext, RELATIVE_EXTENSION, FORCE)
     else:
-        F = force_wlc(nonpeak_rel_ext, Plen=50)
+        F = force_wlc(nonpeak_rel_ext, Plen=dna_persistence_length)
     df_linked_gb["Force"] = F
     return df_linked_gb
 
