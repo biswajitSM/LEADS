@@ -12,8 +12,8 @@ import pims
 import trackpy
 import matplotlib.pyplot as plt
 from . import io
-plt.style.use('seaborn')
-
+from .utils import figure_params
+plt.rcParams.update(figure_params.params_dict)
 
 def read_img_stack(filepath):
     image_meta = {}
@@ -229,7 +229,6 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
 
 def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
                plotting=True, axis=None,):
-    plt.style.use('seaborn')
     df_peaks["x"] = df_peaks["PeakPosition"]
     if df_peaks_sm is None:
         df_peaks["y"] = df_peaks["FrameNumber"]
@@ -306,7 +305,7 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
 
 def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
                       dna_length=48.5, dna_length_um=16, pix_width=11, pix_size=0.115,
-                     interpolation=True):
+                     interpolation=True, dna_persistence_length=50):
     '''
     frame_width: same as the DA end to end distance
     pix_size: in micrometer
@@ -341,7 +340,7 @@ def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
     if interpolation:
         F = np.interp(nonpeak_rel_ext, RELATIVE_EXTENSION, FORCE)
     else:
-        F = force_wlc(nonpeak_rel_ext, Plen=50)
+        F = force_wlc(nonpeak_rel_ext, Plen=dna_persistence_length)
     df_linked_gb["Force"] = F
     return df_linked_gb
 
@@ -455,7 +454,7 @@ def msd_lagtime_allpeaks(df_linked_peaks, pixelsize, fps, max_lagtime=100, axis=
     axis.set_yscale('log')
     axis.set_xscale('log')
     axis.set_xlabel('lag time [s]')
-    axis.set_ylabel(r'$\langle \Delta r^2 \rangle$ [$\mu$m$^2$]');
+    axis.set_ylabel(r'$\langle \Delta r^2 \rangle$ [$\mu$m$^2$]')
     axis.legend()
     return imsd
 
