@@ -20,7 +20,7 @@ import h5py
 import tqdm
 
 DEFAULTS = {
-    "ColorMap" : 'jet',
+    "ColorMap" : 'plasma',
     }
 DEFAULT_PARAMETERS = {
     "Acquisition Time" : 100, # in millisecond
@@ -283,8 +283,14 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # plot kinetics
         self.loopkinetics_pushbutton = QtWidgets.QPushButton("Plot Loop Kinetics")
         self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loop Vs Mol")
-        plot_grid.addWidget(self.loopkinetics_pushbutton, 1, 0, 1, 2)
-        plot_grid.addWidget(self.loopVsmol_pushbutton, 1, 2, 1, 2)
+        self.moving_window_spinbox = QtWidgets.QSpinBox()
+        self.moving_window_spinbox.setRange(1, 1e3)
+        self.moving_window_spinbox.setValue(51)
+        self.moving_window_spinbox.setKeyboardTracking(False)
+        plot_grid.addWidget(self.loopkinetics_pushbutton, 1, 0)
+        plot_grid.addWidget(self.loopVsmol_pushbutton, 1, 1)
+        plot_grid.addWidget(QtWidgets.QLabel("moving window length:"), 1, 2)
+        plot_grid.addWidget(self.moving_window_spinbox, 1, 3)
         # include Force
         self.force_checkbox = QtWidgets.QCheckBox("Include Force")
         self.force_combobox = QtWidgets.QComboBox()
@@ -294,7 +300,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # choose and plot types
         self.plottype_pushbutton = QtWidgets.QPushButton("Plot")
         self.plottype_combobox = QtWidgets.QComboBox()
-        self.plottype_combobox.addItems(["MSDmoving", "MSDlagtime",
+        self.plottype_combobox.addItems(["MSDmoving", "MSDsavgol", "MSDlagtime",
                                          "MSDlagtime-AllPeaks",
                                          "TimeTraceCol1", "TimeTraceCol2",
                                          ])
@@ -1766,6 +1772,9 @@ class Window(QtWidgets.QMainWindow):
                                 axesA=result["ax1"], axesB=result["ax2"], color="red")
                     result["ax2"].add_artist(con)
                 print(self.df_cols_linked)
+            result["ax1"].set_ylim(self.loop_region_right, self.loop_region_left)
+            result["ax2"].set_ylim(self.loop_region_right, self.loop_region_left)
+            result["ax3"].set_ylim(self.loop_region_right, self.loop_region_left)
         else:
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
@@ -1794,12 +1803,28 @@ class Window(QtWidgets.QMainWindow):
                 dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
         _, ax = plt.subplots()
         df_peak_analyzed = peak_analyzed_dict["Max Peak"]
+        n_moving = self.multipeak_dialog.moving_window_spinbox.value()
+        if n_moving%2 == 0:
+            n_moving = n_moving + 1
+        n_order = 2
+        # loop
         ax.plot(df_peak_analyzed["FrameNumber"],
-                df_peak_analyzed["PeakIntensity"], 'g', label='Peak')
+                df_peak_analyzed["PeakIntensity"], '.g', label='Peak')
         ax.plot(df_peak_analyzed["FrameNumber"],
-                df_peak_analyzed["PeakUpIntensity"], 'r', label='Peak Up')
+                savgol_filter(df_peak_analyzed["PeakIntensity"].values,  window_length=n_moving, polyorder=n_order),
+                'g', label='Peak')
+        # Above loop
         ax.plot(df_peak_analyzed["FrameNumber"],
-                df_peak_analyzed["PeakDownIntensity"], 'b', label='Peak down')
+                df_peak_analyzed["PeakUpIntensity"], '.r', label='Peak Up')
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                savgol_filter(df_peak_analyzed["PeakUpIntensity"].values,  window_length=n_moving, polyorder=n_order),
+                'r', label='Peak Up')
+        # Below loop
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                df_peak_analyzed["PeakDownIntensity"], '.b', label='Peak down')
+        ax.plot(df_peak_analyzed["FrameNumber"],
+                savgol_filter(df_peak_analyzed["PeakDownIntensity"].values,  window_length=n_moving, polyorder=n_order),
+                'b', label='Peak down')
         if self.numColors == "2" or "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel = df_gb.get_group(right_peak_no)
@@ -1807,9 +1832,10 @@ class Window(QtWidgets.QMainWindow):
             peak_analyzed_dict_sm = analyze_maxpeak(group_sel, smooth_length=7,
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
-            sel_loop_sm_dict = loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=11)
+            sel_loop_sm_dict = loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=n_moving)
             ax.plot(sel_loop_sm_dict["FrameNumber"],
                     sel_loop_sm_dict["PeakDiffFiltered"], 'm', label='SMol')
+
         if self.multipeak_dialog.force_checkbox.isChecked():
             if self.multipeak_dialog.force_combobox.currentText() == "Interpolation":
                 interpolation_bool = True
@@ -1870,7 +1896,9 @@ class Window(QtWidgets.QMainWindow):
         if self.multipeak_dialog.plottype_combobox.currentText() == "MSDmoving":
             print("plot MSD")
             _, ax = plt.subplots()
-            n=50
+            n=self.multipeak_dialog.moving_window_spinbox.value()
+            if n%2 != 0:
+                n = n+1
             ind = int(n/2)
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
@@ -1879,6 +1907,24 @@ class Window(QtWidgets.QMainWindow):
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames, msd_moving, 'm', label='color_2')
+            ax.set_xlabel("Frame Number")
+            ax.set_ylabel("Moving MSD(" + str(n) + " points)")
+            ax.legend()
+            plt.show()
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDsavgol":
+            print("plot MSD savgol")
+            _, ax = plt.subplots()
+            n=self.multipeak_dialog.moving_window_spinbox.value()
+            if n%2 != 0:
+                n = n+1
+            ind = int(n/2)
+            msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
+            frames = group_sel_col1['FrameNumber'].values[ind:-ind]
+            ax.plot(frames, savgol_filter(msd_moving, window_length=11, polyorder=1), 'g', label='color_1')
+            if self.numColors == "2":
+                msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
+                frames = group_sel_col2['FrameNumber'].values[ind:-ind]
+                ax.plot(frames, savgol_filter(msd_moving, window_length=11, polyorder=1), 'm', label='color_2')
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Moving MSD(" + str(n) + " points)")
             ax.legend()
