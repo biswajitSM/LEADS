@@ -609,13 +609,15 @@ class MainWidget(QtWidgets.QWidget):
         self.bottomlayout.addLayout(grid_save, 0, 5)
         self.saveSectionBtn = QtWidgets.QPushButton("Save section")
         self.saveSectionComboBox = QtWidgets.QComboBox()
-        self.saveSectionComboBox.addItems(["d0left:video", "d0right:video",
+        self.saveSectionComboBox.addItems(["d0left", "d0right",
                                            "ROI:tif",
-                                           "d1left:tif", "d1right:tif",
-                                           "d2left:tif", "d2right:tif",
+                                           "d1left", "d1right",
+                                           "d2left", "d2right",
                                            ])
         self.saveFormatComboBox = QtWidgets.QComboBox()
-        self.saveFormatComboBox.addItems([".mp4", ".avi", ".gif"])
+        self.saveFormatComboBox.addItems([".mp4", ".avi", ".gif",
+                                          ".pdf", ".png", ".jpeg",
+                                          ".tif", ".svg"])
         self.saveFramerateSpinBox = QtWidgets.QSpinBox()
         self.saveFramerateSpinBox.setRange(1, 1e3)
         self.saveFramerateSpinBox.setValue(7)
@@ -711,7 +713,13 @@ class Window(QtWidgets.QMainWindow):
         normalize_img_action.triggered.connect(self.normalize_images)
         normalize_kymo_action = image_menu.addAction("Normalize Kymographs")
         normalize_kymo_action.triggered.connect(lambda x: print("coming soon! Work is in progress!"))
-        
+        crop_img_roi_action = image_menu.addAction("Crop image in the rect ROI")
+        crop_img_roi_action.triggered.connect(self.crop_img_rect_roi)
+        flip_img_menu = image_menu.addMenu("Flip Images")
+        flip_vertical_action = flip_img_menu.addAction("Vertically")
+        flip_vertical_action.triggered.connect(lambda x: self.flip_images(2))
+        flip_horizonta_action = flip_img_menu.addAction("Horizontally")
+        flip_horizonta_action.triggered.connect(lambda x: self.flip_images(1))
         """ Help """
         help_menu = menu_bar.addMenu("Help")
         keyboardshortcuts_action = help_menu.addAction(" Keyboard Shortcuts")
@@ -1250,6 +1258,50 @@ class Window(QtWidgets.QMainWindow):
                 self.imv11.ui.histogram.show()
             else:
                 self.imv11.setImage(self.kymo_right)
+
+    def crop_img_rect_roi(self):
+        if self.numColors == "3":
+            self.roirect_col3.setState(self.roirect_left.getState())
+            self.roirect_right.setState(self.roirect_left.getState())
+            self.imgarr_left = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+            self.imgarr_right = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+            self.imgarr_col3 = self.roirect_col3.getArrayRegion(self.imgarr_col3,
+                                                self.imv02.imageItem, axes=(1, 2))
+            self.imv00.setImage(self.imgarr_left)
+            self.imv01.setImage(self.imgarr_right)
+            self.imv02.setImage(self.imgarr_col3)
+        elif self.numColors == "2":
+            self.roirect_right.setState(self.roirect_left.getState())
+            self.imgarr_left = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+            self.imgarr_right = self.roirect_right.getArrayRegion(self.imgarr_right,
+                                                self.imv01.imageItem, axes=(1, 2))
+            self.imv00.setImage(self.imgarr_left)
+            self.imv01.setImage(self.imgarr_right)
+        elif self.numColors == "1":
+            self.imgarr_left = self.roirect_left.getArrayRegion(self.imgarr_left,
+                                                self.imv00.imageItem, axes=(1, 2))
+            self.imv00.setImage(self.imgarr_left)
+    
+    def flip_images(self, flip_axis=2):
+        print(self.imgarr_left.ndim, self.imgarr_left.shape)
+        if self.numColors == "3":
+            self.imgarr_left = np.flip(self.imgarr_left, axis=flip_axis)
+            self.imgarr_right = np.flip(self.imgarr_right, axis=flip_axis)
+            self.imgarr_col3 = np.flip(self.imgarr_col3, axis=flip_axis)
+            self.imv00.setImage(self.imgarr_left)
+            self.imv01.setImage(self.imgarr_right)
+            self.imv02.setImage(self.imgarr_col3)
+        elif self.numColors == "2":
+            self.imgarr_left = np.flip(self.imgarr_left, axis=flip_axis)
+            self.imgarr_right = np.flip(self.imgarr_right, axis=flip_axis)
+            self.imv00.setImage(self.imgarr_left)
+            self.imv01.setImage(self.imgarr_right)
+        elif self.numColors == "1":
+            self.imgarr_left = np.flip(self.imgarr_left, axis=flip_axis)
+            self.imv00.setImage(self.imgarr_left)
 
     def normalize_images(self):
         self.imgarr_left = 1000*self.imgarr_left/self.imgarr_left.max()
@@ -1914,19 +1966,23 @@ class Window(QtWidgets.QMainWindow):
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDsavgol":
             print("plot MSD savgol")
             _, ax = plt.subplots()
-            n=self.multipeak_dialog.moving_window_spinbox.value()
+            n_savgol=self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol%2 == 0:
+                n_savgol = n_savgol + 1
+            n_order = 1
+            n=12
             if n%2 != 0:
                 n = n+1
             ind = int(n/2)
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
-            ax.plot(frames, savgol_filter(msd_moving, window_length=11, polyorder=1), 'g', label='color_1')
+            ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'g', label='color_1')
             if self.numColors == "2":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
-                ax.plot(frames, savgol_filter(msd_moving, window_length=11, polyorder=1), 'm', label='color_2')
+                ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'm', label='color_2')
             ax.set_xlabel("Frame Number")
-            ax.set_ylabel("Moving MSD(" + str(n) + " points)")
+            ax.set_ylabel("Window Length(" + str(n_savgol) + " points)")
             ax.legend()
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
@@ -2014,12 +2070,14 @@ class Window(QtWidgets.QMainWindow):
                 h5_analysis["Two Colors Linked"] = self.df_cols_linked.to_records()
 
     def save_section(self):
+        self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed_disconnect)
         temp_folder = os.path.abspath(os.path.join(self.folderpath, 'temp'))
         if not os.path.isdir(temp_folder):
             os.mkdir(temp_folder)
         nth_frame_to_save = self.ui.save_nth_frameSpinBox.value()
-        # save left video : d0left
-        if self.ui.saveSectionComboBox.currentText() == "d0left:video":
+        current_index = self.imv00.currentIndex
+        # save color0 video : d0left
+        if self.ui.saveSectionComboBox.currentText() == "d0left" and self.ui.saveFormatComboBox.currentText() in [".mp4", ".avi", ".gif"]:
             roi_state = self.roirect_left.getState()
             self.roirect_left.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
@@ -2043,10 +2101,20 @@ class Window(QtWidgets.QMainWindow):
                 os.remove(file)
             # subprocess.call([filename])
             pbar.close()
+            self.imv00.setCurrentIndex(current_index)
             print("Video conversion FINISHED")
-
-        # save left video : d0right
-        elif self.ui.saveSectionComboBox.currentText() == "d0right:video":
+        # save color0 current image : d0right
+        elif self.ui.saveSectionComboBox.currentText() == "d0left" and self.ui.saveFormatComboBox.currentText() in [".svg", ".png", ".jpeg", ".tif"]:
+            roi_state = self.roirect_left.getState()
+            self.roirect_left.setPos((-100, -100)) # move away from the imageItem
+            extension = self.ui.saveFormatComboBox.currentText()
+            filename = os.path.join(self.folderpath, self.filename_base + '_left_frame' + str(current_index) + extension)
+            exporter = pyqtgraph.exporters.ImageExporter(self.imv00.imageItem)
+            exporter.params.param('width').setValue(int(exporter.params['width'] * 4))
+            exporter.export(filename)
+            self.roirect_left.setState(roi_state) #set back to its previous state
+        # save color1 video : d0right
+        elif self.ui.saveSectionComboBox.currentText() == "d0right" and self.ui.saveFormatComboBox.currentText() in [".mp4", ".avi", ".gif"]:
             roi_state = self.roirect_right.getState()
             self.roirect_right.setPos((-100, -100)) # move away from the imageItem
             print("Converting to video ...")
@@ -2069,7 +2137,18 @@ class Window(QtWidgets.QMainWindow):
             for file in filelist_png:
                 os.remove(file)
             pbar.close()
+            self.imv00.setCurrentIndex(current_index)
             print("Video conversion FINISHED")
+        # save color1 current image : d0right
+        elif self.ui.saveSectionComboBox.currentText() == "d0right" and self.ui.saveFormatComboBox.currentText() in [".svg", ".png", ".jpeg", ".tif"]:
+            roi_state = self.roirect_left.getState()
+            self.roirect_left.setPos((-100, -100)) # move away from the imageItem
+            extension = self.ui.saveFormatComboBox.currentText()
+            filename = os.path.join(self.folderpath, self.filename_base + '_right_frame' + str(current_index) + extension)
+            exporter = pyqtgraph.exporters.ImageExporter(self.imv01.imageItem)
+            exporter.params.param('width').setValue(int(exporter.params['width'] * 4))
+            exporter.export(filename)
+            self.roirect_left.setState(roi_state) #set back to its previous state
         # save ROIleft as tif
         elif self.ui.saveSectionComboBox.currentText() == "ROI:tif":
             filename = self.folderpath+'/'+self.filename_base + '_ROI.tif'
@@ -2116,6 +2195,7 @@ class Window(QtWidgets.QMainWindow):
             else:
                 imwrite(filename, self.kymo_right_loop.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+        self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed)
 
     def frames_changed(self):
         print("Changing the frames and resetting plts...")
