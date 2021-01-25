@@ -645,7 +645,10 @@ class NapariTabs(QtWidgets.QWidget):
             duplicate = nums[:-1][nums[1:] == nums[:-1]]
             if len(duplicate) > 0:
                 print('Duplicate FOV found in '+os.path.dirname(self.FOVpaths[nPath][0])+'. Returning.')
-                return           
+                return         
+            # check if we have less subdirs then expected. If so, return an empty path here
+            if nFOV >= len(sort_index):
+                continue
             paths[nPath] = os.path.join(
                 os.path.dirname(self.FOVpaths[nPath][0]), 
                 subdirs[sort_index[nFOV]] )
@@ -804,14 +807,24 @@ class NapariTabs(QtWidgets.QWidget):
             # contrast min/max, as well as the current frame
             # we then call self.load_img_seq(), which will read the updated shifts + angles
             # from the yaml file we just saved such that the image is correctly rotated
-            if sum(abs(np.array(self.RotationAngle[self.series2treat])))!=0:
+            # see if we already have a value for angle_old. If not, this is the first rotation
+            # we apply. Do it also when angle=0. Otherwise, we can check if the 
+            # new angle value is different from the old one. Only execute the rotation
+            # function if this is true.
+            if not hasattr(self, 'angle_old'):
+                self.angle_old = [[n for n in m] for m in self.RotationAngle]
+                angleDiff = np.array((1,1))
+            else:
+                angleDiff = np.asarray(self.RotationAngle[self.series2treat]) - np.asarray(self.angle_old[self.series2treat])
+            self.angle_old = [[n for n in m] for m in self.RotationAngle]
+            if sum(abs(angleDiff))!=0:                
                 self.GetCurrentDisplaySettings()
                 self.use_current_image_path = True
                 save_series2treat = self.series2treat
                 self.load_img_seq(omitROIlayer=True)
                 self.series2treat = save_series2treat
                 # apply settings as before
-                self.ApplyDisplaySettings()
+                self.ApplyDisplaySettings()  
 
             # shift
             for nColor in range(self.numColors):
