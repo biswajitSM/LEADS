@@ -207,7 +207,9 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     peak_diff = pos_diff_kb_shift.values
     peak_diff_filt = savgol_filter(peak_diff, window_length=smooth_length, polyorder=2)
     loop_sm_dict = {
-        "FrameNumber": frame_number,
+        "FrameNumber" : frame_number,
+        "PositionDiff" : pos_diff,
+        "PositionDiff_kb" : pos_diff_kb,
         "PeakDiff" : peak_diff, # difference in peak position in kilobases
         "PeakDiffFiltered" : peak_diff_filt, #smoothed peaks
     }
