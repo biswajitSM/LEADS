@@ -787,7 +787,7 @@ class NapariTabs(QtWidgets.QWidget):
             self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
             self.LoadShiftYamlFile()
 
-            if not hasattr(self, 'angle'):
+            if not hasattr(self.shift_yaml, 'angle'):
                 self.shift_yaml["angle"] = {}
             for nColor in range(self.numColors):
                 self.shift_yaml["x"]["col"+str(int(nColor))] = self.xShift[self.series2treat][nColor]
@@ -1097,17 +1097,22 @@ class NapariTabs(QtWidgets.QWidget):
                 self.yamlFileName = os.path.join(paths[nSeries], 'shift.yaml')                           
                 self.series2treat = nSeries
                 self.LoadShiftYamlFile()
-                if not hasattr(self, 'angle'):
-                            self.shift_yaml["angle"] = {}
-                for nColor in range(self.MaxNumColors):
+                if not hasattr(self.shift_yaml, 'angle'):
+                    self.shift_yaml["angle"] = {}
+                for nColor in range(self.MaxNumColors):  
                     try:
                         self.xShift[nSeries][nColor] = self.shift_yaml["x"]["col"+str(int(nColor))]
-                        self.yShift[nSeries][nColor] = self.shift_yaml["y"]["col"+str(int(nColor))]                        
-                        self.RotationAngle[nSeries][nColor] = self.shift_yaml["angle"]["col"+str(int(nColor))]
                     except:
                         self.xShift[nSeries][nColor] = 0
+                    try:
+                        self.yShift[nSeries][nColor] = self.shift_yaml["y"]["col"+str(int(nColor))]
+                    except:
                         self.yShift[nSeries][nColor] = 0
-                        self.RotationAngle[nSeries][nColor] = 0                        
+                    try:
+                        self.RotationAngle[nSeries][nColor] = self.shift_yaml["angle"]["col"+str(int(nColor))]
+                    except:
+                        self.RotationAngle[nSeries][nColor] = 0
+                                        
 
                 # read image
                 if paths[nSeries]: # if we actually have a path
@@ -1199,8 +1204,14 @@ class NapariTabs(QtWidgets.QWidget):
             self.series2treat = 0
             self.LoadShiftYamlFile()
             for nColor in range(self.numColors):
-                self.xShift[0][nColor] = self.shift_yaml["x"]["col"+str(int(nColor))]
-                self.yShift[0][nColor] = self.shift_yaml["y"]["col"+str(int(nColor))]
+                try:
+                    self.xShift[0][nColor] = self.shift_yaml["x"]["col"+str(int(nColor))]
+                except:
+                    self.xShift[0][nColor] = 0
+                try:
+                    self.yShift[0][nColor] = self.shift_yaml["y"]["col"+str(int(nColor))]
+                except:
+                    self.yShift[0][nColor] = 0
                 try:
                     self.RotationAngle[0][nColor] = self.shift_yaml["angle"]["col"+str(int(nColor))]
                 except:
@@ -1314,7 +1325,7 @@ class NapariTabs(QtWidgets.QWidget):
         for nSeries in range(self.numSeries):
             for nColor in range(self.numColors):
                 if (self.xShift[nSeries][nColor]!=0) or (self.yShift[nSeries][nColor]!=0):
-                    nLayer = nSeries + nColor                        
+                    nLayer = nSeries*self.numColors + nColor                        
                     translationVector = np.array( [0, self.yShift[nSeries][nColor], self.xShift[nSeries][nColor]] ) # [z, y, x]
                     self.viewer.layers[nLayer].translate = translationVector
 
@@ -1503,7 +1514,7 @@ class NapariTabs(QtWidgets.QWidget):
                 self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
                 self.LoadShiftYamlFile()
                 self.shift_yaml["numColors"] = self.numColors
-                if not hasattr(self, 'angle'):
+                if not hasattr(self.shift_yaml, 'angle'):
                     self.shift_yaml["angle"] = {}
                 for nColor in range(self.numColors):
                     if hasattr(self, 'xShift'):
@@ -1533,7 +1544,7 @@ class NapariTabs(QtWidgets.QWidget):
                     self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
                     self.LoadShiftYamlFile()
                     self.shift_yaml["numColors"] = self.numColors
-                    if not hasattr(self, 'angle'):
+                    if not hasattr(self.shift_yaml, 'angle'):
                         self.shift_yaml["angle"] = {}
                     for nColor in range(self.numColors):
                         self.shift_yaml["x"]["col"+str(int(nColor))] = self.xShift[nSeries][nColor]
