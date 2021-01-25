@@ -814,11 +814,10 @@ class NapariTabs(QtWidgets.QWidget):
                 self.ApplyDisplaySettings()
 
             # shift
-            if any([x!=0 for x in self.yShift[self.series2treat]]) or any([x!=0 for x in self.yShift[self.series2treat]]):
-                for nColor in range(self.numColors):
-                    # [z, y, x]
-                    translationVector = np.array( [0, self.yShift[self.series2treat][nColor], self.xShift[self.series2treat][nColor]] )
-                    self.viewer.layers[self.series2treat+nColor].translate = translationVector
+            for nColor in range(self.numColors):
+                # [z, y, x]
+                translationVector = np.array( [0, self.yShift[self.series2treat][nColor], self.xShift[self.series2treat][nColor]] )
+                self.viewer.layers[self.series2treat*self.numColors+nColor].translate = translationVector
 
             # if line profiles are shown, also update those
             if self.LPwin.isVisible():
@@ -1050,8 +1049,8 @@ class NapariTabs(QtWidgets.QWidget):
             g = interp1d(x, self.color_list[:,1])
             b = interp1d(x, self.color_list[:,2])
             xint = np.linspace(0, len(self.color_list)-1, required_numColors, endpoint=True)
-            xint = xint.reshape((0,required_numColors))
-            self.color_list = np.transpose( np.concatenate((r(xint), g(xint), b(xint)), axis=0) )
+            xint = np.expand_dims(xint, axis=1)
+            self.color_list = np.concatenate((r(xint), g(xint), b(xint)), axis=1)
         numColors = len(self.color_list)
         self.cmap = [0] * numColors
         controls = np.linspace(0., 1., 100)
@@ -1497,7 +1496,7 @@ class NapariTabs(QtWidgets.QWidget):
                 # savepath = os.path.dirname(self.image_meta[0]['folderpath'])
                 savepath = self.image_meta[0]['folderpath'] + '_analysis'
                 ROInames = crop_images.save_rectshape_as_imageJroi(shape_layer, 
-                    folder_to_save=savepath, label=ROIlabel)
+                    folder_to_save=savepath, label=ROIlabel, defaultShape=self.defaultShape)
                 if not ROInames:
                     continue
                 folderpath = self.image_meta[0]['folderpath']
@@ -1529,7 +1528,7 @@ class NapariTabs(QtWidgets.QWidget):
                         continue
                     savepath = folderpath + '_analysis'
                     ROInames = crop_images.save_rectshape_as_imageJroi(shape_layer, 
-                        folder_to_save=savepath, label=ROIlabel)
+                        folder_to_save=savepath, label=ROIlabel, defaultShape=self.defaultShape)
                     
                     self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
                     self.LoadShiftYamlFile()
