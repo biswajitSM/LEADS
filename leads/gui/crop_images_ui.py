@@ -178,6 +178,10 @@ class Ui_Form(object):
         self.BatchProcessBtn.setObjectName("BatchProcessBtn")
         self.horizontalLayout_3.addWidget(self.BatchProcessBtn)
 
+        self.ShiftEstimateBtn = QtWidgets.QPushButton(Form)
+        self.ShiftEstimateBtn.setObjectName("ShiftEstimateBtn")
+        self.horizontalLayout_3.addWidget(self.ShiftEstimateBtn)
+
         self.gridLayout.addLayout(self.horizontalLayout_3, 1, 0, 1, 4)
 
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
@@ -224,6 +228,7 @@ class Ui_Form(object):
         self.FOVLabel.setText(_translate("Form", "FOV tag:"))
         self.FOVCountLabel.setText(_translate("Form", "/0"))
         self.BatchProcessBtn.setText(_translate("Form", "Batch process"))
+        self.ShiftEstimateBtn.setText(_translate("Form", "Estimate shift"))
         self.FileDirectoryLabel.setText(_translate("Form", "Current directory:"))
         self.CopyPathBtn.setText(_translate("Form", "Open path"))        
 

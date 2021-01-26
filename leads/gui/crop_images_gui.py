@@ -13,6 +13,7 @@ from .. import crop_images
 
 from PIL import Image
 from tqdm import trange
+from copy import deepcopy
 from PyQt5 import QtCore, QtGui, QtWidgets
 from skimage import measure
 from pathlib import Path
@@ -21,6 +22,7 @@ from tifffile import imwrite
 from pyqtgraph import PlotWidget, plot, mkPen
 
 from vispy.color import Colormap, ColorArray
+from scipy.signal import correlate2d
 from scipy.interpolate import interp1d
 from napari.layers.utils.text import TextManager
 from napari.layers.utils._text_utils import format_text_properties
@@ -474,6 +476,8 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui.FOVSpinBox.setKeyboardTracking(False)
         # button to toggle batch processing
         self.ui.BatchProcessBtn.clicked.connect(self.call_BatchProcessing)
+        # button to estimate shift
+        self.ui.ShiftEstimateBtn.clicked.connect(self.EstimateShift)
         # button to open the current dir outside python (on the OS)
         self.ui.CopyPathBtn.clicked.connect(self.OpenPathExternally)
 
@@ -518,9 +522,30 @@ class NapariTabs(QtWidgets.QWidget):
                 
                 # now see if we find any shape which contains mouseCoordinates
                 for nShape in range(len(self.layers[nLayer].data)):
-                    polygon = self.layers[nLayer].data[nShape]
+                    # make the polygon 5% on each side larger, in order to 
+                    # not switch to an image layer when trying to resize 
+                    # the ROI   
+                    # issue: when a shape is already selected, it selects the layer
+                    # we should check for that and in case a shape is selected,
+                    # leave it 
+                    polygon = deepcopy(self.layers[nLayer].data[nShape])
+                    a = crop_images.get_rect_params(polygon)
+                    extension = 20 # 20 pixels on each side
+                    dx = extension * (np.cos(a['angle']*np.pi/180) + np.sin(a['angle']*np.pi/180))
+                    dy = extension * (np.cos(a['angle']*np.pi/180) - np.sin(a['angle']*np.pi/180))
+                    polygon[0][0] -= dx
+                    polygon[3][0] -= dx
+                    polygon[1][0] += dx
+                    polygon[2][0] += dx
+                    polygon[0][1] -= dy
+                    polygon[3][1] += dy
+                    polygon[1][1] -= dy
+                    polygon[2][1] += dy
+                    
                     path = mpltPath.Path(polygon)
                     if path.contains_points(mouseCoordinates):
+                        if selected == nLayer:
+                            return
                         # deselect what was selected before
                         self.layers[selected].events.deselect()
                         self.layers[selected].selected = False
@@ -529,6 +554,7 @@ class NapariTabs(QtWidgets.QWidget):
                         self.layers[nLayer].selected = True
                         self._active_layer = self.layers[nLayer]
                         return
+
             # if the function didnt return so far, we didnt find 
             # any shape which has the mouse coord inside
             # in thise case, check if we had an image layer selected before
@@ -546,7 +572,7 @@ class NapariTabs(QtWidgets.QWidget):
         @viewer.events.active_layer.connect
         def UpdateXYShiftRotationAngleUponSwitchingLayer(event):
             # at startup, we dont have any layers yet. in this case, do nothing
-            if (not self.viewer.layers) or (not hasattr(self, 'numLayers') or (not self.viewer._active_layer)):
+            if (not self.viewer.layers) or (not hasattr(self, 'numLayers') or (not self.viewer._active_layer)) or hasattr(self, 'xshift_estimate'):
                 return
             # check if we have currently as many layers as written in self.numLayers
             # if not, we are likely just building up the viewer after changing the FOV
@@ -601,6 +627,91 @@ class NapariTabs(QtWidgets.QWidget):
             self.ui.FileDirectoryLabel.setText(
                 'Current directory: '+os.path.dirname(self.image_meta[nSeries]['filenames'][0])
             )
+
+# ---------------------------------------------------------------------
+    def EstimateShift(self):
+        # get selected layers
+        selected = [0] * 2
+        count = 0
+        for nLayer in range(self.numLayers):
+            if self.viewer.layers[nLayer].selected:
+                selected[count] = nLayer
+                count += 1
+                if count == 2:
+                    break
+        if count < 2:
+            print('Select 2 layers to estimate shift')
+            return
+        currentTime  = self.viewer.dims.point[0]
+        # for the selected layers, get which series and color it is
+        image = [0] * 2
+        series0 = int( np.floor(selected[0] / self.numColors) )
+        color0  = int( np.mod(selected[0], self.numColors) )
+        index0 = int( currentTime*self.numColors + color0 )
+        if index0 >= len(self.image_meta[series0]['filenames']):
+            index0 = len(self.image_meta[series0]['filenames'])
+        series1 = int( np.floor(selected[1] / self.numColors) )
+        color1  = int( np.mod(selected[1], self.numColors) )
+        index1 = int( currentTime*self.numColors + color1 )
+        if index1 >= len(self.image_meta[series1]['filenames']):
+            index1 = len(self.image_meta[series1]['filenames'])
+        if index1 > index0:
+            index1 = index0
+        elif index1 < index0:
+            index0 = index1
+        filename = self.image_meta[series0]['filenames'][index0]
+        image[0] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
+        image[0] = image[0][0].astype(float)
+        if hasattr(self, 'RotationAngle'):
+            image[0] = crop_images.geometric_shift(image[0], angle=self.RotationAngle[series0][color0],
+                                    shift_x=self.yShift[series0][color0], shift_y=self.xShift[series0][color0])
+        filename = self.image_meta[series1]['filenames'][index1]
+        image[1] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
+        image[1] = image[1][0].astype(float)
+        # we dont shift image 1, only the template (=image0)
+        # image[1] = crop_images.geometric_shift(image[1], angle=self.RotationAngle[series1][color1],
+        #                             shift_x=self.xShift[series1][color1], shift_y=self.yShift[series1][color1])
+        
+
+        C = self.fft_xcorr2D(image[0]/np.max(image[0].ravel()), image[1]/np.max(image[1].ravel()))
+        index = np.unravel_index(C.argmax(), C.shape)
+        index = [x for x in index]
+        middle = [x/2 for x in C.shape]
+        shift = np.asarray(index) - np.asarray(middle)
+        for iShift in range(2):
+            if np.abs(shift[iShift]) < 1.5:
+                shift[iShift] = 0
+        self.xshift_estimate = shift[0]
+        self.yshift_estimate = shift[1]
+        # select the upper layer of the two before calling ShiftRotateImage
+        self.viewer.layers[int(np.min(selected))].events.deselect()
+        self.viewer.layers[int(np.min(selected))].selected = False
+        self.viewer.layers[int(np.max(selected))].events.select()
+        self.viewer.layers[int(np.max(selected))].selected = True        
+        # call ShiftRotateImage with input
+        self.ShiftRotateImage()
+        self.viewer._active_layer = self.viewer.layers[int(np.max(selected))]
+
+
+# ---------------------------------------------------------------------
+    def fft_xcorr2D(self, x, y):
+        x = np.fft.fft2(x)
+        y = np.fft.fft2(y)
+
+        # Conjugate for correlation, not convolution (Conv. Theorem)
+        y = np.conj(y)
+        xy = np.concatenate((
+            np.expand_dims(x, axis=2),
+            np.expand_dims(y, axis=2)), axis=2)
+
+        # Over axes (0,1)
+        ## Multiply elementwise over 2:nd axis (since images were concatenated along axis 2)
+        ### fftshift over rows and column over images
+        corr = np.fft.fftshift(np.fft.ifft2(np.prod(xy,axis=2),axes=(0,1)),axes=(0,1))
+
+        # Return after removing padding
+        return np.abs(corr)
+
 
 # ---------------------------------------------------------------------
     def OpenPathExternally(self):
@@ -793,6 +904,11 @@ class NapariTabs(QtWidgets.QWidget):
 
 # ---------------------------------------------------------------------
     def ShiftRotateImage(self):
+        # see first if we have an input
+        if hasattr(self, 'xshift_estimate'):
+            shift_supplied = True
+        else:
+            shift_supplied = False
         # use the built-in translate/rotate method of napari viewer        
         self.GetRelatedSelectedLayers()
         if self.series2treat is not None:
@@ -805,8 +921,12 @@ class NapariTabs(QtWidgets.QWidget):
                 for nLayer in range(self.numLayers):
                     layerNames[nLayer] = self.viewer.layers[nLayer].name
                 currentLayer = layerNames.index(currentLayer)
-                self.xShift[self.series2treat][currentLayer] = self.ui.xShiftSpinBox.value()
-                self.yShift[self.series2treat][currentLayer] = self.ui.yShiftSpinBox.value()
+                if shift_supplied:
+                    self.xShift[self.series2treat][currentLayer] = self.xshift_estimate
+                    self.yShift[self.series2treat][currentLayer] = self.yshift_estimate
+                else:
+                    self.xShift[self.series2treat][currentLayer] = self.ui.xShiftSpinBox.value()
+                    self.yShift[self.series2treat][currentLayer] = self.ui.yShiftSpinBox.value()
                 self.RotationAngle[self.series2treat][currentLayer] = self.ui.angleSpinBox.value()
             else:
                 if not hasattr(self, 'xShift'):
@@ -818,8 +938,12 @@ class NapariTabs(QtWidgets.QWidget):
                         self.xShift[nSeries]        = [0] * self.MaxNumColors
                         self.yShift[nSeries]        = [0] * self.MaxNumColors
                 for nColor in range(self.numColors):
-                    self.xShift[self.series2treat][nColor] = self.ui.xShiftSpinBox.value()
-                    self.yShift[self.series2treat][nColor] = self.ui.yShiftSpinBox.value()
+                    if shift_supplied:
+                        self.xShift[self.series2treat][nColor] = self.xshift_estimate
+                        self.yShift[self.series2treat][nColor] = self.yshift_estimate
+                    else:
+                        self.xShift[self.series2treat][nColor] = self.ui.xShiftSpinBox.value()
+                        self.yShift[self.series2treat][nColor] = self.ui.yShiftSpinBox.value()
                     self.RotationAngle[self.series2treat][nColor] = self.ui.angleSpinBox.value()
             
             # save the current x-y shift into a yaml file
@@ -847,14 +971,16 @@ class NapariTabs(QtWidgets.QWidget):
             # see if we already have a value for angle_old. If not, this is the first rotation
             # we apply. Do it also when angle=0. Otherwise, we can check if the 
             # new angle value is different from the old one. Only execute the rotation
-            # function if this is true.
+            # function if this is true.            
             if not hasattr(self, 'angle_old'):
                 self.angle_old = [[n for n in m] for m in self.RotationAngle]
                 if sum(abs(np.asarray(self.RotationAngle[self.series2treat])))!=0:
                     angleDiff = np.array((1,1))
+                else:
+                    angleDiff = np.array((0,0))
             else:
                 angleDiff = np.asarray(self.RotationAngle[self.series2treat]) - np.asarray(self.angle_old[self.series2treat])
-            self.angle_old = [[n for n in m] for m in self.RotationAngle]
+            self.angle_old = [[n for n in m] for m in self.RotationAngle]            
             if sum(abs(angleDiff))!=0:
                 self.GetCurrentDisplaySettings()
                 self.use_current_image_path = True
@@ -873,6 +999,11 @@ class NapariTabs(QtWidgets.QWidget):
             # if line profiles are shown, also update those
             if self.LPwin.isVisible():
                 self.profile_line()
+
+            # delete the estimate attribute so we dont take it next time again
+            if hasattr(self, 'xshift_estimate'):
+                delattr(self, 'xshift_estimate')
+                delattr(self, 'yshift_estimate')
 
 # ---------------------------------------------------------------------
     def LoadShiftYamlFile(self):
@@ -1335,7 +1466,6 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
     def profile_line(self):
         # first get the line
-        # if 'Profile' in self.viewer.layers
         try:
             line = self.viewer.layers['Profile'].data[0]
         except:
