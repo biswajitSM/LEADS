@@ -1,6 +1,5 @@
 import napari
 import numpy as np
-import pyqtgraph as pg
 import dask.array as da
 import matplotlib.path as mpltPath
 import os, sys, glob, itertools, yaml, re, shutil, pims
@@ -32,7 +31,7 @@ class LineProfileWindow(QtWidgets.QMainWindow):
         # super(MainWindow, self).__init__(*args, **kwargs)
         
         self.setWindowTitle("Line profiles")
-        self.graphWidget = pg.PlotWidget()
+        self.graphWidget = PlotWidget()
         self.setCentralWidget(self.graphWidget)
 
         self.data_line = []
@@ -576,8 +575,6 @@ class NapariTabs(QtWidgets.QWidget):
                 self.ui.xShiftSpinBox.blockSignals(True)
                 self.ui.yShiftSpinBox.blockSignals(True)
                 self.ui.angleSpinBox.blockSignals(True)
-                if not hasattr(self, 'xShift'):
-                    a=1
                 self.ui.xShiftSpinBox.setValue(self.xShift[self.series2treat][index])
                 self.ui.yShiftSpinBox.setValue(self.yShift[self.series2treat][index])
                 self.ui.angleSpinBox.setValue(self.RotationAngle[self.series2treat][index]) # when updating the angle, we can cal self.ShiftRotateImage
@@ -624,7 +621,7 @@ class NapariTabs(QtWidgets.QWidget):
             if len(self.FOVpaths[nPath]) == 0:
                 continue
             subdirs = []
-            nums = []#np.zeros(len(self.FOVpaths[nPath]))
+            nums = []
             for subpath in range(len(self.FOVpaths[nPath])):
                 basename = os.path.basename(self.FOVpaths[nPath][subpath])
                 basename = basename.lower()
@@ -652,7 +649,7 @@ class NapariTabs(QtWidgets.QWidget):
             paths[nPath] = os.path.join(
                 os.path.dirname(self.FOVpaths[nPath][0]), 
                 subdirs[sort_index[nFOV]] )
-        # give user feedback which paths are gonna be loaded
+        
         if all( [len(path)==0 for path in paths] ):
             return
 
@@ -663,9 +660,24 @@ class NapariTabs(QtWidgets.QWidget):
                 settings["crop"]["PWD MultiImageSeries"]["path"+str(nPath)] = paths[nPath]
         io.save_user_settings(settings)
 
+        # give user feedback which paths are gonna be loaded
         print('Loading the following set of FOVs:')
         for nPath in range(numPaths):
-            print('['+str(int(nPath+1))+'] '+paths[nPath])                        
+            print('['+str(int(nPath+1))+'] '+paths[nPath])
+            
+        # look through other folders to which the tag fit and see if there is 
+        # no shift.yaml file yet, write the current one in them.
+        # rationale: when acquiring different FOVs, the shift between 
+        # conditions should be the same or at least similar for all FOVs
+        # so maybe we need to adjust it only once
+        for nPath in range(numPaths):
+            yamlFileName = os.path.join(paths[nPath], 'shift.yaml') # this is in the new dir
+            # see if its there
+            if not os.path.isfile(yamlFileName):
+                yamlFileNameOld = os.path.join(self.image_meta[nPath]['folderpath'], 'shift.yaml') # this is still the 'old' (currently loaded) dir
+                if not os.path.isfile(yamlFileNameOld):
+                    continue
+                shutil.copy2(yamlFileNameOld, yamlFileName) # copy the file to the new dir        
 
         # now call load_img_seq with this set of paths
         self.load_img_seq(path_in=paths)
@@ -813,11 +825,12 @@ class NapariTabs(QtWidgets.QWidget):
             # function if this is true.
             if not hasattr(self, 'angle_old'):
                 self.angle_old = [[n for n in m] for m in self.RotationAngle]
-                angleDiff = np.array((1,1))
+                if sum(abs(self.RotationAngle[self.series2treat]))!=0:
+                    angleDiff = np.array((1,1))
             else:
                 angleDiff = np.asarray(self.RotationAngle[self.series2treat]) - np.asarray(self.angle_old[self.series2treat])
             self.angle_old = [[n for n in m] for m in self.RotationAngle]
-            if sum(abs(angleDiff))!=0:                
+            if sum(abs(angleDiff))!=0:
                 self.GetCurrentDisplaySettings()
                 self.use_current_image_path = True
                 save_series2treat = self.series2treat

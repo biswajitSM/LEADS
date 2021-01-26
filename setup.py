@@ -38,6 +38,7 @@ setuptools.setup(
         "PyYAML",
         "h5py",
         "tables",
+        "vispy"
         "qdarkstyle"
     ],
     dependency_links = ["git+https://github.com/pyqtgraph/pyqtgraph@master"]
