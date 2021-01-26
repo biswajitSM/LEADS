@@ -1,8 +1,11 @@
 import napari
+import platform
+import subprocess
 import numpy as np
 import dask.array as da
 import matplotlib.path as mpltPath
 import os, sys, glob, itertools, yaml, re, shutil, pims
+
 
 from . import crop_images_ui
 from .. import io
@@ -471,6 +474,8 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui.FOVSpinBox.setKeyboardTracking(False)
         # button to toggle batch processing
         self.ui.BatchProcessBtn.clicked.connect(self.call_BatchProcessing)
+        # button to open the current dir outside python (on the OS)
+        self.ui.CopyPathBtn.clicked.connect(self.OpenPathExternally)
 
         # finally, get the window for a line profile
         self.LPwin = LineProfileWindow()
@@ -594,8 +599,28 @@ class NapariTabs(QtWidgets.QWidget):
                 nLayer = self.numLayers-1
             nSeries = int( np.floor( nLayer/self.numColors ) )
             self.ui.FileDirectoryLabel.setText(
-                os.path.dirname('Current directory: '+self.image_meta[nSeries]['filenames'][0])
+                'Current directory: '+os.path.dirname(self.image_meta[nSeries]['filenames'][0])
             )
+
+# ---------------------------------------------------------------------
+    def OpenPathExternally(self):
+        if not self.viewer._active_layer:
+            return
+        activeLayerName = self.viewer._active_layer.name
+        for nLayer in range(len(self.viewer.layers)):
+            if activeLayerName == self.viewer.layers[nLayer].name:
+                break
+        if nLayer > self.numLayers-1:
+            nLayer = self.numLayers-1
+        nSeries = int( np.floor( nLayer/self.numColors ) )
+        path = os.path.dirname(self.image_meta[nSeries]['filenames'][0])
+        
+        if platform.system() == "Windows":
+            os.startfile(path)
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
 
 # ---------------------------------------------------------------------
     def updateSlider(self, dummy):

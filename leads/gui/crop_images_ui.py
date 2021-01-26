@@ -183,6 +183,10 @@ class Ui_Form(object):
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
 
+        self.CopyPathBtn = QtWidgets.QPushButton(Form)
+        self.CopyPathBtn.setObjectName("CopyPathBtn")
+        self.horizontalLayout_4.addWidget(self.CopyPathBtn)
+
         self.FileDirectoryLabel = QtWidgets.QLabel(Form)
         self.FileDirectoryLabel.setObjectName("FileDirectoryLabel")
         self.horizontalLayout_4.addWidget(self.FileDirectoryLabel)
@@ -221,7 +225,7 @@ class Ui_Form(object):
         self.FOVCountLabel.setText(_translate("Form", "/0"))
         self.BatchProcessBtn.setText(_translate("Form", "Batch process"))
         self.FileDirectoryLabel.setText(_translate("Form", "Current directory:"))
-        
+        self.CopyPathBtn.setText(_translate("Form", "Open path"))        
 
 if __name__ == "__main__":
     import sys
