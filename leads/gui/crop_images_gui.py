@@ -18,7 +18,7 @@ from skimage import measure
 from pathlib import Path
 from roifile import ImagejRoi
 from tifffile import imwrite
-from pyqtgraph import PlotWidget, plot
+from pyqtgraph import PlotWidget, plot, mkPen
 
 from vispy.color import Colormap, ColorArray
 from scipy.interpolate import interp1d
@@ -51,7 +51,7 @@ class LineProfileWindow(QtWidgets.QMainWindow):
                 print('Can show max. '+str(int(numLines))+' lines. Disable some layers.')
                 continue
             color = colors[p] * 255
-            self.data_line[p].setData(x, profiles[p], pen=pg.mkPen(color=color))
+            self.data_line[p].setData(x, profiles[p], pen=mkPen(color=color))
         for p in range(len(profiles), len(self.data_line)):
             self.data_line[p].setData([0], [0])
 
@@ -850,7 +850,7 @@ class NapariTabs(QtWidgets.QWidget):
             # function if this is true.
             if not hasattr(self, 'angle_old'):
                 self.angle_old = [[n for n in m] for m in self.RotationAngle]
-                if sum(abs(self.RotationAngle[self.series2treat]))!=0:
+                if sum(abs(np.asarray(self.RotationAngle[self.series2treat])))!=0:
                     angleDiff = np.array((1,1))
             else:
                 angleDiff = np.asarray(self.RotationAngle[self.series2treat]) - np.asarray(self.angle_old[self.series2treat])
