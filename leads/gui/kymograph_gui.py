@@ -696,6 +696,10 @@ class Window(QtWidgets.QMainWindow):
         default_action = view_menu.addAction("Default View State")
         default_action.setShortcut("Ctrl+A")
         default_action.triggered.connect(self.restore_default_dockstate)
+        hide_roi_action = view_menu.addAction("Hide Rect ROIs")
+        hide_roi_action.triggered.connect(lambda x: self.show_or_hide_roi("hide"))
+        show_roi_action = view_menu.addAction("Show Rect ROIs")
+        show_roi_action.triggered.connect(lambda x: self.show_or_hide_roi("show"))
         """ Analyze """
         analyze_menu = menu_bar.addMenu("Analyze")
         parameters_action = analyze_menu.addAction("Parameters")
@@ -1260,6 +1264,7 @@ class Window(QtWidgets.QMainWindow):
                 self.imv11.setImage(self.kymo_right)
 
     def crop_img_rect_roi(self):
+        self.ui.mergeColorsCheckBox.setChecked(False)
         if self.numColors == "3":
             self.roirect_col3.setState(self.roirect_left.getState())
             self.roirect_right.setState(self.roirect_left.getState())
@@ -1344,6 +1349,22 @@ class Window(QtWidgets.QMainWindow):
         roi1_state_update = self.roirect_left.getState()
         roi1_state_update['size'][1] = self.parameters_dialog.roi_spinbox.value()
         self.roirect_left.setState(roi1_state_update)
+
+    def show_or_hide_roi(self, kind="hide"):
+        if kind == "hide":
+            pen = None
+        else:
+            pen = (255, 255, 0)
+        handles = self.roirect_left.getHandles()
+        if self.numColors == "3":
+            self.roirect_left.setPen(pen)
+            self.roirect_right.setPen(pen)
+            self.roirect_col3.setPen(pen)
+        elif self.numColors == "2":
+            self.roirect_left.setPen(pen)
+            self.roirect_right.setPen(pen)
+        elif self.numColors == "1":
+            self.roirect_left.setPen(pen)
 
     def timetrace_rectROI(self, side='left'):
         if side == 'left':
@@ -1864,19 +1885,19 @@ class Window(QtWidgets.QMainWindow):
                 df_peak_analyzed["PeakIntensity"], '.g', label='Peak')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 savgol_filter(df_peak_analyzed["PeakIntensity"].values,  window_length=n_moving, polyorder=n_order),
-                'g', label='Peak')
+                'g', label='Peak filterd')
         # Above loop
         ax.plot(df_peak_analyzed["FrameNumber"],
                 df_peak_analyzed["PeakUpIntensity"], '.r', label='Peak Up')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 savgol_filter(df_peak_analyzed["PeakUpIntensity"].values,  window_length=n_moving, polyorder=n_order),
-                'r', label='Peak Up')
+                'r', label='Peak Up filterd')
         # Below loop
         ax.plot(df_peak_analyzed["FrameNumber"],
                 df_peak_analyzed["PeakDownIntensity"], '.b', label='Peak down')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 savgol_filter(df_peak_analyzed["PeakDownIntensity"].values,  window_length=n_moving, polyorder=n_order),
-                'b', label='Peak down')
+                'b', label='Peak down filterd')
         if self.numColors == "2" or "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel = df_gb.get_group(right_peak_no)
@@ -2070,7 +2091,8 @@ class Window(QtWidgets.QMainWindow):
                 h5_analysis["Two Colors Linked"] = self.df_cols_linked.to_records()
 
     def save_section(self):
-        self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed_disconnect)
+        prev_state = self.ui.RealTimeKymoCheckBox.isChecked()
+        self.ui.RealTimeKymoCheckBox.setChecked(False)
         temp_folder = os.path.abspath(os.path.join(self.folderpath, 'temp'))
         if not os.path.isdir(temp_folder):
             os.mkdir(temp_folder)
@@ -2195,7 +2217,7 @@ class Window(QtWidgets.QMainWindow):
             else:
                 imwrite(filename, self.kymo_right_loop.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
-        self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed)
+        self.ui.RealTimeKymoCheckBox.setChecked(prev_state)
 
     def frames_changed(self):
         print("Changing the frames and resetting plts...")
