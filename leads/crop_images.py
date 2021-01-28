@@ -22,7 +22,7 @@ def get_rect_params(rect, printing=False):
         angle = 0
     else:
         m1 = (dy/dx);   # tan(A)
-        A = np.arctan(m1) * 180 / np.pi;
+        A = np.arctan(m1) * 180 / np.pi
         angle = 270-A#-(A-90)
     x_cent = int((rect[0, :][0] + rect[2, :][0])/2)
     y_cent = int((rect[0, :][1] + rect[2, :][1])/2)
@@ -40,14 +40,14 @@ def get_rect_params(rect, printing=False):
 def crop_rect(img, rect):
     # rect : array for rectanglular roi as in napari
     rect_params = get_rect_params(rect)
-    if rect_params['angle'] != 0:
-        img_rot = rotate(img, angle=rect_params['angle'],
-                         center=(rect_params['y_cent'], rect_params['x_cent']))
-    else:
-        img_rot = img
+    # if rect_params['angle'] != 0:
+    #     img_rot = rotate(img, angle=rect_params['angle'],
+    #                      center=(rect_params['y_cent'], rect_params['x_cent']))
+    # else:
+    #     img_rot = img
     x = int(rect_params['x_cent'] - rect_params['width']/2)
     y = int(rect_params['y_cent'] - rect_params['length']/2)
-    img_croped = img_rot[x:x+rect_params['width'], y:y+rect_params['length']]
+    img_croped = img[x:x+rect_params['width'], y:y+rect_params['length']]
     return sk.util.img_as_uint(img_croped)
 
 # ---------------------------------------------------------------------
@@ -277,13 +277,13 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
     names_roi_tosave = []
     names_tif_tosave = []
     img_array_all    = {}
+    imgseq = pims.ImageSequence(image_meta['filenames_color_'+str(0)])[0]        
+    img = np.array(imgseq, dtype=np.uint16)
+    imgSize = img.shape
     for i in range(len(rect_shape)):
+        # first get the names, based on the real ROI as it was saved
         rect = rect_shape[i]
         rect_params = get_rect_params(rect)
-        key = 'arr' + str(i)
-        img_array_all[key] = np.zeros((num_frames_update, image_meta['num_colors'],
-                                       rect_params['width'], rect_params['length']),
-                                       dtype=np.uint16)        
         rect_0 = rect[0].astype(int)
         shift_text = ''
         if geometric_transform:
@@ -297,6 +297,26 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + shift_text + labels[i].lower()
         names_roi_tosave.append(nam) # without the -f flags
+
+        # now after having the name, correct if the ROI is outside the image dimension
+        rect_shape[i] = [[np.max((x, 1)) for x in y] for y in rect_shape[i]]
+        rect_shape[i] = np.asarray(
+            [
+            np.array(
+                (
+                    np.min((y[0],imgSize[0])), 
+                    np.min((y[1],imgSize[1]))
+                )
+            ) 
+                for y in rect_shape[i]
+            ]
+        )
+        rect = rect_shape[i]
+        rect_params = get_rect_params(rect)
+        key = 'arr' + str(i)
+        img_array_all[key] = np.zeros((num_frames_update, image_meta['num_colors'],
+                                       rect_params['width'], rect_params['length']),
+                                       dtype=np.uint16)        
 
 
     rect_keys = list(img_array_all.keys())   
@@ -319,13 +339,13 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
                 if (shift_x[col]/minLength>percentage) or (shift_y[col]/minWidth>percentage):
                     shift_wholeImage = True
                 else:
-                    shift_wholeImage = False
+                    shift_wholeImage = False                
 
             # shift whole image
             if shift_wholeImage and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
                 img = geometric_shift(img, angle=angle[col],
                                     shift_x=shift_x[col], shift_y=shift_y[col])
-            for j in range(len(rect_shape)):
+            for j in range(len(rect_shape)):                
                 img_croped = crop_rect(img, rect_shape[j])
                 # shift crop if true
                 if (not shift_wholeImage) and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
