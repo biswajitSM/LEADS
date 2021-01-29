@@ -38,7 +38,7 @@ class NewWindow(Window):
             if self.numColors == "2":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
-                ax.plot(frames, msd_moving, 'm', label='MSD particle')
+                ax.plot(frames* self.acquisitionTime, msd_moving, 'm', label='MSD particle')
                 group_sel_col2 = group_sel_col2.loc[group_sel_col2['FrameNumber'].isin(group_sel_col1['FrameNumber'])]
                 group_sel_col1 = group_sel_col1.loc[group_sel_col1['FrameNumber'].isin(group_sel_col2['FrameNumber'])]
                 group_sel_col2.reset_index(drop=True, inplace=True)
@@ -46,17 +46,27 @@ class NewWindow(Window):
                 pos_diff = (group_sel_col1['PeakPosition'] - group_sel_col2['PeakPosition']).values
                 if np.average(pos_diff[:5]) < 0:
                     pos_diff = -pos_diff
-                pos_diff_smooth = savgol_filter(pos_diff, window_length=n_savgol, polyorder=1)
-                if pos_diff_smooth.min() < 0:
-                    pos_diff_smooth = pos_diff_smooth - pos_diff_smooth.min()
+                no_loop_dna = group_sel_col1["PeakUpIntensity"] + group_sel_col1["PeakDownIntensity"]
+                pos_diff_kb = 1e-3 * no_loop_dna * pos_diff / (self.loop_region_right - self.loop_region_left)
+                pos_diff_kb_smooth = savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1)
+                if pos_diff_kb_smooth.min() < 0:
+                    pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
+                    pos_diff_kb = pos_diff_kb - pos_diff_kb_smooth.min()
                 ax_right = ax.twinx()
-                ax_right.plot(group_sel_col1['FrameNumber'],
-                              pos_diff_smooth,
+                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
+                              pos_diff_kb,
+                              '.r', label='Position Differnece')                
+                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
+                              pos_diff_kb_smooth,
                               'r', label='Position Differnece')
-                ax_right.set_ylabel("Kilobases")
+                ax_right.set_ylabel("Kilobases", color="r")
+                ax_right.tick_params(axis='y', colors='r')
+                ax_right.spines["right"].set_color("r")
                 ax_right.legend(loc='center right')
 
-            ax.set_xlabel("Frame Number")
+            ax.set_xlabel("Frame Number", color='m')
+            ax.tick_params(axis='y', colors='m')
+            ax.spines["left"].set_color("m")
             ax.set_ylabel("Moving MSD(" + str(n) + " points)")
             ax.legend()
             plt.show()
@@ -64,12 +74,17 @@ class NewWindow(Window):
             print("plot MSD savgol")
             _, ax = plt.subplots()
             n_savgol=self.multipeak_dialog.moving_window_spinbox.value()
+            n = n_savgol
             if n_savgol%2 == 0:
                 n_savgol = n_savgol + 1
-            n_order = 1
-            n=12
-            if n%2 != 0:
+            else:
                 n = n+1
+            n_order = 1
+            n_savgol = 11
+            # n_order = 1
+            # n=12
+            # if n%2 != 0:
+            #     n = n+1
             ind = int(n/2)
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
@@ -77,7 +92,8 @@ class NewWindow(Window):
             if self.numColors == "2":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
-                ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'm', label='MSD particle')
+                ax.plot(frames * self.acquisitionTime, msd_moving, '.m', label='MSD particle')
+                ax.plot(frames * self.acquisitionTime, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'm', label='MSD particle')
                 group_sel_col2 = group_sel_col2.loc[group_sel_col2['FrameNumber'].isin(group_sel_col1['FrameNumber'])]
                 group_sel_col1 = group_sel_col1.loc[group_sel_col1['FrameNumber'].isin(group_sel_col2['FrameNumber'])]
                 group_sel_col2.reset_index(drop=True, inplace=True)
@@ -85,16 +101,22 @@ class NewWindow(Window):
                 pos_diff = (group_sel_col1['PeakPosition'] - group_sel_col2['PeakPosition']).values
                 if np.average(pos_diff[:5]) < 0:
                     pos_diff = -pos_diff
-                pos_diff_smooth = savgol_filter(pos_diff, window_length=n_savgol, polyorder=1)
-                if pos_diff_smooth.min() < 0:
-                    pos_diff_smooth = pos_diff_smooth - pos_diff_smooth.min()
+                no_loop_dna = group_sel_col1["PeakUpIntensity"] + group_sel_col1["PeakDownIntensity"]
+                pos_diff_kb = 1e-3 * no_loop_dna * pos_diff / (self.loop_region_right - self.loop_region_left)
+                pos_diff_kb_smooth = savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1)
+                if pos_diff_kb_smooth.min() < 0:
+                    pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
+                    pos_diff_kb = pos_diff_kb - pos_diff_kb_smooth.min()
                 ax_right = ax.twinx()
-                ax_right.plot(group_sel_col1['FrameNumber'],
-                              savgol_filter(pos_diff_smooth, window_length=n_savgol, polyorder=1),
+                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
+                              pos_diff_kb,
+                              '.r', label='Position Differnece')
+                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
+                              savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1),
                               'r', label='Position Differnece')
                 ax_right.set_ylabel("Kilobases")
                 ax_right.legend(loc='center right')
-            ax.set_xlabel("Frame Number")
+            ax.set_xlabel("time/s", )
             ax.set_ylabel("Window Length(" + str(n_savgol) + " points)")
             ax.legend()
             plt.show()
