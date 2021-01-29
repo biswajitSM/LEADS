@@ -275,7 +275,6 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
             os.makedirs(dir_to_save)
 
     names_roi_tosave = []
-    names_tif_tosave = []
     img_array_all    = {}
     imgseq = pims.ImageSequence(image_meta['filenames_color_'+str(0)])[0]        
     img = np.array(imgseq, dtype=np.uint16)
@@ -288,11 +287,11 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
         shift_text = ''
         if geometric_transform:
             shift_text = shift_text + '_shifted_' + str(int(shift_x[0])) + 'dx_' + str(int(shift_y[0])) + 'dy'
-        nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-              '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-              '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
-              str(frame_end) + shift_text + labels[i].lower()
-        names_tif_tosave.append(nam) # with the -f flags
+        # nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
+        #       '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
+        #       '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
+        #       str(frame_end) + shift_text + labels[i].lower()
+        # names_tif_tosave.append(nam) # with the -f flags
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
               '-a' + str(rect_params['angle']) + shift_text + labels[i].lower()
@@ -366,7 +365,7 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
     for i in range(len(rect_shape)):
         roi_ij = ImagejRoi.frompoints(rect_shape_to_roi(rect_shape[i]))
         roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[i]+'.roi'))
-        imwrite(os.path.join(dir_to_save, names_tif_tosave[i]+'.tif'),
+        imwrite(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),
                 img_array_all[rect_keys[i]], imagej=True,
                 metadata={'axis': 'TCYX', 'channels': image_meta['num_colors'],
                 'mode': 'composite',})

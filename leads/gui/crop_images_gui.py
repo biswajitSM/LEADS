@@ -1,3 +1,4 @@
+import ptvsd # only for deugging
 import napari
 import platform
 import subprocess
@@ -76,6 +77,8 @@ class Worker(QObject):
         Crops from all the subfolders with images and corresponding ROIs
         FOVs can be sorted by their description into another folder while keeping their name and source path
         '''
+
+        ptvsd.debug_this_thread()
 
         directory = self.BatchCropPath
         saveCollectively = False
@@ -176,7 +179,6 @@ class Worker(QObject):
         if not os.path.isdir(dir_to_save):
             os.makedirs(dir_to_save)
 
-        names_roi_tosave = []
         names_roi_tosave_no_frames = []
         img_array_all = {}
         img = np.array(imgseq[0], dtype=np.uint16) 
@@ -189,11 +191,11 @@ class Worker(QObject):
                                         rect_params['width'], rect_params['length']),
                                         dtype=np.uint16)        
             rect_0 = rect[0].astype(int)
-            nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-                '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-                '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
-                str(frame_end) + '_' + ROIdescriptions[i]
-            names_roi_tosave.append(nam)
+            # nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
+            #     '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
+            #     '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
+            #     str(frame_end) + '_' + ROIdescriptions[i]
+            # names_roi_tosave.append(nam)
             nam_no_frames = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
                 '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
                 '-a' + str(rect_params['angle']) + '_' + ROIdescriptions[i]
@@ -247,8 +249,9 @@ class Worker(QObject):
         skipROI  = []
         skipIMG  = []
         skipSORT = []
+        print('stop here')
         for i in range(len(roi_coord_list)):
-            ROIpath = os.path.join(dir_to_save, names_roi_tosave[i]+'.roi')
+            ROIpath = os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')
             IMGpath = os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif')
             if os.path.isfile(ROIpath): # check if ROIs exist
                 skipROI.append(True)
@@ -259,7 +262,7 @@ class Worker(QObject):
             else:
                 skipIMG.append(False)
             if sort_FOVs:
-                if os.path.isfile(name_sorted[i]): # check if images exist
+                if os.path.isfile(name_sorted[i]+'.tif') and os.path.isfile(name_sorted[i]+'.roi'): # check if images and roi exist
                     skipSORT.append(True)
                 else:
                     skipSORT.append(False)
@@ -278,7 +281,7 @@ class Worker(QObject):
                     roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
                     roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
                     # copying the images from the dir to the sorted one
-                    shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),\
+                    shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
                         name_sorted[i]+'.tif') # copy the file to the sorted dir
             return
 
@@ -289,6 +292,7 @@ class Worker(QObject):
         shift_y = [0] * numROIs
         for j in range(numROIs):
             angle[j], shift_x[j], shift_y[j] = crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)
+        
         # loop through colors, then time, finally ROIs and crop
         for col in range(num_colors):
             # select the correct frames
@@ -338,16 +342,16 @@ class Worker(QObject):
                     roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
                     # os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
                 if (not skipIMG[i]):
-                    imwrite(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),
+                    imwrite(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),
                             img_array_all[rect_keys[i]], imagej=True,
                             metadata={'axis': 'TCYX', 'channels': num_colors,
                             'mode': 'composite',})
                 if (not skipSORT[i]):
                         roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
-                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),\
+                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
                             name_sorted[i]+'.tif') # copy the file to the sorted dir
             except:
-                print(names_roi_tosave[i]+" not found anymore. Skipping.")
+                print(names_roi_tosave_no_frames[i]+" not found anymore. Skipping.")
                 
 # ---------------------------------------------------------------
     def BatchLoadROIs(self, roi_file_list):
@@ -370,18 +374,13 @@ class Worker(QObject):
         return roi_coord_list, roi_original_names
 
 # ---------------------------------------------------------------
-    def BatchGetROIDescription(self, roi_file_list, descriptions=[]):
+    def BatchGetROIDescription(self, roi_file_list):
         # the format is something like xxxxxxxx_description.roi
         # find from the LAST underscore to the dot to get the description and convert to small letters
+        descriptions = []
         for k in range(len(roi_file_list)):      
             split_list = os.path.basename( roi_file_list[k] ).rsplit("_") # we only want the filename
-            # split_list = split_list[-1]
-            # merged_list = ""
-            # for l in range(1, len(split_list)):
-            #     merged_list += split_list[l]
-            #     if l < len(split_list)-1:
-            #         merged_list += '_'
-            descriptions.append( split_list[-1].split(".")[-2].lower() )
+            descriptions.append( split_list[-1].split(".")[-2].lower() )          
         return descriptions
 
 # ---------------------------------------------------------------
@@ -498,285 +497,6 @@ class Worker(QObject):
             if i == 1:
                 isMultipage.append(False)
         return isMultipage
-
-    # ---------------------------------------------------------------
-    def Batchcrop(self, dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names, 
-        ROIdescriptions, sort_directory, num_colors, sort_FOVs, nDir, numDirs):
-        # dir is the directory where ROIs are stored
-        # sub_dir is where the crops go
-
-        folderpath = sub_dir
-        
-        # default. can be changed in the future (20200918)
-        frame_start = 0
-        imgseq = pims.ImageSequence(folderpath+os.path.sep+'*.tif')
-        frame_end = len(imgseq)
-        num_frames = frame_end-frame_start
-        num_frames_update = num_colors * ((frame_end - frame_start) // num_colors)
-        frame_end = frame_start + num_frames_update
-        
-        dir_to_save = os.path.join(folderpath+'_analysis')
-        if not os.path.isdir(dir_to_save):
-            os.makedirs(dir_to_save)
-
-        names_roi_tosave = []
-        names_roi_tosave_no_frames = []
-        img_array_all = {}
-        for i in range(len(roi_coord_list)):  
-            rect = roi_coord_list[i]
-            rect_params = crop_images.get_rect_params(rect) 
-            key = 'arr' + str(i)
-            img_array_all[key] = np.zeros((round(num_frames_update/num_colors), num_colors,
-                                        rect_params['width'], rect_params['length']),
-                                        dtype=np.uint16)        
-            rect_0 = rect[0].astype(int)
-            nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-                '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-                '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
-                str(frame_end) + '_' + ROIdescriptions[i]
-            names_roi_tosave.append(nam)
-            nam_no_frames = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-                '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-                '-a' + str(rect_params['angle']) + '_' + ROIdescriptions[i]
-            names_roi_tosave_no_frames.append(nam_no_frames)
-        rect_keys = list(img_array_all.keys())
-
-        # if we sort, figure out the name of each file in the sorted directory:
-        # we first need the file's superior dir, the current dir, and sub_dir
-        name_sorted = []
-        CropPath = os.path.normpath(self.BatchCropPath)
-        if sort_FOVs:
-            sorted_dir = []
-            for i in range(len(roi_coord_list)):
-                # find out how many levels are in between the folder we're cropping from
-                # and the folder in which we found the ROI
-                foundParent = False
-                children = []
-                currentPath = os.path.dirname(roi_file_list[i])
-                while foundParent == False:
-                    if os.path.normpath(currentPath) == CropPath:
-                        foundParent = True
-                    children.append(os.path.basename(currentPath))
-                    currentPath = os.path.dirname(currentPath)
-                children.reverse()
-                children = '_'.join(children)
-
-                # create a dir to save the FOV to if it doesnt exist yet
-                sorted_dir.append( os.path.join(sort_directory, ROIdescriptions[i]) )
-                if not os.path.isdir(sorted_dir[-1]):
-                    os.makedirs(sorted_dir[-1])
-                name_sorted.append( 
-                    os.path.join(sorted_dir[-1],\
-                    children + '_' +\
-                    names_roi_tosave_no_frames[i]) )
-
-        # go through each roi name and see if it already exists. If yes, skip it
-        skipROI  = []
-        skipIMG  = []
-        skipSORT = []
-        for i in range(len(roi_coord_list)):
-            ROIpath = os.path.join(dir_to_save, names_roi_tosave[i]+'.roi')
-            IMGpath = os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif')
-            if os.path.isfile(ROIpath): # check if ROIs exist
-                skipROI.append(True)
-            else:
-                skipROI.append(False)
-            if os.path.isfile(IMGpath): # check if images exist
-                skipIMG.append(True)
-            else:
-                skipIMG.append(False)
-            if sort_FOVs:
-                if os.path.isfile(name_sorted[i]): # check if images exist
-                    skipSORT.append(True)
-                else:
-                    skipSORT.append(False)
-            else:
-                skipSORT.append(True)
-
-        if all(skipIMG):
-            print('All crops already exist in subfolder '+str(nDir+1)+'/'+str(numDirs)+'.')
-            for i in range(len(roi_coord_list)):
-                if (not skipROI[i]):
-                    roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
-                    roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
-                    roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
-                    # os.remove(os.path.join(dir, roi_original_names[i])) # remove the original file
-                if (not skipSORT[i]):
-                    roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
-                    roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
-                    # copying the images from the dir to the sorted one
-                    shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),\
-                        name_sorted[i]+'.tif') # copy the file to the sorted dir
-            return
-
-        numROIs = len(roi_coord_list)
-        # see if we can find the yaml file which is associated to each ROI
-        angle   = [0] * numROIs
-        shift_x = [0] * numROIs
-        shift_y = [0] * numROIs
-        for j in range(numROIs):
-            angle[j], shift_x[j], shift_y[j] = crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)
-        # loop through colors, then time, finally ROIs and crop
-        for col in range(num_colors):
-            # select the correct frames
-            imgseq_col = imgseq[col:num_frames_update:num_colors]
-            for i in trange(len(imgseq_col), desc='Batch cropping color '+str(col+1)+'/'+str(num_colors)+' in subfolder '+str(nDir+1)+'/'+str(numDirs)+'...'):
-                # frame_index = i*num_colors+col
-                # if num_colors>1:
-                #     if col==0:
-                #         frame_index += 1
-                #     elif col==1:
-                #         frame_index -= 1
-                if i==0: # decide if the whole image has to be shifted or only the crop
-                    minWidth  = float('inf')
-                    minLength = float('inf')
-                    for nRect in range(len(roi_coord_list)):
-                        rect_params = crop_images.get_rect_params(roi_coord_list[nRect]) 
-                        minWidth = np.min([minWidth, rect_params['width']])
-                        minLength = np.min([minLength, rect_params['length']])
-                    percentage = 0.1 # 10% of the smallest crop
-                    shift_wholeImage = False
-                    j = 0
-                    while not shift_wholeImage and j<len(shift_x): # as soon as we find a ROI which requires to shift to complete image, we can stop
-                        if (shift_x[j][col]/minLength>percentage) or (shift_y[j][col]/minWidth>percentage):
-                            shift_wholeImage = True
-                        else:
-                            shift_wholeImage = False
-                        j += 1
-                # load image
-                img = np.array(imgseq_col[i], dtype=np.uint16)                
-                for j in range(numROIs):
-                    if (not skipIMG[j]):
-                        # shift the whole image if necessary
-                        if shift_wholeImage and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
-                            img_shift = crop_images.geometric_shift(img, angle=angle[j][col],
-                                                shift_x=shift_x[j][col], shift_y=shift_y[j][col])
-                        else:
-                            img_shift = img
-                        # ... or just shift the crop
-                        img_cropped = crop_images.crop_rect(img_shift, roi_coord_list[j])
-                        if (not shift_wholeImage) and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
-                            img_cropped = crop_images.geometric_shift(img_cropped, angle=angle[j][col],
-                                            shift_x=shift_x[j][col], shift_y=shift_y[j][col])
-                        img_array_all[rect_keys[j]][i, col, :, :] = img_cropped            
-        
-        for i in range(len(roi_coord_list)):
-            try:
-                if (not skipROI[i]):
-                    roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
-                    roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
-                    roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
-                    # os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
-                if (not skipIMG[i]):
-                    imwrite(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),
-                            img_array_all[rect_keys[i]], imagej=True,
-                            metadata={'axis': 'TCYX', 'channels': num_colors,
-                            'mode': 'composite',})
-                if (not skipSORT[i]):
-                        roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
-                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[i]+'.tif'),\
-                            name_sorted[i]+'.tif') # copy the file to the sorted dir
-            except:
-                print(names_roi_tosave[i]+" not found anymore. Skipping.")
-                
-# ---------------------------------------------------------------
-    def BatchLoadROIs(self, roi_file_list):
-        roi_file_list_updated = []
-        roi_original_names_updated = []
-        for j in range(len(roi_file_list)):    
-            if (roi_file_list[j].count('-f')<2):
-                roi_file_list_updated.append(roi_file_list[j])
-                roi_original_names_updated.append(roi_file_list[j])
-        roi_file_list = roi_file_list_updated
-        roi_original_names = roi_original_names_updated
-        
-        roi_coord_list = []
-        for roi_file in roi_file_list:
-            roi = ImagejRoi.fromfile(roi_file)
-            roi_coord = np.flip(roi.coordinates())
-            roi_coord = np.array([roi_coord[2], roi_coord[1], roi_coord[0], roi_coord[3]], dtype=np.float32)
-            roi_coord[roi_coord<0] = 1
-            roi_coord_list.append(roi_coord)
-        return roi_coord_list, roi_original_names
-
-# ---------------------------------------------------------------
-    def BatchGetROIDescription(self, roi_file_list, descriptions=[]):
-        # the format is something like xxxxxxxx_description.roi
-        # find from the LAST underscore to the dot to get the description and convert to small letters
-        for k in range(len(roi_file_list)):      
-            split_list = os.path.basename( roi_file_list[k] ).rsplit("_") # we only want the filename
-            # split_list = split_list[-1]
-            # merged_list = ""
-            # for l in range(1, len(split_list)):
-            #     merged_list += split_list[l]
-            #     if l < len(split_list)-1:
-            #         merged_list += '_'
-            descriptions.append( split_list[-1].split(".")[-2].lower() )
-        return descriptions
-
-# ---------------------------------------------------------------
-    def BatchIdentifyRelevantDirectories(self, directory):
-        
-        # scan directory for folders
-        sub_dirs = self.BatchFindAllSubdirectories(directory)
-        sub_dirs.append(directory) 
-        print()
-
-        # check if there are any ambiguities we have to ask the user about
-        # basename_list = []
-        sub_dirs_updated = []
-        for i in trange(len(sub_dirs), desc='Check for .roi files'):
-            roi_file_list = glob.glob(sub_dirs[i] + '/*.roi', recursive = False)
-
-            # only consider if there are any roi files and if these roi files do 
-            # not contain two "-f" in their name (those are the processed ones)
-            if roi_file_list:
-                if (not any(roi_file_list_item.count('-f')>1 for roi_file_list_item in roi_file_list)):
-                    sub_dirs_updated.append(sub_dirs[i])
-        sub_dirs = sub_dirs_updated
-
-        # if there is a choice to be made, we dont currently ask the user. We simply take the complete
-        # folder. ALready processed ROIs/tifs are skipped anyway
-        # if len(sub_dirs)>1:
-        #     print("Found more than one potential folder to Batchcrop images from. Which one to take?")
-        #     for i in range(len(sub_dirs)):
-        #         print("[", i, "] ", sub_dirs[i])
-        #     choice = [int(item) for item in input("Enter the list items (separated by blank, type -1 for all): ").split()]
-        #     if choice[0]==-1:
-        #         choice = range(0, len(sub_dirs))
-        #     sub_dirs = [sub_dirs[i] for i in choice]
-        if not sub_dirs:
-            print('No directories found. Try again.')
-            self.call_BatchProcessing()
-            return
-            
-        # outdated: remove all subdirectories which contain a roi file which has 2x "-f" in the name since those are files which are saved together with the crops    
-        # sub_dirs_updated = []
-        # for i in trange(len(sub_dirs), desc='Discard already processed ROIs'):
-        #     subfolders = [f.path for f in os.scandir(sub_dirs[i]) if f.is_dir()]
-        #     roi_file_list = glob.glob(sub_dirs[i] + "/**/*.roi", recursive = True)
-        #     # for j in range(len(subfolders)):
-        #     #     roi_file_list = glob.glob(sub_dirs[i] + "/**/*.roi", recursive = True)
-        #         for k in range(len(roi_file_list)):
-        #             if (roi_file_list[k].count('-f')<2) and (sub_dirs[i] not in sub_dirs_updated):
-        #                 sub_dirs_updated.append(sub_dirs[i])
-        # sub_dirs = sub_dirs_updated
-        
-        print()
-        print("Cropping from the following folders: ")
-        for j in range(len(sub_dirs)):
-            print("- ", sub_dirs[j])
-        print()
-            
-        return sub_dirs
-
-# ---------------------------------------------------------------
-    def BatchFindAllSubdirectories(self, dirname, count=0):
-        subfolders = [f.path for f in os.scandir(dirname) if f.is_dir()]
-        for dirname in list(subfolders):
-            count += 1
-            subfolders.extend(self.BatchFindAllSubdirectories(dirname, count))
-        return subfolders
 
 # ---------------------------------------------------------------------
 # ---------------------------------------------------------------------
