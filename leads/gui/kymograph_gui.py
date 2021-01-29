@@ -1882,22 +1882,22 @@ class Window(QtWidgets.QMainWindow):
         n_order = 2
         # loop
         ax.plot(df_peak_analyzed["FrameNumber"],
-                df_peak_analyzed["PeakIntensity"], '.g', label='Peak')
+                df_peak_analyzed["PeakIntensity"], '.g', label=r'$I_{loop}$')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 savgol_filter(df_peak_analyzed["PeakIntensity"].values,  window_length=n_moving, polyorder=n_order),
-                'g', label='Peak filterd')
+                'g', label=r'$I_{loop} filtered$')
         # Above loop
         ax.plot(df_peak_analyzed["FrameNumber"],
-                df_peak_analyzed["PeakUpIntensity"], '.r', label='Peak Up')
+                df_peak_analyzed["PeakUpIntensity"], '.r', label=r'$I_{up}$')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 savgol_filter(df_peak_analyzed["PeakUpIntensity"].values,  window_length=n_moving, polyorder=n_order),
-                'r', label='Peak Up filterd')
+                'r', label=r'$I_{up} filtered$')
         # Below loop
         ax.plot(df_peak_analyzed["FrameNumber"],
-                df_peak_analyzed["PeakDownIntensity"], '.b', label='Peak down')
+                df_peak_analyzed["PeakDownIntensity"], '.b', label=r'$I_{down}$')
         ax.plot(df_peak_analyzed["FrameNumber"],
                 savgol_filter(df_peak_analyzed["PeakDownIntensity"].values,  window_length=n_moving, polyorder=n_order),
-                'b', label='Peak down filterd')
+                'b', label=r'$I_{down} filtered$')
         if self.numColors == "2" or "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel = df_gb.get_group(right_peak_no)
