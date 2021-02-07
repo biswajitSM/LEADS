@@ -37,18 +37,18 @@ def get_rect_params(rect, printing=False):
     return rect_params
 
 # ---------------------------------------------------------------------
-def crop_rect(img, rect):
+def crop_rect(img, rect, angle=0):
     # rect : array for rectanglular roi as in napari
     rect_params = get_rect_params(rect)
-    # if rect_params['angle'] != 0:
-    #     img_rot = rotate(img, angle=rect_params['angle'],
-    #                      center=(rect_params['y_cent'], rect_params['x_cent']))
-    # else:
-    #     img_rot = img
+    if rect_params['angle'] != 0 or angle!=0:
+        img_rot = rotate(img, angle=rect_params['angle']+angle)
+                        #  center=(rect_params['y_cent'], rect_params['x_cent']))
+    else:
+        img_rot = img
     x = int(rect_params['x_cent'] - rect_params['width']/2)
     y = int(rect_params['y_cent'] - rect_params['length']/2)
-    img_croped = img[x:x+rect_params['width'], y:y+rect_params['length']]
-    return sk.util.img_as_uint(img_croped)
+    img_cropped = img_rot[x:x+rect_params['width'], y:y+rect_params['length']]
+    return sk.util.img_as_uint(img_cropped)
 
 # ---------------------------------------------------------------------
 def rect_shape_to_roi(arr_from_napari):
@@ -141,14 +141,28 @@ def readROIassociatedYamlFile(roi_file, num_colors):
     angle = []
     shift_x = []
     shift_y = []
-    for col in range(len(shift_yaml['x'])):
-        if "angle" in shift_yaml:
-            angle.append(shift_yaml['angle']['col'+str(int(col))])
-        else:
-            angle.append(0)
-        shift_x.append(shift_yaml['x']['col'+str(int(col))])
-        shift_y.append(shift_yaml['y']['col'+str(int(col))])
-    return angle, shift_x, shift_y 
+    file_corrected = False
+
+    for col in range(shift_yaml['numColors']):
+            if not 'col'+str(int(col)) in shift_yaml['angle'] \
+                or not 'col'+str(int(col)) in shift_yaml['x'] \
+                or not 'col'+str(int(col)) in shift_yaml['y']:
+                shift_yaml['numColors'] = col
+                file_corrected = True
+                continue
+            if "angle" in shift_yaml:
+                angle.append(shift_yaml['angle']['col'+str(int(col))])
+            else:
+                angle.append(0)
+            shift_x.append(shift_yaml['x']['col'+str(int(col))])
+            shift_y.append(shift_yaml['y']['col'+str(int(col))])
+
+    if file_corrected:
+        shift_yaml = io.to_dict_walk(shift_yaml)
+        os.makedirs(os.path.dirname(yamlFileName), exist_ok=True)
+        with open(yamlFileName, "w") as shift_file:
+            yaml.dump(dict(shift_yaml), shift_file, default_flow_style=False)
+    return angle, shift_x, shift_y, shift_yaml['numColors']
 
 # ---------------------------------------------------------------------
 def LoadShiftYamlFile(yamlFileName, xShift, yShift, angle, numColors):
@@ -174,11 +188,19 @@ def MakeShiftYamlFile(xShift, yShift, angle, numColors):
     shift_yaml["x"] = {}
     shift_yaml["y"] = {}
     shift_yaml["angle"] = {}
+    shift_yaml["numColors"] = numColors
     for nColor in range(numColors):
         shift_yaml["x"]["col"+str(int(nColor))] = xShift
         shift_yaml["y"]["col"+str(int(nColor))] = yShift
         shift_yaml["angle"]["col"+str(int(nColor))] = angle
     return shift_yaml
+
+# ---------------------------------------------------------------
+def ShiftROI(coord, dy, dx):
+
+    y = np.array( [x[0] for x in coord] )
+    x = np.array( [x[1] for x in coord] )
+    return np.array( [[y[i]+dy, x[i]+dx] for i in range(len(coord))] )
 
 # ---------------------------------------------------------------------
 def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
@@ -298,6 +320,9 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
         names_roi_tosave.append(nam) # without the -f flags
 
         # now after having the name, correct if the ROI is outside the image dimension
+        # first dimension is y, second is x. 
+        rect_shape[i] = ShiftROI(rect_shape[i], 
+                        -shift_y[0], -shift_x[0])
         rect_shape[i] = [[np.max((x, 1)) for x in y] for y in rect_shape[i]]
         rect_shape[i] = np.asarray(
             [
@@ -327,29 +352,29 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
             # the crop only for speed (as long as no shift > 10% of image 
             # dimension) or if we have to shift the whole image, which is slower
             # but we dont lose half of the crop from shifting
-            if i==0:
-                minWidth = float('inf')
-                minLength = float('inf')
-                for nRect in range(len(rect_shape)):
-                    rect_params = get_rect_params(rect_shape[nRect])
-                    minWidth = np.min([minWidth, rect_params['width']])
-                    minLength = np.min([minLength, rect_params['length']])
-                percentage = 0.1 # 10% of the smallest crop
-                if (shift_x[col]/minLength>percentage) or (shift_y[col]/minWidth>percentage):
-                    shift_wholeImage = True
-                else:
-                    shift_wholeImage = False                
+            # if i==0:
+            #     minWidth = float('inf')
+            #     minLength = float('inf')
+            #     for nRect in range(len(rect_shape)):
+            #         rect_params = get_rect_params(rect_shape[nRect])
+            #         minWidth = np.min([minWidth, rect_params['width']])
+            #         minLength = np.min([minLength, rect_params['length']])
+            #     percentage = 0.1 # 10% of the smallest crop
+            #     if (np.abs(shift_x[col])/minLength>percentage) or (np.abs(shift_y[col])/minWidth>percentage):
+            #         shift_wholeImage = True
+            #     else:
+            #         shift_wholeImage = False                
 
             # shift whole image
-            if shift_wholeImage and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
-                img = geometric_shift(img, angle=angle[col],
-                                    shift_x=shift_x[col], shift_y=shift_y[col])
+            # if shift_wholeImage and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
+            #     img = geometric_shift(img, angle=angle[col],
+            #                         shift_x=shift_x[col], shift_y=shift_y[col])
             for j in range(len(rect_shape)):                
-                img_croped = crop_rect(img, rect_shape[j])
+                img_croped = crop_rect(img, rect_shape[j], angle=angle[col])
                 # shift crop if true
-                if (not shift_wholeImage) and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
-                    img_croped = geometric_shift(img_croped, angle=angle[col],
-                                    shift_x=shift_x[col], shift_y=shift_y[col])
+                # if (not shift_wholeImage) and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
+                #     img_croped = geometric_shift(img_croped, angle=angle[col],
+                #                     shift_x=shift_x[col], shift_y=shift_y[col])
                 # append the image to the stack
                 img_array_all[rect_keys[j]][i, col, :, :] = img_croped
 

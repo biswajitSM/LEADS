@@ -24,6 +24,7 @@ from pyqtgraph import PlotWidget, plot, mkPen
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
 from vispy.color import Colormap, ColorArray
+from scipy.stats import mode
 from scipy.signal import correlate2d
 from scipy.interpolate import interp1d
 from napari.layers.utils.text import TextManager
@@ -78,14 +79,15 @@ class Worker(QObject):
         FOVs can be sorted by their description into another folder while keeping their name and source path
         '''
 
-        ptvsd.debug_this_thread()
+        # ptvsd.debug_this_thread()
 
         directory = self.BatchCropPath
         saveCollectively = False
         if hasattr(self, 'BatchSavePath'):
             save_directory = self.BatchSavePath
-            if os.path.isdir(save_directory):
-                saveCollectively = True
+            saveCollectively = True
+            if not os.path.isdir(save_directory):
+                os.makedirs(save_directory)
 
         # Get relevant subdirectories
         sub_dirs = self.BatchIdentifyRelevantDirectories(directory)
@@ -102,6 +104,7 @@ class Worker(QObject):
             # - in all subfolders
             # - if the current folder (in which we found the roi) contains '_analysis', look for a folder without that tag and concurrent subfolders
             subfolders = [] # initialize list of subfolders
+            # tmpdir = sub_dirs[i]
             # look in the same folder and its sub folders. Omit multipage-tifs since those are the cropped ones
             for iteration in range(2):
                 if iteration == 0:
@@ -111,10 +114,12 @@ class Worker(QObject):
                         tmpdir = sub_dirs[i][0:-len('_analysis')]
                     else: 
                         continue
-                tif_file_list = glob.glob(tmpdir + "/**/*.tif", recursive=True)
-                isMultipage = self.TIFisMultipage(tif_file_list)
-                tif_file_list = [tif_file_list[i] for i in range(len(tif_file_list)) if not isMultipage[i]]
-                subfolders.extend( list(set([os.path.dirname(file) for file in tif_file_list])) )
+            tif_file_list = glob.glob(tmpdir + "/**/*.tif", recursive=True)
+            isMultipage = self.TIFisMultipage(tif_file_list[0])
+            if isMultipage[0]: 
+                continue
+            # tif_file_list = [tif_file_list[i] for i in range(len(tif_file_list)) if not isMultipage[i]]
+            subfolders.extend( list(set([os.path.dirname(file) for file in tif_file_list])) )
             subfolders = list(set(subfolders))
 
             # give user feedback
@@ -166,6 +171,17 @@ class Worker(QObject):
         # sub_dir is where the crops go
 
         folderpath = sub_dir
+
+        # see if we can find the yaml file which is associated to each ROI
+        numROIs = len(roi_coord_list)
+        angle     = [0] * numROIs
+        shift_x   = [0] * numROIs
+        shift_y   = [0] * numROIs
+        numColors = [0] * numROIs
+        for j in range(numROIs):
+            angle[j], shift_x[j], shift_y[j], numColors[j] = \
+                crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)
+        num_colors = int( mode(numColors).mode ) # take what most files say
         
         # default. can be changed in the future (20200918)
         frame_start = 0
@@ -185,11 +201,7 @@ class Worker(QObject):
         imgSize = img.shape
         for i in range(len(roi_coord_list)):
             rect = roi_coord_list[i]
-            rect_params = crop_images.get_rect_params(rect) 
-            key = 'arr' + str(i)
-            img_array_all[key] = np.zeros((round(num_frames_update/num_colors), num_colors,
-                                        rect_params['width'], rect_params['length']),
-                                        dtype=np.uint16)        
+            rect_params = crop_images.get_rect_params(rect)       
             rect_0 = rect[0].astype(int)
             # nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
             #     '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
@@ -202,6 +214,10 @@ class Worker(QObject):
             names_roi_tosave_no_frames.append(nam_no_frames)
 
             # now after having the name, correct if the ROI is outside the image dimension
+            # a = roi_coord_list[i]
+            # first dimension is y, second is x.
+            roi_coord_list[i] = crop_images.ShiftROI(roi_coord_list[i], 
+                            -shift_y[i][0], -shift_x[i][0])
             roi_coord_list[i] = [[np.max((x, 1)) for x in y] for y in roi_coord_list[i]]
             roi_coord_list[i] = np.asarray(
                 [
@@ -214,6 +230,11 @@ class Worker(QObject):
                     for y in roi_coord_list[i]
                 ]
             )
+            rect_params = crop_images.get_rect_params(roi_coord_list[i])
+            key = 'arr' + str(i)
+            img_array_all[key] = np.zeros((round(num_frames_update/num_colors), num_colors,
+                                        rect_params['width'], rect_params['length']),
+                                        dtype=np.uint16)  
         rect_keys = list(img_array_all.keys())
 
         # if we sort, figure out the name of each file in the sorted directory:
@@ -234,7 +255,7 @@ class Worker(QObject):
                     children.append(os.path.basename(currentPath))
                     currentPath = os.path.dirname(currentPath)
                 children.reverse()
-                children = '_'.join(children)
+                children = '__'.join(children)
 
                 # create a dir to save the FOV to if it doesnt exist yet
                 sorted_dir.append( os.path.join(sort_directory, ROIdescriptions[i]) )
@@ -242,14 +263,13 @@ class Worker(QObject):
                     os.makedirs(sorted_dir[-1])
                 name_sorted.append( 
                     os.path.join(sorted_dir[-1],\
-                    children + '_' +\
+                    children + '__' +\
                     names_roi_tosave_no_frames[i]) )
 
         # go through each roi name and see if it already exists. If yes, skip it
         skipROI  = []
         skipIMG  = []
         skipSORT = []
-        print('stop here')
         for i in range(len(roi_coord_list)):
             ROIpath = os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')
             IMGpath = os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif')
@@ -284,14 +304,6 @@ class Worker(QObject):
                     shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
                         name_sorted[i]+'.tif') # copy the file to the sorted dir
             return
-
-        numROIs = len(roi_coord_list)
-        # see if we can find the yaml file which is associated to each ROI
-        angle   = [0] * numROIs
-        shift_x = [0] * numROIs
-        shift_y = [0] * numROIs
-        for j in range(numROIs):
-            angle[j], shift_x[j], shift_y[j] = crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)
         
         # loop through colors, then time, finally ROIs and crop
         for col in range(num_colors):
@@ -302,42 +314,52 @@ class Worker(QObject):
                 img = np.array(imgseq_col[i], dtype=np.uint16) 
 
                 # decide if the whole image has to be shifted or only the crop
-                if i==0:
-                    minWidth  = float('inf')
-                    minLength = float('inf')
-                    for nRect in range(len(roi_coord_list)):
-                        rect_params = crop_images.get_rect_params(roi_coord_list[nRect]) 
-                        minWidth = np.min([minWidth, rect_params['width']])
-                        minLength = np.min([minLength, rect_params['length']])
-                    percentage = 0.1 # 10% of the smallest crop                    
-                    shift_wholeImage = False
-                    j = 0
-                    while not shift_wholeImage and j<len(shift_x): # as soon as we find a ROI which requires to shift to complete image, we can stop
-                        if (shift_x[j][col]/minLength>percentage) or (shift_y[j][col]/minWidth>percentage):
-                            shift_wholeImage = True
-                        else:
-                            shift_wholeImage = False
-                        j += 1
+                # if i==0:
+                #     minWidth  = float('inf')
+                #     minLength = float('inf')
+                #     for nRect in range(len(roi_coord_list)):
+                #         rect_params = crop_images.get_rect_params(roi_coord_list[nRect]) 
+                #         minWidth = np.min([minWidth, rect_params['width']])
+                #         minLength = np.min([minLength, rect_params['length']])
+                #     percentage = 0.1 # 10% of the smallest crop                    
+                #     shift_wholeImage = False
+                #     j = 0
+                #     while not shift_wholeImage and j<len(shift_x): # as soon as we find a ROI which requires to shift to complete image, we can stop
+                #         if col < numColors[j]:
+                #             if (np.abs(shift_x[j][col])/minLength>percentage) or (np.abs(shift_y[j][col])/minWidth>percentage):
+                #                 shift_wholeImage = True
+                #             else:
+                #                 shift_wholeImage = False
+                #         j += 1
                
                 for j in range(numROIs):
+                    if col >= numColors[j]:
+                        continue
                     if (not skipIMG[j]):
-                        # shift the whole image if necessary
-                        if shift_wholeImage and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
-                            img_shift = crop_images.geometric_shift(img, angle=angle[j][col],
-                                                shift_x=shift_x[j][col], shift_y=shift_y[j][col])
-                        else:
-                            img_shift = img
-                        # ... or just shift the crop
-                        img_cropped = crop_images.crop_rect(img_shift, roi_coord_list[j])
-                        if (not shift_wholeImage) and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
-                            img_cropped = crop_images.geometric_shift(img_cropped, angle=angle[j][col],
-                                            shift_x=shift_x[j][col], shift_y=shift_y[j][col])
-                        img_array_all[rect_keys[j]][i, col, :, :] = img_cropped            
+                        img_cropped = crop_images.crop_rect(img, roi_coord_list[j], angle=angle[j][col])
+
+                        # # shift the whole image if necessary
+                        # if shift_wholeImage and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
+                        #     img_shift = crop_images.geometric_shift(img, angle=angle[j][col],
+                        #                         shift_x=shift_x[j][col], shift_y=shift_y[j][col])
+                        # else:
+                        #     img_shift = img
+                        # # ... or just shift the crop
+                        # img_cropped = crop_images.crop_rect(img_shift, roi_coord_list[j])
+                        # if (not shift_wholeImage) and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
+                        #     img_cropped = crop_images.geometric_shift(img_cropped, angle=angle[j][col],
+                        #                     shift_x=shift_x[j][col], shift_y=shift_y[j][col])
+                        # if j == 0 and i == 0 and col == 0 and abs(shift_y[j][col])>10:
+                        #     a = Image.fromarray(np.uint16(img_cropped/np.max(img_cropped.ravel())*(2**16)))
+                        #     a.show()
+                        #     a=1
+                        #     a=1
+                        img_array_all[rect_keys[j]][i, col, :, :] = img_cropped
         
         for i in range(len(roi_coord_list)):
             try:
-                if (not skipROI[i]):
-                    roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
+                roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
+                if (not skipROI[i]):                    
                     roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
                     roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
                     # os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
@@ -352,7 +374,7 @@ class Worker(QObject):
                             name_sorted[i]+'.tif') # copy the file to the sorted dir
             except:
                 print(names_roi_tosave_no_frames[i]+" not found anymore. Skipping.")
-                
+
 # ---------------------------------------------------------------
     def BatchLoadROIs(self, roi_file_list):
         roi_file_list_updated = []
@@ -416,7 +438,7 @@ class Worker(QObject):
         #     sub_dirs = [sub_dirs[i] for i in choice]
         if not sub_dirs:
             print('No directories found. Try again.')
-            self.call_BatchProcessing()
+            self.BatchCrop_from_directory()
             return
             
         # outdated: remove all subdirectories which contain a roi file which has 2x "-f" in the name since those are files which are saved together with the crops    
@@ -1432,9 +1454,9 @@ class NapariTabs(QtWidgets.QWidget):
             if not hasattr(self.shift_yaml, 'angle'):
                 self.shift_yaml["angle"] = {}
             for nColor in range(self.numColors):
-                self.shift_yaml["x"]["col"+str(int(nColor))] = self.xShift[self.series2treat][nColor]
-                self.shift_yaml["y"]["col"+str(int(nColor))] = self.yShift[self.series2treat][nColor]
-                self.shift_yaml["angle"]["col"+str(int(nColor))] = self.RotationAngle[self.series2treat][nColor]
+                self.shift_yaml["x"]["col"+str(int(nColor))] = int( self.xShift[self.series2treat][nColor] )
+                self.shift_yaml["y"]["col"+str(int(nColor))] = int( self.yShift[self.series2treat][nColor] )
+                self.shift_yaml["angle"]["col"+str(int(nColor))] = int( self.RotationAngle[self.series2treat][nColor] )
         
             # save the yaml file
             self.shift_yaml = io.to_dict_walk(self.shift_yaml)
@@ -1671,7 +1693,7 @@ class NapariTabs(QtWidgets.QWidget):
             self.MultiImageSeries_folderpath  = dialog.MultiImageSeries_folderpath
             self.MultiImageSeries_description = dialog.MultiImageSeries_description
             self.CreateColormaps()            
-            self.load_img_seq()
+            self.load_img_seq(buttonPressed=True)
             if self.numLayers == self.numColors:
                 self.ToggleAllLayers('show') # if there is only one series
 
@@ -1682,7 +1704,7 @@ class NapariTabs(QtWidgets.QWidget):
             delattr(self, 'RotationAngle')
             delattr(self, 'xShift')
             delattr(self, 'yShift')
-        self.load_img_seq()
+        self.load_img_seq(buttonPressed=True)
 
 # ---------------------------------------------------------------------
     def FixContrast(self):
@@ -1723,14 +1745,17 @@ class NapariTabs(QtWidgets.QWidget):
             self.cmap[nCmap] = Colormap(carray, controls)
 
 # ---------------------------------------------------------------------
-    def load_img_seq(self, path_in="", omitROIlayer=False):
+    def load_img_seq(self, path_in="", omitROIlayer=False, buttonPressed=False):
+        if (not hasattr(self, 'image_meta')) and (not buttonPressed):
+            return # no images were opened yet
+
         # first remove all layers
         for l in reversed(self.viewer.layers[:]):
             self.viewer.layers.remove(l)          
         self.numColors = int( self.ui.numColorsCbox.currentText() )
 
         if self.MultiImageSeriesFlag: # if we load multiple image series
-            if not path_in:
+            if len(path_in) < 1:
                 paths = self.MultiImageSeries_folderpath
             else:
                 paths = path_in
@@ -1833,12 +1858,12 @@ class NapariTabs(QtWidgets.QWidget):
             self.numSeries = 1
             nSeries = 0
 
-            if path_in:
+            if len(path_in) > 0:
                 self.use_current_image_path = True
             if not self.use_current_image_path:
                 self.image_meta = [''] * self.numSeries            
             else:
-                if path_in:
+                if len(path_in) > 0:
                     self.image_meta[nSeries]['folderpath'] = path_in[0]                
 
             # if a dictionary for rotation angles, x- and y-shift doesnt yet exist, create it
@@ -1851,31 +1876,6 @@ class NapariTabs(QtWidgets.QWidget):
                     self.RotationAngle[nSeries] = [0] * self.MaxNumColors
                     self.xShift[nSeries]        = [0] * self.MaxNumColors
                     self.yShift[nSeries]        = [0] * self.MaxNumColors
-
-            # see if there's a yaml file found in this folder. If yes, load it
-            if self.use_current_image_path:
-                folderpath = self.image_meta[nSeries]['folderpath']
-                if len(folderpath)==0:
-                    self.yamlFileName = ''
-                else:
-                    self.yamlFileName = os.path.join(folderpath, 'shift.yaml')
-            else:
-                self.yamlFileName = ''
-            self.series2treat = 0
-            self.LoadShiftYamlFile()
-            for nColor in range(self.numColors):
-                try:
-                    self.xShift[0][nColor] = self.shift_yaml["x"]["col"+str(int(nColor))]
-                except:
-                    self.xShift[0][nColor] = 0
-                try:
-                    self.yShift[0][nColor] = self.shift_yaml["y"]["col"+str(int(nColor))]
-                except:
-                    self.yShift[0][nColor] = 0
-                try:
-                    self.RotationAngle[0][nColor] = self.shift_yaml["angle"]["col"+str(int(nColor))]
-                except:
-                    self.RotationAngle[0][nColor] = 0
 
 
             # load the image
@@ -1913,7 +1913,29 @@ class NapariTabs(QtWidgets.QWidget):
                 self.viewer.layers['ROI_00'].mode = 'select'
             
             self.numLayers = len(self.viewer.layers) - 1 - (not omitROIlayer) # minus ROI and profile layer
+            
             # apply shifts loaded from yaml file
+            # see if there's a yaml file found in this folder. If yes, load it
+            folderpath = self.image_meta[nSeries]['folderpath']
+            if len(folderpath)==0:
+                self.yamlFileName = ''
+            else:
+                self.yamlFileName = os.path.join(folderpath, 'shift.yaml')
+            self.series2treat = 0
+            self.LoadShiftYamlFile()
+            for nColor in range(self.numColors):
+                try:
+                    self.xShift[0][nColor] = self.shift_yaml["x"]["col"+str(int(nColor))]
+                except:
+                    self.xShift[0][nColor] = 0
+                try:
+                    self.yShift[0][nColor] = self.shift_yaml["y"]["col"+str(int(nColor))]
+                except:
+                    self.yShift[0][nColor] = 0
+                try:
+                    self.RotationAngle[0][nColor] = self.shift_yaml["angle"]["col"+str(int(nColor))]
+                except:
+                    self.RotationAngle[0][nColor] = 0
             self.applyShiftsFromYaml()
 
         self.FixContrast()
@@ -2090,8 +2112,9 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
     def change_num_colors(self):
         self.numColors = int( self.ui.numColorsCbox.currentText() )
-        if hasattr(self, 'MultiImageSeriesFlag'):
-            self.use_current_image_path = True
+        if hasattr(self, 'MultiImageSeriesFlag'):            
+            if hasattr(self, 'image_meta'):
+                self.use_current_image_path = True
             self.load_img_seq()
 
 # ---------------------------------------------------------------------
