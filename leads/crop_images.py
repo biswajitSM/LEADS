@@ -306,9 +306,9 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
         rect = rect_shape[i]
         rect_params = get_rect_params(rect)
         rect_0 = rect[0].astype(int)
-        shift_text = ''
-        if geometric_transform:
-            shift_text = shift_text + '_shifted_' + str(int(shift_x[0])) + 'dx_' + str(int(shift_y[0])) + 'dy'
+        # shift_text = ''
+        # if geometric_transform:
+        #     shift_text = shift_text + '_shifted_' + str(int(shift_x[0])) + 'dx_' + str(int(shift_y[0])) + 'dy'
         # nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
         #       '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
         #       '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
@@ -316,7 +316,7 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
         # names_tif_tosave.append(nam) # with the -f flags
         nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
               '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-              '-a' + str(rect_params['angle']) + shift_text + labels[i].lower()
+              '-a' + str(rect_params['angle']) + labels[i].lower()
         names_roi_tosave.append(nam) # without the -f flags
 
         # now after having the name, correct if the ROI is outside the image dimension
