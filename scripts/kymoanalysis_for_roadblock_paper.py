@@ -34,29 +34,28 @@ class NewWindow(Window):
             ind = int(n/2)
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
+            peak_analyzed_dict = kymograph.analyze_maxpeak(group_sel_col1, smooth_length=7,
+                    frame_width = self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, msd_moving, 'g', label='color_1')
             if self.numColors == "2":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames* self.acquisitionTime, msd_moving, 'm', label='MSD particle')
-                group_sel_col2 = group_sel_col2.loc[group_sel_col2['FrameNumber'].isin(group_sel_col1['FrameNumber'])]
-                group_sel_col1 = group_sel_col1.loc[group_sel_col1['FrameNumber'].isin(group_sel_col2['FrameNumber'])]
-                group_sel_col2.reset_index(drop=True, inplace=True)
-                group_sel_col1.reset_index(drop=True, inplace=True)
-                pos_diff = (group_sel_col1['PeakPosition'] - group_sel_col2['PeakPosition']).values
-                if np.average(pos_diff[:5]) < 0:
-                    pos_diff = -pos_diff
-                no_loop_dna = group_sel_col1["PeakUpIntensity"] + group_sel_col1["PeakDownIntensity"]
-                pos_diff_kb = 1e-3 * no_loop_dna * pos_diff / (self.loop_region_right - self.loop_region_left)
+                peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
+                    frame_width = self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+                sel_loop_sm_dict = kymograph.loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=7)
+                pos_diff_kb = sel_loop_sm_dict['PositionDiff_kb']
                 pos_diff_kb_smooth = savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1)
                 if pos_diff_kb_smooth.min() < 0:
-                    pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
                     pos_diff_kb = pos_diff_kb - pos_diff_kb_smooth.min()
+                    pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
                 ax_right = ax.twinx()
-                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
+                ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb,
                               '.r', label='Position Differnece')                
-                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
+                ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb_smooth,
                               'r', label='Position Differnece')
                 ax_right.set_ylabel("Kilobases", color="r")
@@ -88,36 +87,39 @@ class NewWindow(Window):
             ind = int(n/2)
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
+            peak_analyzed_dict = kymograph.analyze_maxpeak(group_sel_col1, smooth_length=7,
+                    frame_width = self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'g', label='color_1')
             if self.numColors == "2":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames * self.acquisitionTime, msd_moving, '.m', label='MSD particle')
                 ax.plot(frames * self.acquisitionTime, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'm', label='MSD particle')
-                group_sel_col2 = group_sel_col2.loc[group_sel_col2['FrameNumber'].isin(group_sel_col1['FrameNumber'])]
-                group_sel_col1 = group_sel_col1.loc[group_sel_col1['FrameNumber'].isin(group_sel_col2['FrameNumber'])]
-                group_sel_col2.reset_index(drop=True, inplace=True)
-                group_sel_col1.reset_index(drop=True, inplace=True)
-                pos_diff = (group_sel_col1['PeakPosition'] - group_sel_col2['PeakPosition']).values
-                if np.average(pos_diff[:5]) < 0:
-                    pos_diff = -pos_diff
-                no_loop_dna = group_sel_col1["PeakUpIntensity"] + group_sel_col1["PeakDownIntensity"]
-                pos_diff_kb = 1e-3 * no_loop_dna * pos_diff / (self.loop_region_right - self.loop_region_left)
+                peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
+                    frame_width = self.loop_region_right - self.loop_region_left,
+                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+                sel_loop_sm_dict = kymograph.loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=7)
+                pos_diff_kb = sel_loop_sm_dict['PositionDiff_kb']
                 pos_diff_kb_smooth = savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1)
                 if pos_diff_kb_smooth.min() < 0:
-                    pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
                     pos_diff_kb = pos_diff_kb - pos_diff_kb_smooth.min()
+                    pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
                 ax_right = ax.twinx()
-                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
+                ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb,
                               '.r', label='Position Differnece')
-                ax_right.plot(group_sel_col1['FrameNumber'] * self.acquisitionTime,
-                              savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1),
+                ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
+                              pos_diff_kb_smooth,
                               'r', label='Position Differnece')
-                ax_right.set_ylabel("Kilobases")
+                ax_right.set_ylabel("Distance/kb", color='r')
+                ax_right.tick_params(axis='y', colors='r')
+                ax_right.spines["right"].set_color("r")
                 ax_right.legend(loc='center right')
-            ax.set_xlabel("time/s", )
-            ax.set_ylabel("Window Length(" + str(n_savgol) + " points)")
+            ax.set_xlabel("time/s")
+            ax.tick_params(axis='y', colors='m')
+            ax.spines["left"].set_color("m")
+            ax.set_ylabel("MSD moving average(" + str(n) + " points)")
             ax.legend()
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
