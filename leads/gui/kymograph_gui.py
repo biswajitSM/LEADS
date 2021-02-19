@@ -1881,21 +1881,21 @@ class Window(QtWidgets.QMainWindow):
             n_moving = n_moving + 1
         n_order = 2
         # loop
-        ax.plot(df_peak_analyzed["FrameNumber"],
+        ax.plot(df_peak_analyzed["FrameNumber"] * self.acquisitionTime,
                 df_peak_analyzed["PeakIntensity"], '.g', label=r'$I_{loop}$')
-        ax.plot(df_peak_analyzed["FrameNumber"],
+        ax.plot(df_peak_analyzed["FrameNumber"] * self.acquisitionTime,
                 savgol_filter(df_peak_analyzed["PeakIntensity"].values,  window_length=n_moving, polyorder=n_order),
                 'g', label=r'$I_{loop} filtered$')
         # Above loop
-        ax.plot(df_peak_analyzed["FrameNumber"],
+        ax.plot(df_peak_analyzed["FrameNumber"] * self.acquisitionTime,
                 df_peak_analyzed["PeakUpIntensity"], '.r', label=r'$I_{up}$')
-        ax.plot(df_peak_analyzed["FrameNumber"],
+        ax.plot(df_peak_analyzed["FrameNumber"] * self.acquisitionTime,
                 savgol_filter(df_peak_analyzed["PeakUpIntensity"].values,  window_length=n_moving, polyorder=n_order),
                 'r', label=r'$I_{up} filtered$')
         # Below loop
-        ax.plot(df_peak_analyzed["FrameNumber"],
+        ax.plot(df_peak_analyzed["FrameNumber"] * self.acquisitionTime,
                 df_peak_analyzed["PeakDownIntensity"], '.b', label=r'$I_{down}$')
-        ax.plot(df_peak_analyzed["FrameNumber"],
+        ax.plot(df_peak_analyzed["FrameNumber"] * self.acquisitionTime,
                 savgol_filter(df_peak_analyzed["PeakDownIntensity"].values,  window_length=n_moving, polyorder=n_order),
                 'b', label=r'$I_{down} filtered$')
         if self.numColors == "2" or "3":
@@ -1906,7 +1906,7 @@ class Window(QtWidgets.QMainWindow):
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             sel_loop_sm_dict = loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=n_moving)
-            ax.plot(sel_loop_sm_dict["FrameNumber"],
+            ax.plot(sel_loop_sm_dict["FrameNumber"] * self.acquisitionTime,
                     sel_loop_sm_dict["PeakDiffFiltered"], 'm', label='SMol')
 
         if self.multipeak_dialog.force_checkbox.isChecked():
@@ -1925,12 +1925,12 @@ class Window(QtWidgets.QMainWindow):
             group_sel = group_sel.reset_index(drop=True)
             print(group_sel)
             ax_f = ax.twinx()
-            ax_f.plot(group_sel["FrameNumber"],
+            ax_f.plot(group_sel["FrameNumber"] * self.acquisitionTime,
                       savgol_filter(group_sel["Force"].values, window_length=11, polyorder=2),
                       '.', label='Force')
             ax_f.set_ylabel('Force / pN')
             ax_f.legend(loc='lower right')
-        ax.set_xlabel('Frame Number')
+        ax.set_xlabel('time/s')
         ax.set_ylabel('DNA/kb')
         ax.legend()
         plt.show()
@@ -2007,16 +2007,20 @@ class Window(QtWidgets.QMainWindow):
             ax.legend()
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
-            print("plot MSD")
             _, ax = plt.subplots()
-            msd = kymograph.msd_1d_nb1(group_sel_col1['x'].values)
-            plt.plot(msd, 'g', label="MSD color-1")
+            _ = kymograph.msd_lagtime_allpeaks(group_sel_col1,
+                            pixelsize = self.pixelSize,
+                            fps=1/(self.acquisitionTime),
+                            max_lagtime=100, axis=ax)
             if self.numColors == "2" or "3":
-                msd = kymograph.msd_1d_nb1(group_sel_col2['x'].values)
-                plt.plot(msd, 'm', label="MSD color-1")
-            ax.set_xlabel("Frame Number")
+                _ = kymograph.msd_lagtime_allpeaks(group_sel_col2,
+                                pixelsize = self.pixelSize,
+                                fps=1/(self.acquisitionTime),
+                                max_lagtime=100, axis=ax)
+            ax.set_xlabel("time/s")
             ax.set_ylabel("MSD")
-            ax.set_yscale('log')
+            ax.set_xscale('linear')
+            ax.set_yscale('linear')
             ax.legend()
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime-AllPeaks":
@@ -2024,19 +2028,21 @@ class Window(QtWidgets.QMainWindow):
                 fig,(ax1) = plt.subplots(nrows=1, ncols=1)
                 _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked,
                                 pixelsize = self.pixelSize,
-                                fps=int(self.numColors) * (1/self.acquisitionTime),
+                                fps=1/(self.acquisitionTime),
                                 max_lagtime=100, axis=ax1)
                 ax1.set_title("Color 1")
             elif self.numColors == "2" or "3":
                 fig,(ax1, ax2) = plt.subplots(nrows=1, ncols=2)
                 _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked,
                                 pixelsize = self.pixelSize,
-                                fps=int(self.numColors) * (1/self.acquisitionTime),
-                                max_lagtime=100, axis=ax1)
+                                fps=1/(self.acquisitionTime),
+                                max_lagtime=1000,
+                                axis=ax1)
                 _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked_sm,
                                 pixelsize = self.pixelSize,
-                                fps=int(self.numColors) * (1/self.acquisitionTime),
-                                max_lagtime=100, axis=ax2)
+                                fps=1/(self.acquisitionTime),
+                                max_lagtime=1000,
+                                axis=ax2)
                 ax1.set_title("Color 1")
                 ax2.set_title("Color 2")
             plt.show()
@@ -2070,10 +2076,16 @@ class Window(QtWidgets.QMainWindow):
             hdf5dict.dump(self.params_yaml, params_group)
             h5_analysis["filepath"] = self.filepath
             if self.kymo_left is not None:
+                h5_analysis["Left Image Array"] = self.roirect_left.getArrayRegion(
+                                    self.imgarr_left,
+                                    self.imv00.imageItem, axes=(1, 2))
                 h5_analysis["Left Kymograph"] = self.kymo_left.T
                 h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
                 h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
                 if self.numColors == "2":
+                    h5_analysis["Right Image Array"] = self.roirect_right.getArrayRegion(
+                                    self.imgarr_right,
+                                    self.imv01.imageItem, axes=(1, 2))
                     h5_analysis["Right Kymograph"] = self.kymo_right.T
                     h5_analysis["Right Kymograph Loop"] = self.kymo_right_loop.T
                     h5_analysis["Right Kymograph No Loop"] = self.kymo_right_noLoop.T
