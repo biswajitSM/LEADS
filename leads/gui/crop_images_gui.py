@@ -1135,63 +1135,139 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
     def EstimateShift(self):
         # get selected layers
-        selected = [0] * 2
-        count = 0
+        selected = []
+        numLayers2align = 0
         for nLayer in range(self.numLayers):
             if self.viewer.layers[nLayer].selected:
-                selected[count] = nLayer
-                count += 1
-                if count == 2:
-                    break
-        if count < 2:
+                selected.append(nLayer)
+                numLayers2align += 1
+                # if count == 2:
+                #     break
+        if numLayers2align < 2:
             print('Select 2 layers to estimate shift')
             return
         currentTime  = self.viewer.dims.point[0]
         # for the selected layers, get which series and color it is
-        image = [0] * 2
-        series0 = int( np.floor(selected[0] / self.numColors) )
-        color0  = int( np.mod(selected[0], self.numColors) )
-        index0 = int( currentTime*self.numColors + color0 )
-        if index0 >= len(self.image_meta[series0]['filenames']):
-            index0 = len(self.image_meta[series0]['filenames'])
-        series1 = int( np.floor(selected[1] / self.numColors) )
-        color1  = int( np.mod(selected[1], self.numColors) )
-        index1 = int( currentTime*self.numColors + color1 )
-        if index1 >= len(self.image_meta[series1]['filenames']):
-            index1 = len(self.image_meta[series1]['filenames'])
-        if index1 > index0:
-            index1 = index0
-        elif index1 < index0:
-            index0 = index1
-        filename = self.image_meta[series0]['filenames'][index0]
-        image[0] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
-        image[0] = image[0][0].astype(float)
-        filename = self.image_meta[series1]['filenames'][index1]
-        image[1] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
-        image[1] = image[1][0].astype(float)     
+        image = [0] * numLayers2align
+        sortedIndex  = [0] * numLayers2align
+        seriesSorted = [0] * numLayers2align
+        colorSorted  = [0] * numLayers2align
+        for nLayer in range(numLayers2align):
+            series = int( np.floor(selected[nLayer] / self.numColors) )
+            color  = int( np.mod(selected[nLayer], self.numColors) )
+            index = int( currentTime*self.numColors + color )
+            if index >= len(self.image_meta[series]['filenames']):
+                index = len(self.image_meta[series]['filenames'])
+            sortedIndex[nLayer]  = index
+            seriesSorted[nLayer] = series
+            colorSorted[nLayer]  = color
+            
+            filename = self.image_meta[series]['filenames'][index]
+            image[nLayer]    = np.array(pims.ImageSequence(filename), dtype=np.uint16)
+            image[nLayer]    = image[nLayer][0].astype(float)
 
-        C = self.fft_xcorr2D(image[0]/np.max(image[0].ravel()), image[1]/np.max(image[1].ravel()))
-        index = np.unravel_index(C.argmax(), C.shape)
-        index = [x for x in index]
-        middle = [x/2 for x in C.shape]
-        shift = np.asarray(index) - np.asarray(middle)
-        for iShift in range(2):
-            if np.abs(shift[iShift]) < 1.5:
-                shift[iShift] = 0
-        self.xshift_estimate = shift[1]
-        self.yshift_estimate = shift[0]
-        if hasattr(self, 'RotationAngle'): # add the shift of the lower layer
-            self.xshift_estimate += self.xShift[series0][color0]
-            self.yshift_estimate += self.yShift[series0][color0]
-        # select the upper layer of the two before calling ShiftRotateImage
-        self.viewer.layers[int(np.min(selected))].events.deselect()
-        self.viewer.layers[int(np.min(selected))].selected = False
-        self.viewer.layers[int(np.max(selected))].events.select()
-        self.viewer.layers[int(np.max(selected))].selected = True        
-        # call ShiftRotateImage with input
-        self.ShiftRotateImage()
-        self.viewer._active_layer = self.viewer.layers[int(np.max(selected))]
+        sorted_sortedIndex = np.argsort(sortedIndex)
+        sortedIndex  = [sortedIndex[sorted_sortedIndex[i]]  for i in range(numLayers2align)]
+        image        = [image[sorted_sortedIndex[i]]        for i in range(numLayers2align)]
+        selected     = [selected[sorted_sortedIndex[i]]     for i in range(numLayers2align)]
+        colorSorted  = [colorSorted[sorted_sortedIndex[i]]  for i in range(numLayers2align)]
+        seriesSorted = [seriesSorted[sorted_sortedIndex[i]] for i in range(numLayers2align)]
+
+        for pair in range(1, numLayers2align):
+
+            C = self.fft_xcorr2D(image[0]/np.max(image[0].ravel()), image[pair]/np.max(image[pair].ravel()))
+            index = np.unravel_index(C.argmax(), C.shape)
+            index = [x for x in index]
+            middle = [x/2 for x in C.shape]
+            shift = np.asarray(index) - np.asarray(middle)
+            for iShift in range(2):
+                if np.abs(shift[iShift]) < 1.5:
+                    shift[iShift] = 0
+            self.xshift_estimate = shift[1]
+            print(shift)
+            self.yshift_estimate = shift[0]
+            if hasattr(self, 'RotationAngle'): # add the shift of the lowest layer
+                self.xshift_estimate += self.xShift[seriesSorted[0]][colorSorted[0]]
+                self.yshift_estimate += self.yShift[seriesSorted[0]][colorSorted[0]]
+ 
+            # call ShiftRotateImage
+            self.series2treat_ShiftRoutine = int(seriesSorted[pair])
+            self.ShiftRotateImage()
+        # deselect all layers but the lowest one
+        self.series2treat_ShiftRoutine = None
+        for nLayer in range(1, numLayers2align):
+            if self.viewer.layers[int(selected[nLayer])].selected:
+                try:
+                    self.viewer.layers[int(selected[nLayer])].events.deselect()
+                except:
+                    pass
+                try:
+                    self.viewer.layers[int(selected[nLayer])].selected = False
+                except:
+                    pass
+        self.viewer._active_layer = self.viewer.layers[int(selected[0])]
         self.UpdateXYShiftRotationAngleUponSwitchingLayer()
+
+# # ---------------------------------------------------------------------
+#     def EstimateShift(self):
+#         # get selected layers
+#         selected = [0] * 2
+#         count = 0
+#         for nLayer in range(self.numLayers):
+#             if self.viewer.layers[nLayer].selected:
+#                 selected[count] = nLayer
+#                 count += 1
+#                 if count == 2:
+#                     break
+#         if count < 2:
+#             print('Select 2 layers to estimate shift')
+#             return
+#         currentTime  = self.viewer.dims.point[0]
+#         # for the selected layers, get which series and color it is
+#         image = [0] * 2
+#         series0 = int( np.floor(selected[0] / self.numColors) )
+#         color0  = int( np.mod(selected[0], self.numColors) )
+#         index0 = int( currentTime*self.numColors + color0 )
+#         if index0 >= len(self.image_meta[series0]['filenames']):
+#             index0 = len(self.image_meta[series0]['filenames'])
+#         series1 = int( np.floor(selected[1] / self.numColors) )
+#         color1  = int( np.mod(selected[1], self.numColors) )
+#         index1 = int( currentTime*self.numColors + color1 )
+#         if index1 >= len(self.image_meta[series1]['filenames']):
+#             index1 = len(self.image_meta[series1]['filenames'])
+#         if index1 > index0:
+#             index1 = index0
+#         elif index1 < index0:
+#             index0 = index1
+#         filename = self.image_meta[series0]['filenames'][index0]
+#         image[0] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
+#         image[0] = image[0][0].astype(float)
+#         filename = self.image_meta[series1]['filenames'][index1]
+#         image[1] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
+#         image[1] = image[1][0].astype(float)     
+
+#         C = self.fft_xcorr2D(image[0]/np.max(image[0].ravel()), image[1]/np.max(image[1].ravel()))
+#         index = np.unravel_index(C.argmax(), C.shape)
+#         index = [x for x in index]
+#         middle = [x/2 for x in C.shape]
+#         shift = np.asarray(index) - np.asarray(middle)
+#         for iShift in range(2):
+#             if np.abs(shift[iShift]) < 1.5:
+#                 shift[iShift] = 0
+#         self.xshift_estimate = shift[1]
+#         self.yshift_estimate = shift[0]
+#         if hasattr(self, 'RotationAngle'): # add the shift of the lower layer
+#             self.xshift_estimate += self.xShift[series0][color0]
+#             self.yshift_estimate += self.yShift[series0][color0]
+#         # select the upper layer of the two before calling ShiftRotateImage
+#         self.viewer.layers[int(np.min(selected))].events.deselect()
+#         self.viewer.layers[int(np.min(selected))].selected = False
+#         self.viewer.layers[int(np.max(selected))].events.select()
+#         self.viewer.layers[int(np.max(selected))].selected = True        
+#         # call ShiftRotateImage with input
+#         self.ShiftRotateImage()
+#         self.viewer._active_layer = self.viewer.layers[int(np.max(selected))]
+#         self.UpdateXYShiftRotationAngleUponSwitchingLayer()
 
 # ---------------------------------------------------------------------
     def fft_xcorr2D(self, x, y):
@@ -1409,8 +1485,12 @@ class NapariTabs(QtWidgets.QWidget):
             shift_supplied = True
         else:
             shift_supplied = False
-        # use the built-in translate/rotate method of napari viewer        
-        self.GetRelatedSelectedLayers()
+        # use the built-in translate/rotate method of napari viewer                
+        if self.series2treat_ShiftRoutine is not None:
+            self.series2treat = self.series2treat_ShiftRoutine
+        else:
+            self.GetRelatedSelectedLayers()
+        self.series2treat = int(self.series2treat)
         if self.series2treat is not None:
             ShiftColorsIndividually = False
             if self.numLayers == self.numColors:
