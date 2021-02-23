@@ -1,4 +1,4 @@
-import ptvsd # only for deugging
+import ptvsd # only for debugging
 import napari
 import platform
 import subprocess
