@@ -22,6 +22,7 @@ from roifile import ImagejRoi
 from tifffile import imwrite
 from pyqtgraph import PlotWidget, plot, mkPen
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from colorharmonies import Color, complementaryColor, triadicColor, tetradicColor 
 
 from vispy.color import Colormap, ColorArray
 from scipy.stats import mode
@@ -925,8 +926,10 @@ class NapariTabs(QtWidgets.QWidget):
         self.MaxNumColors           = 4
         self.defaultShape           = np.array([[10, 0], [80, 0], [80, 50], [10, 50]])
         self.defaultLine            = np.array([[10, 120], [50, 150]])
-        self.color_list = np.array([[0, 158, 115], [204, 121, 167], [86, 180, 233], [230, 159, 0], [240, 228, 66], 
-            [0, 114, 178], [213, 94, 0], [255, 255, 255]]) / 255 # color palette taken from https://www.nature.com/articles/nmeth.1618        
+        self.color_list             = np.array([[0, 158, 115], [204, 121, 167], [86, 180, 233], \
+                                        [230, 159, 0], [240, 228, 66], 
+                                        [0, 114, 178], [213, 94, 0], \
+                                        [255, 255, 255]]) / 255 # color palette taken from https://www.nature.com/articles/nmeth.1618        
 
         # number of colors
         self.ui.numColorsCbox.setCurrentText("2")
@@ -1161,7 +1164,7 @@ class NapariTabs(QtWidgets.QWidget):
             sortedIndex[nLayer]  = index
             seriesSorted[nLayer] = series
             colorSorted[nLayer]  = color
-            
+
             filename = self.image_meta[series]['filenames'][index]
             image[nLayer]    = np.array(pims.ImageSequence(filename), dtype=np.uint16)
             image[nLayer]    = image[nLayer][0].astype(float)
@@ -1207,67 +1210,6 @@ class NapariTabs(QtWidgets.QWidget):
                     pass
         self.viewer._active_layer = self.viewer.layers[int(selected[0])]
         self.UpdateXYShiftRotationAngleUponSwitchingLayer()
-
-# # ---------------------------------------------------------------------
-#     def EstimateShift(self):
-#         # get selected layers
-#         selected = [0] * 2
-#         count = 0
-#         for nLayer in range(self.numLayers):
-#             if self.viewer.layers[nLayer].selected:
-#                 selected[count] = nLayer
-#                 count += 1
-#                 if count == 2:
-#                     break
-#         if count < 2:
-#             print('Select 2 layers to estimate shift')
-#             return
-#         currentTime  = self.viewer.dims.point[0]
-#         # for the selected layers, get which series and color it is
-#         image = [0] * 2
-#         series0 = int( np.floor(selected[0] / self.numColors) )
-#         color0  = int( np.mod(selected[0], self.numColors) )
-#         index0 = int( currentTime*self.numColors + color0 )
-#         if index0 >= len(self.image_meta[series0]['filenames']):
-#             index0 = len(self.image_meta[series0]['filenames'])
-#         series1 = int( np.floor(selected[1] / self.numColors) )
-#         color1  = int( np.mod(selected[1], self.numColors) )
-#         index1 = int( currentTime*self.numColors + color1 )
-#         if index1 >= len(self.image_meta[series1]['filenames']):
-#             index1 = len(self.image_meta[series1]['filenames'])
-#         if index1 > index0:
-#             index1 = index0
-#         elif index1 < index0:
-#             index0 = index1
-#         filename = self.image_meta[series0]['filenames'][index0]
-#         image[0] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
-#         image[0] = image[0][0].astype(float)
-#         filename = self.image_meta[series1]['filenames'][index1]
-#         image[1] = np.array(pims.ImageSequence(filename), dtype=np.uint16)
-#         image[1] = image[1][0].astype(float)     
-
-#         C = self.fft_xcorr2D(image[0]/np.max(image[0].ravel()), image[1]/np.max(image[1].ravel()))
-#         index = np.unravel_index(C.argmax(), C.shape)
-#         index = [x for x in index]
-#         middle = [x/2 for x in C.shape]
-#         shift = np.asarray(index) - np.asarray(middle)
-#         for iShift in range(2):
-#             if np.abs(shift[iShift]) < 1.5:
-#                 shift[iShift] = 0
-#         self.xshift_estimate = shift[1]
-#         self.yshift_estimate = shift[0]
-#         if hasattr(self, 'RotationAngle'): # add the shift of the lower layer
-#             self.xshift_estimate += self.xShift[series0][color0]
-#             self.yshift_estimate += self.yShift[series0][color0]
-#         # select the upper layer of the two before calling ShiftRotateImage
-#         self.viewer.layers[int(np.min(selected))].events.deselect()
-#         self.viewer.layers[int(np.min(selected))].selected = False
-#         self.viewer.layers[int(np.max(selected))].events.select()
-#         self.viewer.layers[int(np.max(selected))].selected = True        
-#         # call ShiftRotateImage with input
-#         self.ShiftRotateImage()
-#         self.viewer._active_layer = self.viewer.layers[int(np.max(selected))]
-#         self.UpdateXYShiftRotationAngleUponSwitchingLayer()
 
 # ---------------------------------------------------------------------
     def fft_xcorr2D(self, x, y):
@@ -1795,7 +1737,7 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
     def CreateColormaps(self):        
         # there are only a specific number of colors given. In case we'd need more
-        # just replicate the array. The colors will repeat!
+        # we interpolate the colormap
         # replicate = np.ceil(self.numSeries*self.numColors/(len(self.color_list)/2))
         # self.color_list = np.tile(self.color_list,(replicate,1))
         # alternative: interpolate the list
@@ -1804,7 +1746,7 @@ class NapariTabs(QtWidgets.QWidget):
         else: 
             self.numSeries = 1
         self.numColors = int( self.ui.numColorsCbox.currentText() )
-        required_numColors = self.numSeries*self.numColors
+        required_numColors = self.numSeries
         if len(self.color_list) < required_numColors:
             x = np.arange(0, len(self.color_list))
             r = interp1d(x, self.color_list[:,0])
@@ -1817,12 +1759,27 @@ class NapariTabs(QtWidgets.QWidget):
         self.cmap = [0] * numColors
         controls = np.linspace(0., 1., 100)
         numInterpolationPoints = 100
+        count = 0
         for nCmap in range(numColors):
-            carray = [np.linspace(0, self.color_list[nCmap][0], numInterpolationPoints), 
-                np.linspace(0, self.color_list[nCmap][1], numInterpolationPoints), 
-                np.linspace(0, self.color_list[nCmap][2], numInterpolationPoints)]
-            carray = np.transpose(carray)
-            self.cmap[nCmap] = Colormap(carray, controls)
+            # create a color object and compute complementary colors
+            currentColor = Color(self.color_list[nCmap], "", "")
+            if self.numColors==2:
+                complemtary_colors = [currentColor]
+            elif self.numColors==2:
+                complemtary_colors = complementaryColor(currentColor)
+            elif self.numColors==3:
+                complemtary_colors = triadicColor(currentColor)
+            elif self.numColors==4:
+                complemtary_colors = tetradicColor(currentColor)
+
+            # loop through complemetary colors
+            for col in range(self.numColors):
+                carray = [np.linspace(0, complemtary_colors[col][0], numInterpolationPoints), 
+                    np.linspace(0, complemtary_colors[col][1], numInterpolationPoints), 
+                    np.linspace(0, complemtary_colors[col][2], numInterpolationPoints)]
+                carray = np.transpose(carray)
+                self.cmap[count] = Colormap(carray, controls)
+                count += 1
 
 # ---------------------------------------------------------------------
     def load_img_seq(self, path_in="", omitROIlayer=False, buttonPressed=False):
