@@ -1756,21 +1756,25 @@ class NapariTabs(QtWidgets.QWidget):
             xint = np.expand_dims(xint, axis=1)
             self.color_list = np.concatenate((r(xint), g(xint), b(xint)), axis=1)
         numColors = len(self.color_list)
-        self.cmap = [0] * numColors
+        self.cmap = [0] * numColors * self.numColors
         controls = np.linspace(0., 1., 100)
         numInterpolationPoints = 100
         count = 0
         for nCmap in range(numColors):
             # create a color object and compute complementary colors
-            currentColor = Color(self.color_list[nCmap], "", "")
-            if self.numColors==2:
-                complemtary_colors = [currentColor]
-            elif self.numColors==2:
-                complemtary_colors = complementaryColor(currentColor)
-            elif self.numColors==3:
-                complemtary_colors = triadicColor(currentColor)
+            currentColorHarmonies = Color(self.color_list[nCmap], "", "")
+            complemtary_colors    = [self.color_list[nCmap]]
+            # if self.numColors==3:
+            #     complemtary_colors.append( complementaryColor(currentColorHarmonies) )
+            if self.numColors==2 or self.numColors==3:
+                tmp = triadicColor(currentColorHarmonies)
+                complemtary_colors.append( tmp[0] )
+                complemtary_colors.append( tmp[1] )
             elif self.numColors==4:
-                complemtary_colors = tetradicColor(currentColor)
+                tmp = tetradicColor(currentColorHarmonies)
+                complemtary_colors.append( tmp[0] )
+                complemtary_colors.append( tmp[1] )
+                complemtary_colors.append( tmp[2] )
 
             # loop through complemetary colors
             for col in range(self.numColors):
