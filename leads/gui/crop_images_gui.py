@@ -31,8 +31,10 @@ from scipy.interpolate import interp1d
 from napari.layers.utils.text import TextManager
 from napari.layers.utils._text_utils import format_text_properties
 
+
 # ---------------------------------------------------------------------
 # ---------------------------------------------------------------------
+# Cropping and batch cropping are outsourced on another thread. We need a worker class for that
 # Step 1: Create a worker class
 class Worker(QObject):
     finished = pyqtSignal()
@@ -1136,6 +1138,22 @@ class NapariTabs(QtWidgets.QWidget):
 
 
 # ---------------------------------------------------------------------
+    def ConstructStatusBar(self, value, maxVal, labelStr=''):
+        self.maxVal = int( maxVal )
+        self.numDigits = int( np.floor(np.log10(maxVal)) )
+        if value == maxVal:
+           self.ui.StatusBarLabel.setText('Idle')
+        else:
+            if self.maxVal == 1:
+                progressStr = "Progress: {:03d}".format(int(value*100)) + "%"
+            else:
+                progressStr = "Progress: {:0{width}d}".format(int(value), width=self.numDigits) + " / {:0{width}d}".format(self.maxVal, width=self.numDigits)
+            if len(labelStr) > 0:
+                progressStr = progressStr.replace('Progress:', labelStr+':')
+            self.ui.StatusBarLabel.setText(progressStr)
+       
+
+# ---------------------------------------------------------------------
     def EstimateShift(self):
         # get selected layers
         selected = []
@@ -1177,17 +1195,19 @@ class NapariTabs(QtWidgets.QWidget):
         seriesSorted = [seriesSorted[sorted_sortedIndex[i]] for i in range(numLayers2align)]
 
         for pair in range(1, numLayers2align):
-
+            
+            # call the waitbar class
+            if numLayers2align > 1:
+                self.ConstructStatusBar(pair, numLayers2align-1, 'Estimating shift')
             C = self.fft_xcorr2D(image[0]/np.max(image[0].ravel()), image[pair]/np.max(image[pair].ravel()))
-            index = np.unravel_index(C.argmax(), C.shape)
-            index = [x for x in index]
+            index  = np.unravel_index(C.argmax(), C.shape)
+            index  = [x for x in index]
             middle = [x/2 for x in C.shape]
-            shift = np.asarray(index) - np.asarray(middle)
+            shift  = np.asarray(index) - np.asarray(middle)
             for iShift in range(2):
                 if np.abs(shift[iShift]) < 1.5:
                     shift[iShift] = 0
             self.xshift_estimate = shift[1]
-            print(shift)
             self.yshift_estimate = shift[0]
             if hasattr(self, 'RotationAngle'): # add the shift of the lowest layer
                 self.xshift_estimate += self.xShift[seriesSorted[0]][colorSorted[0]]
@@ -1819,6 +1839,7 @@ class NapariTabs(QtWidgets.QWidget):
             self.image_meta = [''] * self.numSeries
             cmap_numer = 0
             for nSeries in range(self.numSeries):
+                self.ConstructStatusBar(nSeries+1, self.numSeries, labelStr='Loading image series')
                 # see if there's a yaml file found in this folder. If yes, load it                
                 self.yamlFileName = os.path.join(paths[nSeries], 'shift.yaml')                           
                 self.series2treat = nSeries

@@ -195,6 +195,10 @@ class Ui_Form(object):
         self.FileDirectoryLabel.setObjectName("FileDirectoryLabel")
         self.horizontalLayout_4.addWidget(self.FileDirectoryLabel)
 
+        self.StatusBarLabel = QtWidgets.QLabel(Form)
+        self.StatusBarLabel.setObjectName("StatusBarLabel")
+        self.horizontalLayout_4.addWidget(self.StatusBarLabel)
+
         self.gridLayout.addLayout(self.horizontalLayout_4, 2, 0, 1, 3)
 
         self.retranslateUi(Form)
@@ -230,6 +234,7 @@ class Ui_Form(object):
         self.BatchProcessBtn.setText(_translate("Form", "Batch process"))
         self.ShiftEstimateBtn.setText(_translate("Form", "Estimate shift"))
         self.FileDirectoryLabel.setText(_translate("Form", "Current directory:"))
+        self.StatusBarLabel.setText(_translate("Form", "Idle"))
         self.CopyPathBtn.setText(_translate("Form", "Open path"))        
 
 if __name__ == "__main__":
