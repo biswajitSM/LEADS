@@ -1,7 +1,7 @@
 import os
 import glob
 import numpy as np
-from scipy import ndimage, misc
+from scipy import ndimage, misc, optimize, special
 import skimage as sk
 from skimage.filters import threshold_otsu
 from skimage.transform import rotate
@@ -502,13 +502,13 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path="", RotationAngle
             if bkg_subtraction:
                 sample = bkg_substration(sample)
             minVal.append(sample.min())
-            maxVal.append(sample.max())
-            minConTemp, maxConTemp = AutoAdjustContrast(sample)
+            maxVal.append(sample.max())            
+            minConTemp, maxConTemp = AutoAdjustContrastIJ(sample)
             minCon.append(minConTemp)
             maxCon.append(maxConTemp)
         image_meta['min_int_color_'+str(i)] = np.mean(minVal)
         image_meta['max_int_color_'+str(i)] = np.mean(maxVal)        
-        image_meta['min_contrast_color_'+str(i)] = np.mean(minCon)
+        image_meta['min_contrast_color_'+str(i)] = np.mean(minCon)#AutoAdjustContrastSorting(sample)#
         image_meta['max_contrast_color_'+str(i)] = np.mean(maxCon)
         # print('Channel {}: adjusted min intensity {}, adjusted max intensity {}'.format(i, round(np.mean(minCon)), round(np.mean(maxCon))))    
     
@@ -533,7 +533,7 @@ def applyRotation(txy_array, RotationAngle=[0], num_colors=1):
     return array_processed
 
 # ---------------------------------------------------------------------
-def AutoAdjustContrast(img):
+def AutoAdjustContrastIJ(img):
     size = img.shape
     pixelCount = size[0]*size[1]
     limit = pixelCount/10
@@ -563,6 +563,63 @@ def AutoAdjustContrast(img):
         hmin = hist[1][hmin]
         hmax = hist[1][hmax]
     return hmin, hmax
+
+# ---------------------------------------------------------------------
+def invnormcdf(x, mu, sigma):
+    # noise model: mu is the mean value, sigma is the sigma of the gaussian noise
+    return np.real(mu+sigma*np.sqrt(2)*special.erfinv(x))
+
+# ---------------------------------------------------------------------
+def AutoAdjustContrastSorting(img):
+    img = img.astype('float')
+    size = img.shape
+    img_bckg = bkg_substration(img)
+    img_bckg_flat = img_bckg.flatten()
+    # get rid of zeros, that messes with the fitting once the intensity values are sorted
+    if (img_bckg_flat==0).any():
+        img_bckg_flat[img_bckg_flat==0] = np.nan
+        sumNaNs = np.sum(np.isnan(img_bckg_flat))
+        N = size[0]*size[1] - sumNaNs
+    else:
+        sumNaNs = 0
+        N = size[0]*size[1]
+    x = np.linspace(-0.999, 0.999, N)
+
+    # sort intensity values
+    sort_ind = np.argsort(img_bckg_flat)
+    img_bckg_sorted = img_bckg_flat[sort_ind]
+    
+    # if there are nan's, take them away now
+    if sumNaNs > 0:
+        img_bckg_sorted = img_bckg_sorted[~np.isnan(img_bckg_sorted)]
+    
+    # subtract mean value and normalize data
+    img_bckg_sorted -= np.mean(img_bckg_sorted)
+    img_bckg_sorted /= max(img_bckg_sorted)
+    
+    # fit to noise model
+    initial_guess = np.array([0, 0.2])
+    LB = np.array([-0.2, 0.001])
+    UB = np.array([0.2, 0.35])
+    
+    popt, pcov = optimize.curve_fit(invnormcdf, x[0:int(np.round(N/2))], \
+        img_bckg_sorted[0:int(np.round(N/2))], p0=initial_guess, bounds=(LB, UB))
+
+    noise_subtracted = img_bckg_sorted - invnormcdf(x, popt[0], popt[1])
+    noise_subtracted /= np.max(noise_subtracted.flatten())
+    
+    ind = np.argmax(noise_subtracted > 0.01)
+    sorted_im = np.sort(img.flatten())
+    threshold = sorted_im[ind]
+
+    # from matplotlib import pyplot as plt
+    # plt.figure()
+    # plt.plot(x, img_bckg_sorted)
+    # plt.plot(x, invnormcdf(x, popt[0], popt[1]))
+    # # plt.show()
+    # plt.savefig('foo.png')
+
+    return threshold
 
 # ---------------------------------------------------------------------
 from scipy.ndimage import white_tophat, black_tophat

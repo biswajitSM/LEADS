@@ -187,6 +187,10 @@ class Ui_Form(object):
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
 
+        self.StatusBarLabel = QtWidgets.QLabel(Form)
+        self.StatusBarLabel.setObjectName("StatusBarLabel")
+        self.horizontalLayout_4.addWidget(self.StatusBarLabel)
+
         self.CopyPathBtn = QtWidgets.QPushButton(Form)
         self.CopyPathBtn.setObjectName("CopyPathBtn")
         self.horizontalLayout_4.addWidget(self.CopyPathBtn)
@@ -194,10 +198,6 @@ class Ui_Form(object):
         self.FileDirectoryLabel = QtWidgets.QLabel(Form)
         self.FileDirectoryLabel.setObjectName("FileDirectoryLabel")
         self.horizontalLayout_4.addWidget(self.FileDirectoryLabel)
-
-        self.StatusBarLabel = QtWidgets.QLabel(Form)
-        self.StatusBarLabel.setObjectName("StatusBarLabel")
-        self.horizontalLayout_4.addWidget(self.StatusBarLabel)
 
         self.gridLayout.addLayout(self.horizontalLayout_4, 2, 0, 1, 3)
 
@@ -233,8 +233,8 @@ class Ui_Form(object):
         self.FOVCountLabel.setText(_translate("Form", "/0"))
         self.BatchProcessBtn.setText(_translate("Form", "Batch process"))
         self.ShiftEstimateBtn.setText(_translate("Form", "Estimate shift"))
-        self.FileDirectoryLabel.setText(_translate("Form", "Current directory:"))
         self.StatusBarLabel.setText(_translate("Form", "Idle"))
+        self.FileDirectoryLabel.setText(_translate("Form", "Current directory:"))        
         self.CopyPathBtn.setText(_translate("Form", "Open path"))        
 
 if __name__ == "__main__":

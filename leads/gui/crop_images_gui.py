@@ -720,10 +720,10 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
         self.window = parent
         self.setWindowTitle("Choose image series to show together")
         # self.resize(300, 0)
-        self.resize(481, 436)
+        self.resize(481, 536)
 
         # how many series do we allow? take 7 for now
-        self.numSeries = 7        
+        self.numSeries = 10        
 
         # initialize variables
         self.MultiImageSeries_folderpath  = ['']*self.numSeries
@@ -743,7 +743,7 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
 
         # OK and Cancel buttons
         self.OKCancelButtonBox = QtWidgets.QDialogButtonBox(self)
-        self.OKCancelButtonBox.setGeometry(QtCore.QRect(40, 390, 341, 32))
+        self.OKCancelButtonBox.setGeometry(QtCore.QRect(40, 490, 341, 32))
         self.OKCancelButtonBox.setOrientation(QtCore.Qt.Horizontal)
         self.OKCancelButtonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
         self.OKCancelButtonBox.setObjectName("OKCancelButtonBox")
@@ -751,7 +751,7 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
         # group box to contain several h layouts within a v layout
         # add up to 10 horizontalLayouts like these
         self.groupBox = QtWidgets.QGroupBox(self)
-        self.groupBox.setGeometry(QtCore.QRect(10, 10, 463, 380))
+        self.groupBox.setGeometry(QtCore.QRect(10, 10, 463, 480))
         self.groupBox.setObjectName("groupBox")
 
         # iterate through numSeries
