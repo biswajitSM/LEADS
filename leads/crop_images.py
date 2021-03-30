@@ -408,7 +408,7 @@ import dask.array as da
 import random
 folderpath = ''
 # ---------------------------------------------------------------------
-def daskread_img_seq(num_colors=1, bkg_subtraction=False, path="", RotationAngle=None):
+def daskread_img_seq(num_colors=1, bkg_subtraction=False, mean_subtraction=False, path="", RotationAngle=None):
     '''
     Import image sequences (saved individually in a folder)
     num_colors : integer
@@ -459,8 +459,10 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path="", RotationAngle
     # read the first file to get the shape and dtype
     # ASSUMES THAT ALL FILES SHARE THE SAME SHAPE/TYPE
     sample = imread(filenames[0])
-    if bkg_subtraction:
-        sample = bkg_substration(sample)
+    # if bkg_subtraction:
+    #     sample = bkgSubtraction(sample)
+    # if mean_subtraction:
+    #     sample = meanSubtraction(sample)
     # print('minimum intensity: {}, maximum intensity: {}'.format(sample.min(), sample.max()))
 
     lazy_imread = delayed(imread)  # lazy reader
@@ -482,7 +484,9 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path="", RotationAngle
 
     # background subtraction
     if bkg_subtraction:
-        stack = stack.map_blocks(bkg_substration)
+        stack = stack.map_blocks(bkgSubtraction)
+    if mean_subtraction:
+        stack = stack.map_blocks(meanSubtraction)
    
     # apply rotation
     if RotationAngle is not None:
@@ -500,7 +504,9 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, path="", RotationAngle
         for k in sampling:
             sample = imread(filenames[k+i])
             if bkg_subtraction:
-                sample = bkg_substration(sample)
+                sample = bkgSubtraction(sample)
+            # if mean_subtraction:
+            #     sample = meanSubtraction(sample)
             minVal.append(sample.min())
             maxVal.append(sample.max())            
             minConTemp, maxConTemp = AutoAdjustContrastIJ(sample)
@@ -573,7 +579,7 @@ def invnormcdf(x, mu, sigma):
 def AutoAdjustContrastSorting(img):
     img = img.astype('float')
     size = img.shape
-    img_bckg = bkg_substration(img)
+    img_bckg = bkgSubtraction(img)
     img_bckg_flat = img_bckg.flatten()
     # get rid of zeros, that messes with the fitting once the intensity values are sorted
     if (img_bckg_flat==0).any():
@@ -623,7 +629,7 @@ def AutoAdjustContrastSorting(img):
 
 # ---------------------------------------------------------------------
 from scipy.ndimage import white_tophat, black_tophat
-def bkg_substration(txy_array, size_bgs=50, light_bg=False):
+def bkgSubtraction(txy_array, size_bgs=50, light_bg=False):
     array_processed = np.zeros_like(txy_array)
     if array_processed.ndim>2:
         for i in range(txy_array.shape[0]):
@@ -638,6 +644,23 @@ def bkg_substration(txy_array, size_bgs=50, light_bg=False):
             array_processed = black_tophat(txy_array, size=size_bgs)
         else:
             array_processed = white_tophat(txy_array, size=size_bgs)
+    return array_processed
+
+# ---------------------------------------------------------------------
+from matplotlib import pyplot as plt
+def meanSubtraction(txy_array):
+    array_processed = np.zeros_like(txy_array)
+    if array_processed.ndim>2:
+        meanImage = np.nanmean(txy_array, axis=0, keepdims=True)
+        if np.isnan(meanImage.flatten()).any():
+            return txy_array
+        # plt.figure(), plt.imshow(meanImage), plt.show()
+        for i in range(txy_array.shape[0]):
+            array_processed[i, :, :] = txy_array[i] - meanImage
+    # for i in range(txy_array.shape[0]):
+        # array_processed = txy_array - meanImage
+        # array_processed[array_processed<0] = 0
+        print(np.nanmean(meanImage.flatten()))
     return array_processed
 
 # ---------------------------------------------------------------------
