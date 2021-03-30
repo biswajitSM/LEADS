@@ -1192,7 +1192,18 @@ class Window(QtWidgets.QMainWindow):
             if os.path.isfile(fpath_processed):
                 self.image_meta = read_img_stack(fpath_processed)
             else:
-                if self.numColors == "2":
+                if self.numColors == "3":
+                    self.imgarr_left = median_bkg_substration(self.imgarr_left)
+                    self.imgarr_right = median_bkg_substration(self.imgarr_right)
+                    self.imgarr_col3 = median_bkg_substration(self.imgarr_col3)
+                    comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
+                                            self.imgarr_right[:,np.newaxis,:,:],
+                                            self.imgarr_right[:,np.newaxis,:,:]),
+                                            axis=1)
+                    imwrite(fpath_processed, comb_arr, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                elif self.numColors == "2":
                     self.imgarr_left = median_bkg_substration(self.imgarr_left)
                     self.imgarr_right = median_bkg_substration(self.imgarr_right)
                     comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
@@ -2011,12 +2022,12 @@ class Window(QtWidgets.QMainWindow):
             _ = kymograph.msd_lagtime_allpeaks(group_sel_col1,
                             pixelsize = self.pixelSize,
                             fps=1/(self.acquisitionTime),
-                            max_lagtime=100, axis=ax)
+                            max_lagtime=1000, axis=ax)
             if self.numColors == "2" or "3":
                 _ = kymograph.msd_lagtime_allpeaks(group_sel_col2,
                                 pixelsize = self.pixelSize,
                                 fps=1/(self.acquisitionTime),
-                                max_lagtime=100, axis=ax)
+                                max_lagtime=1000, axis=ax)
             ax.set_xlabel("time/s")
             ax.set_ylabel("MSD")
             ax.set_xscale('linear')
