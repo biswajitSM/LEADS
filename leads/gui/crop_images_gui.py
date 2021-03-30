@@ -1946,6 +1946,12 @@ class NapariTabs(QtWidgets.QWidget):
 
             # load the image
             self.createColormaps()
+            if not hasattr(self, 'image_meta'):
+                print('Open an image series first')
+                self.ui.bkgSubtractionCheckBox.setChecked(False)
+                self.ui.meanSubtractionCheckBox.setChecked(False)
+                self.use_current_image_path = False
+                return
             if self.use_current_image_path:
                 current_image_path = self.image_meta[nSeries]['folderpath']
                 self.image_meta[nSeries] = crop_images.daskread_img_seq(
@@ -2311,7 +2317,10 @@ class NapariTabs(QtWidgets.QWidget):
 
 # ---------------------------------------------------------------------
     def toggleBckgSubtraction(self):
-        self.use_current_image_path = True
+        if not hasattr(self, 'image_meta'):
+            self.use_current_image_path = False
+        else:
+            self.use_current_image_path = True
         self.loadImgSeq()      
 
 # ---------------------------------------------------------------------

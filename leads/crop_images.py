@@ -413,6 +413,8 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, mean_subtraction=False
     Import image sequences (saved individually in a folder)
     num_colors : integer
     returns: dask arrays and 
+    # 20210330: mean subtraction currently without function. The reason is that the mean image has to be computed over 
+    every n'th image only for n colors, while dask arrays only allow the same operation on each element in the array
     '''
     image_meta = {}
     image_meta['num_colors'] = num_colors
@@ -485,8 +487,10 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, mean_subtraction=False
     # background subtraction
     if bkg_subtraction:
         stack = stack.map_blocks(bkgSubtraction)
-    if mean_subtraction:
-        stack = stack.map_blocks(meanSubtraction)
+    # if mean_subtraction:
+    #     stackMean = stack.mean(axis=0).persist()
+    #     stack = stack - stackMean
+        # stack.map_blocks(meanSubtraction)
    
     # apply rotation
     if RotationAngle is not None:
@@ -506,7 +510,7 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, mean_subtraction=False
             if bkg_subtraction:
                 sample = bkgSubtraction(sample)
             # if mean_subtraction:
-            #     sample = meanSubtraction(sample)
+            #     sample -= sample
             minVal.append(sample.min())
             maxVal.append(sample.max())            
             minConTemp, maxConTemp = AutoAdjustContrastIJ(sample)
@@ -647,21 +651,42 @@ def bkgSubtraction(txy_array, size_bgs=50, light_bg=False):
     return array_processed
 
 # ---------------------------------------------------------------------
-from matplotlib import pyplot as plt
-def meanSubtraction(txy_array):
-    array_processed = np.zeros_like(txy_array)
-    if array_processed.ndim>2:
-        meanImage = np.nanmean(txy_array, axis=0, keepdims=True)
-        if np.isnan(meanImage.flatten()).any():
-            return txy_array
-        # plt.figure(), plt.imshow(meanImage), plt.show()
-        for i in range(txy_array.shape[0]):
-            array_processed[i, :, :] = txy_array[i] - meanImage
-    # for i in range(txy_array.shape[0]):
-        # array_processed = txy_array - meanImage
-        # array_processed[array_processed<0] = 0
-        print(np.nanmean(meanImage.flatten()))
-    return array_processed
+# def meanSubtraction(txy_array):
+#     array_processed = np.zeros_like(txy_array)
+#     if array_processed.ndim>2:
+#         for i in range(txy_array.shape[0]):
+#             img = txy_array[i]
+#             if light_bg:
+#                 img_bgs = black_tophat(img, size=size_bgs)
+#             else:
+#                 img_bgs = white_tophat(img, size=size_bgs)
+#             array_processed[i, :, :] = img_bgs
+#     else:
+#         if light_bg:
+#             array_processed = black_tophat(txy_array, size=size_bgs)
+#         else:
+#             array_processed = white_tophat(txy_array, size=size_bgs)
+#     return array_processed
+# def meanSubtraction(txy_array):
+#     array_processed = np.zeros_like(txy_array)
+#     if array_processed.ndim>2:
+#         # meanImage = np.nanmean(txy_array, axis=0, keepdims=True)
+#         meanImage = sum(txy_array) / len(txy_array)
+#         if np.isnan(meanImage.flatten()).any():
+#             return txy_array
+#         # plt.figure(), plt.imshow(meanImage), plt.show()
+#         for i in range(txy_array.shape[0]):
+#             array_processed[i, :, :] = txy_array[i] - meanImage
+#     # for i in range(txy_array.shape[0]):
+#         # array_processed = txy_array - meanImage
+#         # array_processed[array_processed<0] = 0
+#         print('shape: ')
+#         print(txy_array.shape)
+#         print('meanImage: ')
+#         print(meanImage)
+#         asdkjgasd
+#         print(np.nanmean(meanImage.flatten()))
+#     return array_processed
 
 # ---------------------------------------------------------------------
 def geometric_shift(image2d, angle, shift_x, shift_y):
