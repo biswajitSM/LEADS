@@ -159,6 +159,7 @@ class Worker(QObject):
                     numColors = self.shift_yaml["numColors"]
                 except:
                     numColors = 2 # 2 colors by default
+                    print('Could not read the number of colors (setting to default 2 colors) in '+os.path.join(sub_dirs[i], subfolders[sf]))
                 self.Batchcrop(sub_dirs[i], subfolders[sf], roi_coord_list, roi_file_list, 
                 roi_original_names, ROIdescriptions, save_directory, numColors, 
                 saveCollectively, sf, len(subfolders))
@@ -176,14 +177,14 @@ class Worker(QObject):
         folderpath = sub_dir
 
         # see if we can find the yaml file which is associated to each ROI
-        numROIs = len(roi_coord_list)
+        numROIs   = len(roi_coord_list)
         angle     = [0] * numROIs
         shift_x   = [0] * numROIs
         shift_y   = [0] * numROIs
         numColors = [0] * numROIs
         for j in range(numROIs):
             angle[j], shift_x[j], shift_y[j], numColors[j] = \
-                crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)
+                crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)       
         num_colors = int( mode(numColors).mode ) # take what most files say
         
         # default. can be changed in the future (20200918)
@@ -2275,9 +2276,9 @@ class NapariTabs(QtWidgets.QWidget):
                     self.shift_yaml["angle"] = {}
                 for nColor in range(self.numColors):
                     if hasattr(self, 'xShift'):
-                        self.shift_yaml["x"]["col"+str(int(nColor))] = self.xShift[0][nColor]
-                        self.shift_yaml["y"]["col"+str(int(nColor))] = self.yShift[0][nColor]                        
-                        self.shift_yaml["angle"]["col"+str(int(nColor))] = self.RotationAngle[0][nColor]
+                        self.shift_yaml["x"]["col"+str(int(nColor))] = int( self.xShift[0][nColor] )
+                        self.shift_yaml["y"]["col"+str(int(nColor))] = int( self.yShift[0][nColor] )
+                        self.shift_yaml["angle"]["col"+str(int(nColor))] = int( self.RotationAngle[0][nColor] )
                     else: 
                         self.shift_yaml["x"]["col"+str(int(nColor))] = 0
                         self.shift_yaml["y"]["col"+str(int(nColor))] = 0
@@ -2304,9 +2305,9 @@ class NapariTabs(QtWidgets.QWidget):
                     if not hasattr(self.shift_yaml, 'angle'):
                         self.shift_yaml["angle"] = {}
                     for nColor in range(self.numColors):
-                        self.shift_yaml["x"]["col"+str(int(nColor))] = self.xShift[nSeries][nColor]
-                        self.shift_yaml["y"]["col"+str(int(nColor))] = self.yShift[nSeries][nColor]
-                        self.shift_yaml["angle"]["col"+str(int(nColor))] = self.RotationAngle[nSeries][nColor]
+                        self.shift_yaml["x"]["col"+str(int(nColor))] = int( self.xShift[nSeries][nColor] )
+                        self.shift_yaml["y"]["col"+str(int(nColor))] = int( self.yShift[nSeries][nColor] )
+                        self.shift_yaml["angle"]["col"+str(int(nColor))] = int( self.RotationAngle[nSeries][nColor] )
                     # save the yaml file
                     self.shift_yaml = io.to_dict_walk(self.shift_yaml)
                     for nROI in range(len(ROInames)):

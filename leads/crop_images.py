@@ -9,6 +9,7 @@ from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
 import pims
 import yaml
+import re
 from tqdm import trange
 from . import io
 
@@ -170,6 +171,7 @@ def LoadShiftYamlFile(yamlFileName, xShift, yShift, angle, numColors):
         try:
             yaml_file = open(yamlFileName, "r")
         except FileNotFoundError:
+            print('Not found: '+yamlFileName)
             shift_yaml = MakeShiftYamlFile(xShift, yShift, angle, numColors)
             return shift_yaml
         try:
@@ -177,8 +179,32 @@ def LoadShiftYamlFile(yamlFileName, xShift, yShift, angle, numColors):
             yaml_file.close()
             shift_yaml = io.AutoDict(shift_yaml)
         except:
-            shift_yaml = MakeShiftYamlFile(xShift, yShift, angle, numColors)
-    else: # if is doesnt exist, we create all structures from scratch                
+            print('Found but not readable: '+yamlFileName)
+            # it might be here that yaml files are corrupt. This is especially crucial for cropping.
+            # If we encounter such a file in a posXX_analysis folder, try to look at the corresponding folder with '_analysis'
+            # our folders have usually the names pos or default since we use micromanager
+            pos_analysis_folder = re.search("pos\d+_analysis", yamlFileName.lower())        
+            default_analysis_folder = re.search("default\d+_analysis", yamlFileName.lower())
+            if (pos_analysis_folder is not None) or (default_analysis_folder is not None):
+                yamlFileInImageFolder = os.path.join(os.path.dirname(yamlFileName)[:-len('_analysis')], 'shift.yaml')
+                try:
+                    yaml_file = open(yamlFileInImageFolder, "r")
+                except FileNotFoundError:
+                    print('Alternative yaml file not found: '+yamlFileInImageFolder)
+                    shift_yaml = MakeShiftYamlFile(xShift, yShift, angle, numColors)
+                try:                    
+                    shift_yaml = yaml.load(yaml_file, Loader=yaml.FullLoader)
+                    yaml_file.close()
+                    shift_yaml = io.AutoDict(shift_yaml)
+                    print('Alternative yaml file loaded: '+yamlFileInImageFolder)
+                except:
+                    print('Alternative yaml file found but not readable: '+yamlFileInImageFolder)
+                    shift_yaml = MakeShiftYamlFile(xShift, yShift, angle, numColors)
+            else:
+                print('No potential alternative yaml file present.')
+                shift_yaml = MakeShiftYamlFile(xShift, yShift, angle, numColors)
+    else: # if is doesnt exist, we create all structures from scratch      
+        print('Given file does not exist: '+yamlFileName)          
         shift_yaml = MakeShiftYamlFile(xShift, yShift, angle, numColors) 
     return shift_yaml
 
