@@ -508,7 +508,6 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, mean_subtraction=False
 
     # Stack into one large dask.array
     stack = da.stack(dask_arrays, axis=0)
-    # print('Whole Stack shape: ', stack.shape)  # (nfiles, nz, ny, nx)
 
     # background subtraction
     if bkg_subtraction:
