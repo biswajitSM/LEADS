@@ -1198,7 +1198,7 @@ class Window(QtWidgets.QMainWindow):
                     self.imgarr_col3 = median_bkg_substration(self.imgarr_col3)
                     comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
                                             self.imgarr_right[:,np.newaxis,:,:],
-                                            self.imgarr_right[:,np.newaxis,:,:]),
+                                            self.imgarr_col3[:,np.newaxis,:,:]),
                                             axis=1)
                     imwrite(fpath_processed, comb_arr, imagej=True,
                             metadata={'axis': 'TCYX', 'channels': self.numColors,
