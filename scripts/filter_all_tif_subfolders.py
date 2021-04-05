@@ -80,7 +80,8 @@ def median_tifstack(tif_stack_path):
         num_colors = 1
         img_arr_processed = median_bkg_substration(img_arr)
     elif ndim == 4:
-        num_colors = 2
+        # make it work for any umber of colors e.g. 3
+        num_colors = img_arr.shape[1]
         img_arr_processed = np.zeros_like(img_arr) #, dtype=np.float32
         for color in range(num_colors):
             img_arr_processed[:, color, :, :] = median_bkg_substration(img_arr[:, color, :, :])
