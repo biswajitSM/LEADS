@@ -716,6 +716,7 @@ class Window(QtWidgets.QMainWindow):
         self.df_peaks_linked = None
         self.linkedpeaks_analyzed = None
         self.df_cols_linked = None
+        self.SwapColorsSingleChannel = False
 
     def add_col1_imvs(self):
         self.imv00 = pg.ImageView(name='color 1')
@@ -938,6 +939,24 @@ class Window(QtWidgets.QMainWindow):
             else:
                 self.imv01.setImage(self.imgarr_right)
             self.imv01.showMaximized()
+        elif self.numColors == "1":
+            self.imgarr_right = np.zeros_like(self.imgarr_left)
+            if self.ui.mergeColorsCheckBox.isChecked():
+                arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
+                                            self.imgarr_left[:, :, :, np.newaxis],
+                                            np.zeros_like(self.imgarr_right[:, :, :, np.newaxis])),
+                                            axis=3)
+                if hasattr(self, 'SwapColorsSingleChannel'):
+                    if self.SwapColorsSingleChannel:
+                        arr_combined = np.concatenate((self.imgarr_left[:, :, :, np.newaxis],
+                                            self.imgarr_right[:, :, :, np.newaxis],
+                                            np.zeros_like(self.imgarr_right[:, :, :, np.newaxis])),
+                                            axis=3)
+
+                self.imv00.setImage(arr_combined, levelMode='rgba')
+            else:
+                self.imv00.setImage(self.imgarr_left)
+            self.imv00.showMaximized()
         self.roi_changed()
         self.region_Loop_changed()
         self.region_noLoop_changed()
@@ -1041,6 +1060,8 @@ class Window(QtWidgets.QMainWindow):
             self.image_meta = self.get_processed_image()
             self.set_img_stack()
         else:
+            if not hasattr(self, 'filepath'):
+                return
             self.image_meta = read_img_stack(self.filepath)
             self.set_img_stack()
 
@@ -1097,6 +1118,25 @@ class Window(QtWidgets.QMainWindow):
                 self.imv11.ui.histogram.show()
             else:
                 self.imv11.setImage(self.kymo_right)
+        elif self.numColors == "1" and self.ui.mergeColorsCheckBox.isChecked():
+            # self.roirect_right.setState(self.roirect_left.getState())
+            # roi2_data = self.roirect_right.getArrayRegion(self.imgarr_right,
+            #                                     self.imv01.imageItem, axes=(1, 2))                                                       
+            # self.kymo_right = np.sum(roi2_data, axis=2)
+            # self.kymo_right = self.kymo_right / np.max(self.kymo_right)
+            self.kymo_right = np.zeros_like(self.kymo_left)            
+            self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
+                                self.kymo_left[:, :, np.newaxis],
+                                np.zeros_like(self.kymo_right[:, :, np.newaxis])),
+                                axis=2)
+            if self.SwapColorsSingleChannel:
+                self.kymo_comb = np.concatenate((self.kymo_left[:, :, np.newaxis],
+                                self.kymo_right[:, :, np.newaxis],
+                                np.zeros_like(self.kymo_right[:, :, np.newaxis])),
+                                axis=2)
+            self.imv10.setImage(self.kymo_comb, levelMode='rgba')
+            self.imv10.ui.histogram.show()
+
 
     def on_frame_change_imv00(self):
         frame_imv00 = self.imv00.currentIndex
@@ -1234,6 +1274,18 @@ class Window(QtWidgets.QMainWindow):
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
             else:
                 self.imv22.setImage(self.kymo_right_noLoop)
+        elif self.numColors == "1" and self.ui.mergeColorsCheckBox.isChecked():
+            self.kymo_right_noLoop = np.zeros_like(self.kymo_left_noLoop)
+            kymo_noLoop_comb = np.concatenate((self.kymo_right_noLoop[:, :, np.newaxis],
+                                    self.kymo_left_noLoop[:, :, np.newaxis],
+                                    np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
+                                    axis=2)
+            if self.SwapColorsSingleChannel:
+                kymo_noLoop_comb = np.concatenate((self.kymo_left_noLoop[:, :, np.newaxis],
+                                    self.kymo_right_noLoop[:, :, np.newaxis],
+                                    np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
+                                    axis=2)
+            self.imv20.setImage(kymo_noLoop_comb, levelMode='rgba')
 
     def region_Loop_changed(self):
         minX, maxX = self.region3_Loop.getRegion()
@@ -1252,6 +1304,19 @@ class Window(QtWidgets.QMainWindow):
                 self.imv23.setImage(kymo_loop_comb, levelMode='rgba')
             else:
                 self.imv23.setImage(self.kymo_right_loop)
+        elif self.numColors == "1" and self.ui.mergeColorsCheckBox.isChecked():
+            self.kymo_right_loop = np.zeros_like(self.kymo_left_loop)
+            kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
+                                    self.kymo_left_loop[:, :, np.newaxis],
+                                    np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
+                                    axis=2)
+            if self.SwapColorsSingleChannel:
+                kymo_loop_comb = np.concatenate((self.kymo_left_loop[:, :, np.newaxis],
+                                    self.kymo_right_loop[:, :, np.newaxis],
+                                    np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
+                                    axis=2)
+            self.imv21.setImage(kymo_loop_comb, levelMode='rgba')
+
         # also clear the loop position data point
         if self.plot_loop_errbar is not None:
             self.plotLoopPosData.clear()
@@ -1259,18 +1324,19 @@ class Window(QtWidgets.QMainWindow):
     def merge_colors(self):
         # rgba images need to have 3 colors (arr[t, x, y, c]). c must be 3 
         if self.ui.mergeColorsCheckBox.isChecked():
+            if self.ui.numColorsComboBox.currentText() == '1':
+                self.imgarr_right      = np.zeros_like(self.imgarr_left)
+                self.kymo_right        = np.zeros_like(self.kymo_left)
+                self.kymo_right_loop   = np.zeros_like(self.kymo_left_loop)
+                self.kymo_right_noLoop = np.zeros_like(self.kymo_left_noLoop)
             arr_combined = np.concatenate((self.imgarr_right[:, :, :, np.newaxis],
                                         self.imgarr_left[:, :, :, np.newaxis],
                                         np.zeros_like(self.imgarr_right[:, :, :, np.newaxis])),
                                         axis=3)
-            self.imv01.setImage(arr_combined, levelMode='rgba')
-            self.imv01.showMaximized()
             self.kymo_comb = np.concatenate((self.kymo_right[:, :, np.newaxis],
                                     self.kymo_left[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right[:, :, np.newaxis])),
                                     axis=2)
-            self.imv11.setImage(self.kymo_comb, levelMode='rgba')
-            self.imv11.ui.histogram.show()
             self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
                                     self.kymo_left_loop[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
@@ -1279,15 +1345,34 @@ class Window(QtWidgets.QMainWindow):
                                     self.kymo_left_noLoop[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
                                     axis=2)
-            self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
-            self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
+            if self.ui.numColorsComboBox.currentText() == '1':
+                self.imv00.setImage(arr_combined, levelMode='rgba')
+                self.imv00.showMaximized()
+                self.imv10.setImage(self.kymo_comb, levelMode='rgba')
+                self.imv10.ui.histogram.show()
+                self.imv20.setImage(kymo_noLoop_comb, levelMode='rgba')
+                self.imv21.setImage(self.kymo_loop_comb, levelMode='rgba')
+            elif self.ui.numColorsComboBox.currentText() == '2':
+                self.imv01.setImage(arr_combined, levelMode='rgba')
+                self.imv01.showMaximized()
+                self.imv11.setImage(self.kymo_comb, levelMode='rgba')
+                self.imv11.ui.histogram.show()
+                self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
+                self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
         else:
             # set back the imagedata
-            self.imv01.setImage(self.imgarr_right, levelMode='mono')
-            self.imv01.showMaximized()
-            self.imv11.setImage(self.kymo_right, levelMode='mono')
-            self.imv22.setImage(self.kymo_right_noLoop, levelMode='mono')
-            self.imv23.setImage(self.kymo_right_loop, levelMode='mono')
+            if self.ui.numColorsComboBox.currentText() == '1':
+                self.imv00.setImage(self.imgarr_left, levelMode='mono')
+                self.imv00.showMaximized()
+                self.imv10.setImage(self.kymo_left, levelMode='mono')
+                self.imv20.setImage(self.kymo_left_noLoop, levelMode='mono')
+                self.imv21.setImage(self.kymo_left_loop, levelMode='mono')
+            elif self.ui.numColorsComboBox.currentText() == '2':
+                self.imv01.setImage(self.imgarr_right, levelMode='mono')
+                self.imv01.showMaximized()
+                self.imv11.setImage(self.kymo_right, levelMode='mono')
+                self.imv22.setImage(self.kymo_right_noLoop, levelMode='mono')
+                self.imv23.setImage(self.kymo_right_loop, levelMode='mono')
         return
 
     def swap_colors(self):
@@ -1295,6 +1380,12 @@ class Window(QtWidgets.QMainWindow):
             temp_arr = self.image_meta['img_arr_color_0']
             self.image_meta['img_arr_color_0'] = self.image_meta['img_arr_color_1']
             self.image_meta['img_arr_color_1'] = temp_arr
+            self.set_img_stack()
+        elif self.numColors == "1":
+            if self.ui.swapColorsCheckBox.isChecked():
+                self.SwapColorsSingleChannel = True
+            else: 
+                self.SwapColorsSingleChannel = False
             self.set_img_stack()
         else:
             self.set_img_stack()
@@ -1826,7 +1917,7 @@ class Window(QtWidgets.QMainWindow):
         # save right full kymo : d1right
         elif self.ui.saveSectionComboBox.currentText() == "d1right:tif":
             filename = self.folderpath+'/'+self.filename_base + '_right_kymo.tif'
-            if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
+            if self.ui.mergeColorsCheckBox.isChecked() and (self.numColors == "2" or self.numColors == "1"):
                 imwrite(filename, self.kymo_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
             else:
@@ -1840,7 +1931,7 @@ class Window(QtWidgets.QMainWindow):
         # save right selected kymo : d2right
         elif self.ui.saveSectionComboBox.currentText() == "d2right:tif":
             filename = self.folderpath+'/'+self.filename_base + '_right_selected_kymo.tif'
-            if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
+            if self.ui.mergeColorsCheckBox.isChecked() (self.numColors == "2" or self.numColors == "1"):
                 imwrite(filename, self.kymo_loop_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
             else:
