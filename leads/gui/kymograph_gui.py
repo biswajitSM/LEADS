@@ -749,10 +749,12 @@ class Window(QtWidgets.QMainWindow):
         self.roirect_left.sigRegionChangeFinished.connect(self.roi_changed)
         self.infline_left.sigPositionChanged.connect(self.infiline_left_update)
         self.imv00.sigTimeChanged.connect(self.on_frame_change_imv00)
-        if self.numColors == "2":
+        if self.numColors == "2" or self.numColors == "3":
             self.infline_right.sigPositionChanged.connect(self.infiline_right_update)
             self.imv01.sigTimeChanged.connect(self.on_frame_change_imv01)
-        # self.infline_left.sigDragged
+            if self.numColors == "3":
+                self.infline_col3.sigPositionChanged.connect(self.infiline_col3_update)
+                # self.imv02.sigTimeChanged.connect(self.on_frame_change_imv02)
 
     def load_parameters(self):
         self.numColors = self.ui.numColorsComboBox.currentText()
@@ -1419,23 +1421,33 @@ class Window(QtWidgets.QMainWindow):
 
     def infiline_left_update(self):
         frame_numer = int(self.infline_left.value())
-        if frame_numer >= 0:
-            self.imv00.setCurrentIndex(frame_numer)
-            pos = self.infline_left.getPos()
-            if self.numColors == "2" or "3":
-                self.imv01.setCurrentIndex(frame_numer)
-                self.infline_right.setPos(pos)
-                if self.numColors == "3":
-                    self.imv02.setCurrentIndex(frame_numer)
-                    self.infline_col3.setPos(pos)
+        pos = self.infline_left.getPos()
+        self.imv00.setCurrentIndex(frame_numer)
+        if self.numColors == "2" or "3":
+            self.imv01.setCurrentIndex(frame_numer)
+            self.infline_right.setPos(pos)
+            if self.numColors == "3":
+                self.imv02.setCurrentIndex(frame_numer)
+                self.infline_col3.setPos(pos)
 
     def infiline_right_update(self):
         frame_numer = int(self.infline_right.value())
-        if frame_numer >= 0:
-            self.imv00.setCurrentIndex(frame_numer)
-            self.imv01.setCurrentIndex(frame_numer)
-            pos = self.infline_right.getPos()
-            self.infline_left.setPos(pos)
+        pos = self.infline_right.getPos()
+        self.imv00.setCurrentIndex(frame_numer)
+        self.imv01.setCurrentIndex(frame_numer)
+        self.infline_left.setPos(pos)
+        if self.numColors == "3":
+            self.imv02.setCurrentIndex(frame_numer)
+            self.infline_col3.setPos(pos)
+    
+    def infiline_col3_update(self):
+        frame_number = int(self.infline_col3.value())
+        pos = self.infline_col3.getPos()
+        self.imv00.setCurrentIndex(frame_number)
+        self.imv01.setCurrentIndex(frame_number)
+        self.imv02.setCurrentIndex(frame_number)
+        self.infline_left.setPos(pos)
+        self.infline_right.setPos(pos)
 
     def hide_imgv_cmap(self, imgv):
         imgv.ui.roiBtn.hide()
@@ -1465,6 +1477,7 @@ class Window(QtWidgets.QMainWindow):
             self.add_col1_imvs()
             self.add_col2_imvs()
             self.add_col3_imvs()
+            self.connect_signals()
         self.scalebar_img = None
         self.defaultDockState = self.dockarea.saveState()
         
