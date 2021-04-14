@@ -1838,7 +1838,7 @@ class Window(QtWidgets.QMainWindow):
         self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
         self.memory_link = self.multipeak_dialog.memory_spinbox.value()
         self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
-        if self.numColors == "2":
+        if self.numColors == "2" or "3":
             result = kymograph.link_and_plot_two_color(
                     self.all_peaks_dict["All Peaks"], self.all_smpeaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
@@ -2012,7 +2012,7 @@ class Window(QtWidgets.QMainWindow):
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
             ax.plot(frames, msd_moving, 'g', label='color_1')
-            if self.numColors == "2":
+            if self.numColors == "2" or "3":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames, msd_moving, 'm', label='color_2')
