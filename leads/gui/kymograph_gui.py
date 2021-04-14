@@ -1595,10 +1595,22 @@ class Window(QtWidgets.QMainWindow):
 
     def swap_colors(self):
         if self.numColors == "2"  or "3":
-            temp_arr = self.image_meta['img_arr_color_0']
-            self.image_meta['img_arr_color_0'] = self.image_meta['img_arr_color_1']
-            self.image_meta['img_arr_color_1'] = temp_arr
-            self.set_img_stack()
+            if self.ui.swapColorsComboBox.currentText() == "1<->2":
+                print("am at switching colors")
+                temp_arr = self.image_meta['img_arr_color_0']
+                self.image_meta['img_arr_color_0'] = self.image_meta['img_arr_color_1']
+                self.image_meta['img_arr_color_1'] = temp_arr
+                self.set_img_stack()
+            elif self.ui.swapColorsComboBox.currentText() == "2<->3":
+                temp_arr = self.image_meta['img_arr_color_1']
+                self.image_meta['img_arr_color_1'] = self.image_meta['img_arr_color_2']
+                self.image_meta['img_arr_color_2'] = temp_arr
+                self.set_img_stack()
+            elif self.ui.swapColorsComboBox.currentText() == "1<->3":
+                temp_arr = self.image_meta['img_arr_color_2']
+                self.image_meta['img_arr_color_2'] = self.image_meta['img_arr_color_0']
+                self.image_meta['img_arr_color_0'] = temp_arr
+                self.set_img_stack()
         else:
             self.set_img_stack()
 
