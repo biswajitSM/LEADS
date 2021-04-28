@@ -94,8 +94,12 @@ class NewWindow(Window):
             if self.numColors == "2":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
-                ax.plot(frames * self.acquisitionTime, msd_moving, '.m', label='MSD particle')
-                ax.plot(frames * self.acquisitionTime, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'm', label='MSD particle')
+                ax.plot(frames * self.acquisitionTime,
+                        msd_moving * self.pixelSize**2, #converted to µm²
+                        '.', color='darkslategrey', label='MSD particle')
+                ax.plot(frames * self.acquisitionTime,
+                        savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order) * self.pixelSize**2, #converted to µm²
+                        color='darkslategrey', label='')
                 peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
@@ -108,19 +112,19 @@ class NewWindow(Window):
                 ax_right = ax.twinx()
                 ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb,
-                              '.r', label='Position Differnece')
+                              '.', color='darkorange', label='Distance')
                 ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb_smooth,
-                              'r', label='Position Differnece')
-                ax_right.set_ylabel("Distance/kb", color='r')
-                ax_right.tick_params(axis='y', colors='r')
-                ax_right.spines["right"].set_color("r")
-                ax_right.legend(loc='center right')
+                              color='darkorange', label='')
+                ax_right.set_ylabel("Distance/kb", color='darkorange')
+                ax_right.tick_params(axis='y', colors='darkorange')
+                ax_right.spines["right"].set_color('darkorange')
+                ax_right.legend(loc='center right', labelcolor='linecolor')
             ax.set_xlabel("time/s")
-            ax.tick_params(axis='y', colors='m')
-            ax.spines["left"].set_color("m")
-            ax.set_ylabel("MSD moving average(" + str(n) + " points)")
-            ax.legend()
+            ax.tick_params(axis='y', colors='darkslategrey')
+            ax.spines["left"].set_color("darkslategrey")
+            ax.set_ylabel(r"MSD(${\mu} m^2$)", color='darkslategrey')
+            ax.legend(labelcolor='linecolor')
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
             print("plot MSD")
