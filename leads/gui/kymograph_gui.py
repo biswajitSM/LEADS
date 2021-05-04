@@ -303,6 +303,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.plottype_combobox.addItems(["MSDmoving", "MSDsavgol", "MSDlagtime",
                                          "MSDlagtime-AllPeaks",
                                          "TimeTraceCol1", "TimeTraceCol2",
+                                         "FitKinetics"
                                          ])
         plot_grid.addWidget(self.plottype_pushbutton, 2, 2)
         plot_grid.addWidget(self.plottype_combobox, 2, 3)
@@ -317,6 +318,8 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.DNAlength_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         self.DNApuncta_spinbox.valueChanged.connect(self.on_prominence_spinbox_changed)
         self.smoothlength_spinbox.valueChanged.connect(self.on_smoothlength_spinbox_changed)
+        self.peakthreshold_checkbox.stateChanged.connect(self.on_threshold_all_peaks_changed)
+        self.peakthreshold_spinbox.valueChanged.connect(self.on_threshold_all_peaks_changed)
         self.smol_prominence_spinbox.valueChanged.connect(self.on_smol_prominence_spinbox_changed)
         self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
         self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
@@ -360,6 +363,10 @@ class MultiPeakDialog(QtWidgets.QDialog):
         if self.smoothlength_spinbox.value() % 2 != 0: # only processing odd values
             self.window.params_change_loop_detection()
             self.window.params_change_smol_detection()
+
+    def on_threshold_all_peaks_changed(self):
+        self.window.params_change_loop_detection()
+        self.window.params_change_smol_detection()
 
     def on_smol_prominence_spinbox_changed(self):
         value = self.smol_prominence_spinbox.value()
@@ -436,6 +443,41 @@ class MultiPeakDialog(QtWidgets.QDialog):
             pass
         self.settings = settings
         return self.settings
+
+class KineticsFitting(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Kinetics Fitting")
+
+        self.figure = plt.figure()
+        self.canvas = FigureCanvasQTAgg(self.figure)
+        self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        # set layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)
+        # fit layout
+        fit_layout = QtWidgets.QGridLayout()
+        # fit loop kinetics button
+        self.button_fit_kinetics = QtWidgets.QPushButton('Fit Loop Kinetics')
+        fit_layout.addWidget(self.button_fit_kinetics, 0, 0)
+        self.mintime_spinbox = QtWidgets.QSpinBox()
+        self.mintime_spinbox.setRange(0, 1e3)
+        self.maxtime_spinbox = QtWidgets.QSpinBox()
+        self.maxtime_spinbox.setRange(1, 1e3)
+        fit_layout.addWidget(self.mintime_spinbox, 0, 1)
+        fit_layout.addWidget(self.maxtime_spinbox, 0, 2)
+        layout.addLayout(fit_layout)
+        self.setLayout(layout)
+
+        self.button_fit_kinetics.clicked.connect(self.plot)
+    
+    def plot(self):
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        ax.plot(1, 1)
+        self.canvas.draw()
 
 class ROIDialog(QtWidgets.QDialog):
     """
@@ -1728,6 +1770,8 @@ class Window(QtWidgets.QMainWindow):
                 peak_width=(min_peak_width, max_peak_width),
                 pix_width=self.dna_puncta_size,
                 smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(),
+                threshold_glbal_peak=self.multipeak_dialog.peakthreshold_checkbox.isChecked(),
+                threshold_value=self.multipeak_dialog.peakthreshold_spinbox.value(),
                 plotting=False, kymo_noLoop=self.kymo_left_noLoop.T,
                 correction_noLoop=self.correction_with_no_loop
                 )
@@ -1741,7 +1785,10 @@ class Window(QtWidgets.QMainWindow):
                 prominence_min=self.peak_prominence_smol,
                 peak_width=(min_peak_width, max_peak_width),
                 pix_width=self.dna_puncta_size,
-                smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(), plotting=False,
+                smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(),
+                threshold_glbal_peak=self.multipeak_dialog.peakthreshold_checkbox.isChecked(),
+                threshold_value=self.multipeak_dialog.peakthreshold_spinbox.value(),
+                plotting=False,
                 )
         self.plotLoopPosData.setData(self.all_peaks_dict["All Peaks"]["FrameNumber"],
                                      self.all_peaks_dict["All Peaks"]["PeakPosition"])
@@ -1765,6 +1812,8 @@ class Window(QtWidgets.QMainWindow):
                 prominence_min=self.peak_prominence_smol,
                 peak_width=(min_peak_width, max_peak_width),
                 smooth_length=self.multipeak_dialog.smoothlength_spinbox.value(),
+                threshold_glbal_peak=self.multipeak_dialog.peakthreshold_checkbox.isChecked(),
+                threshold_value=self.multipeak_dialog.peakthreshold_spinbox.value(),
                 pix_width=self.dna_puncta_size, plotting=False,)
             self.plot_loop_vs_sm_smdata.clear()
             self.plot_loop_vs_sm_loopdata.clear()
@@ -1971,6 +2020,11 @@ class Window(QtWidgets.QMainWindow):
         ax.legend()
         plt.show()
 
+    def fit_loop_kinetics(self):
+        # from .kinetics_fitting import KineticsFitting
+        fitting_dialog = KineticsFitting(self)
+        fitting_dialog.show()
+
     def matplot_loop_vs_sm(self):
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
         right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
@@ -2104,6 +2158,8 @@ class Window(QtWidgets.QMainWindow):
             ax.set_ylabel("Intensity")
             ax.legend()
             plt.show()
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "FitKinetics":
+            self.fit_loop_kinetics()
 
     def save_hdf5(self, filepath_hdf5):
         with h5py.File(filepath_hdf5, 'w') as h5_analysis:

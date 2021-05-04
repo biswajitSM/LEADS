@@ -81,6 +81,7 @@ def bkg_substration(txy_array, size_bgs=10, light_bg=False):
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
                       smooth_length=7, prominence_min=1/2, peak_width=(None, None),
+                      threshold_glbal_peak=True, threshold_value=1, #threshold: threshold vlue in percentage that compare all peaks in the kymo
                       pix_width=11, plotting=False,
                       kymo_noLoop=None, correction_noLoop=True):
     '''
@@ -133,6 +134,9 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
             columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
     df_max_pks = pd.DataFrame(maxpeak_pos_list,
             columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
+    if threshold_glbal_peak:
+        df_pks = threshold_all_peaks(df_pks, threshold_value)
+        df_max_pks = threshold_all_peaks(df_max_pks, threshold_value)
     peak_dict = {
         "All Peaks": df_pks,
         "Max Peak" : df_max_pks,
@@ -147,6 +151,17 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
         plt.plot(peak_dict["Max Peak"]["FrameNumber"],
                  peak_dict["Max Peak"]["PeakPosition"], '.r', alpha=0.5)
     return peak_dict
+
+
+def threshold_all_peaks(df_peaks, threshold=1):
+    '''threshold: threshold vlue in percentage that compare all peaks in the kymo
+    df_peaks    
+    '''
+    int_peaks = df_peaks["PeakIntensity"].median()
+    int_threshold = 1e-2*threshold*int_peaks
+    mask = df_peaks["PeakIntensity"] > int_threshold
+    df_peaks_threshold = df_peaks[mask]
+    return df_peaks_threshold.reset_index(drop=True)
 
 
 def analyze_maxpeak(df_maxpeak, smooth_length=11, fitting=False, fit_lim=[0, 30],
@@ -456,7 +471,7 @@ def msd_lagtime_allpeaks(df_linked_peaks, pixelsize, fps, max_lagtime=100, axis=
     axis.set_yscale('log')
     axis.set_xscale('log')
     axis.set_xlabel('lag time [s]')
-    axis.set_ylabel(r'$\langle \Delta r^2 \rangle$ [$\mu$m$^2$]')
+    axis.set_ylabel(r'$\angle \Delta r^2 \rangle$ [$\mu$m$^2$]')
     axis.legend()
     return imsd
 
