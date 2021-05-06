@@ -2167,20 +2167,27 @@ class Window(QtWidgets.QMainWindow):
             params_group = h5_analysis.create_group("parameters")
             hdf5dict.dump(self.params_yaml, params_group)
             h5_analysis["filepath"] = self.filepath
-            if self.kymo_left is not None:
-                h5_analysis["Left Image Array"] = self.roirect_left.getArrayRegion(
-                                    self.imgarr_left,
-                                    self.imv00.imageItem, axes=(1, 2))
-                h5_analysis["Left Kymograph"] = self.kymo_left.T
-                h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
-                h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
-                if self.numColors == "2":
-                    h5_analysis["Right Image Array"] = self.roirect_right.getArrayRegion(
-                                    self.imgarr_right,
-                                    self.imv01.imageItem, axes=(1, 2))
-                    h5_analysis["Right Kymograph"] = self.kymo_right.T
-                    h5_analysis["Right Kymograph Loop"] = self.kymo_right_loop.T
-                    h5_analysis["Right Kymograph No Loop"] = self.kymo_right_noLoop.T
+            # if self.kymo_left is not None:
+            h5_analysis["Left Image Array"] = self.roirect_left.getArrayRegion(
+                                self.imgarr_left,
+                                self.imv00.imageItem, axes=(1, 2))
+            h5_analysis["Left Kymograph"] = self.kymo_left.T
+            h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
+            h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
+            if self.numColors == "2" or "3":
+                h5_analysis["Right Image Array"] = self.roirect_right.getArrayRegion(
+                                self.imgarr_right,
+                                self.imv01.imageItem, axes=(1, 2))
+                h5_analysis["Right Kymograph"] = self.kymo_right.T
+                h5_analysis["Right Kymograph Loop"] = self.kymo_right_loop.T
+                h5_analysis["Right Kymograph No Loop"] = self.kymo_right_noLoop.T
+                if self.numColors == "3":
+                    h5_analysis[" Col3 Image Array"] = self.roirect_col3.getArrayRegion(
+                                self.imgarr_col3,
+                                self.imv02.imageItem, axes=(1, 2))
+                    h5_analysis["Col3 Kymograph"] = self.kymo_col3.T
+                    h5_analysis["Col3 Kymograph Loop"] = self.kymo_col3_loop.T
+                    h5_analysis["Col3 Kymograph No Loop"] = self.kymo_col3_noLoop.T
             if self.max_peak_dict is not None:
                 h5_analysis["Left Max Peaks"] = self.max_peak_dict["Max Peak"].to_records()
                 if self.numColors == "2" and self.max_smpeak_dict is not None:
