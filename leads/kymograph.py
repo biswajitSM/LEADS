@@ -282,13 +282,14 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
             search_range=10, memory=5, filter_length=10,
             plotting=True):
     # set axes and figsize
-    fig = plt.figure()
-    gs = fig.add_gridspec(3, 3)
+    fig = plt.figure(figsize=(10, 10))
+    gs = fig.add_gridspec(4, 4)
     ax1 = fig.add_subplot(gs[0, :])
     ax1.set_xticks([])
     ax2 = fig.add_subplot(gs[1, :])
     ax2.set_xticks([])
     ax3 = fig.add_subplot(gs[2, :])
+    ax4 = fig.add_subplot(gs[3, :])
     # link and plot data to it
     df_peaks_linked = link_peaks(df_peaks, search_range=search_range,
                           memory=memory, filter_length=filter_length,
@@ -296,19 +297,23 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
     df_peaks_linked_sm = link_peaks(df_peaks_sm, search_range=search_range,
                           memory=memory, filter_length=filter_length,
                           plotting=plotting, axis=ax2)
-    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.8, label='DNA')
-    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.8, label='SM')
+    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.5, label='SM')
+    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.3, label='DNA')
     ax3.legend(loc=4)
-    ax_list = [ax1, ax2, ax3]
+    ax4_sc = ax4.scatter(df_peaks_linked['frame'], df_peaks_linked['x'], marker='.',
+                         c=df_peaks_linked["PeakIntensity"].values, cmap='jet')
+    ax4_cbar = plt.colorbar(ax4_sc)
+    # ax4_cbar.set_ticks([])
+    ax_list = [ax1, ax2, ax3, ax4]
     for ax in ax_list:
         ax.set_ylim(0, None)
         ax.set_xlim(0, None)
         ax.set_ylabel('pixels')
-    ax3.set_xlabel('Frame Numbers')
+    ax4.set_xlabel('Frame Numbers')
     ax1.text(0.55, 0.9, 'DNA punctas')
     ax2.text(0.55, 0.9, 'Single molecules')
     ax3.text(0.55, 0.9, 'DNA punctas and SM')
-    fig.tight_layout()
+    # fig.tight_layout()
     plt.show()
     result = {
         'df_peaks_linked' : df_peaks_linked,
@@ -316,6 +321,7 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
         'ax1' : ax1,
         'ax2' : ax2,
         'ax3' : ax3,
+        'ax4' : ax4,
     }
     return result
 

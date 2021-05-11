@@ -1930,9 +1930,10 @@ class Window(QtWidgets.QMainWindow):
                                 axesA=result["ax1"], axesB=result["ax2"], color="red")
                     result["ax2"].add_artist(con)
                 print(self.df_cols_linked)
-            result["ax1"].set_ylim(self.loop_region_right, self.loop_region_left)
-            result["ax2"].set_ylim(self.loop_region_right, self.loop_region_left)
-            result["ax3"].set_ylim(self.loop_region_right, self.loop_region_left)
+            result["ax1"].set_ylim(self.loop_region_left, self.loop_region_right)
+            result["ax2"].set_ylim(self.loop_region_left, self.loop_region_right)
+            result["ax3"].set_ylim(self.loop_region_left, self.loop_region_right)
+            result["ax4"].set_ylim(self.loop_region_left, self.loop_region_right)
         else:
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
