@@ -653,8 +653,8 @@ class MainWidget(QtWidgets.QWidget):
         self.saveSectionComboBox = QtWidgets.QComboBox()
         self.saveSectionComboBox.addItems(["d0left", "d0right",
                                            "ROI:tif",
-                                           "d1left", "d1right",
-                                           "d2left", "d2right",
+                                           "d1left:tif", "d1right:tif",
+                                           "d2left:tif", "d2right:tif",
                                            ])
         self.saveFormatComboBox = QtWidgets.QComboBox()
         self.saveFormatComboBox.addItems([".mp4", ".avi", ".gif",
@@ -2310,7 +2310,12 @@ class Window(QtWidgets.QMainWindow):
         elif self.ui.saveSectionComboBox.currentText() == "d1right:tif":
             filename = self.folderpath+'/'+self.filename_base + '_right_kymo.tif'
             if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
-                imwrite(filename, self.kymo_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
+                kymo_comb = self.kymo_comb[:,:,:-1]
+                for nChannel in range(kymo_comb.shape[2]):
+                    temp = kymo_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_comb[:,:,nChannel] = temp * (2**16-1)
+                imwrite(filename, kymo_comb.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
             else:
                 imwrite(filename, self.kymo_right.T.astype(np.uint16), imagej=True,
@@ -2324,7 +2329,12 @@ class Window(QtWidgets.QMainWindow):
         elif self.ui.saveSectionComboBox.currentText() == "d2right:tif":
             filename = self.folderpath+'/'+self.filename_base + '_right_selected_kymo.tif'
             if self.ui.mergeColorsCheckBox.isChecked() and self.numColors == "2":
-                imwrite(filename, self.kymo_loop_comb[:,:,:-1].T.astype(np.uint16), imagej=True,
+                kymo_loop_comb = self.kymo_loop_comb[:,:,:-1]
+                for nChannel in range(kymo_loop_comb.shape[2]):
+                    temp = kymo_loop_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
+                imwrite(filename, kymo_loop_comb.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
             else:
                 imwrite(filename, self.kymo_right_loop.T.astype(np.uint16), imagej=True,
