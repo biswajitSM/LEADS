@@ -1298,6 +1298,13 @@ class Window(QtWidgets.QMainWindow):
                                                  self.kymo_left[:, :, np.newaxis],
                                                  self.kymo_col3[:, :, np.newaxis],),
                                                  axis=2)
+                kymo_comb = self.kymo_comb[:,:,:-1]
+                for nChannel in range(kymo_comb.shape[2]):
+                    temp = kymo_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_comb[:,:,:-1] = kymo_comb
+
                 self.imv11.setImage(self.kymo_comb, levelMode='rgba')
                 self.imv11.ui.histogram.show()
             else:
@@ -1313,6 +1320,14 @@ class Window(QtWidgets.QMainWindow):
                                     self.kymo_left[:, :, np.newaxis],
                                     np.zeros_like(self.kymo_right[:, :, np.newaxis])),
                                     axis=2)
+                
+                kymo_comb = self.kymo_comb[:,:,:-1]
+                for nChannel in range(kymo_comb.shape[2]):
+                    temp = kymo_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_comb[:,:,:-1] = kymo_comb
+                
                 self.imv11.setImage(self.kymo_comb, levelMode='rgba')
                 self.imv11.ui.histogram.show()
             else:
@@ -1572,6 +1587,12 @@ class Window(QtWidgets.QMainWindow):
                                         self.kymo_left_loop[:, :, np.newaxis],
                                         self.kymo_col3_loop[:, :, np.newaxis],),
                                         axis=2)
+                kymo_loop_comb = self.kymo_loop_comb[:,:,:-1]
+                for nChannel in range(kymo_loop_comb.shape[2]):
+                    temp = kymo_loop_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_loop_comb[:,:,:-1] = kymo_loop_comb
                 self.imv23.setImage(kymo_loop_comb, levelMode='rgba')
             else:
                 self.imv23.setImage(self.kymo_right_loop)
@@ -1583,6 +1604,12 @@ class Window(QtWidgets.QMainWindow):
                                         self.kymo_left_loop[:, :, np.newaxis],
                                         np.zeros_like(self.kymo_right_loop[:, :, np.newaxis])),
                                         axis=2)
+                kymo_loop_comb = self.kymo_loop_comb[:,:,:-1]
+                for nChannel in range(kymo_loop_comb.shape[2]):
+                    temp = kymo_loop_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_loop_comb[:,:,:-1] = kymo_loop_comb
                 self.imv23.setImage(kymo_loop_comb, levelMode='rgba')
             else:
                 self.imv23.setImage(self.kymo_right_loop)
@@ -1604,16 +1631,40 @@ class Window(QtWidgets.QMainWindow):
                                         self.kymo_left[:, :, np.newaxis],
                                         self.kymo_col3[:, :, np.newaxis],),
                                         axis=2)
+
+                kymo_comb = self.kymo_comb[:,:,:-1]
+                for nChannel in range(kymo_comb.shape[2]):
+                    temp = kymo_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_comb[:,:,:-1] = kymo_comb
+                
                 self.imv11.setImage(self.kymo_comb, levelMode='rgba')
                 self.imv11.ui.histogram.show()
                 self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
                                         self.kymo_left_loop[:, :, np.newaxis],
                                         self.kymo_col3_loop[:, :, np.newaxis],),#CHANGE to proper array
                                         axis=2)
+
+                kymo_loop_comb = self.kymo_loop_comb[:,:,:-1]
+                for nChannel in range(kymo_loop_comb.shape[2]):
+                    temp = kymo_loop_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_loop_comb[:,:,:-1] = kymo_loop_comb
+
                 kymo_noLoop_comb = np.concatenate((self.kymo_right_noLoop[:, :, np.newaxis],
                                         self.kymo_left_noLoop[:, :, np.newaxis],
                                         self.kymo_col3_noLoop[:, :, np.newaxis],),
                                         axis=2)
+
+                kymo_noLoop_comb = self.kymo_noLoop_comb[:,:,:-1]
+                for nChannel in range(kymo_noLoop_comb.shape[2]):
+                    temp = kymo_noLoop_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_noLoop_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_noLoop_comb[:,:,:-1] = kymo_noLoop_comb
+
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
                 self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
             if self.numColors == "2":
@@ -1627,6 +1678,14 @@ class Window(QtWidgets.QMainWindow):
                                         self.kymo_left[:, :, np.newaxis],
                                         np.zeros_like(self.kymo_right[:, :, np.newaxis])),
                                         axis=2)
+
+                kymo_comb = self.kymo_comb[:,:,:-1]
+                for nChannel in range(kymo_comb.shape[2]):
+                    temp = kymo_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_comb[:,:,:-1] = kymo_comb
+
                 self.imv11.setImage(self.kymo_comb, levelMode='rgba')
                 self.imv11.ui.histogram.show()
                 self.kymo_loop_comb = np.concatenate((self.kymo_right_loop[:, :, np.newaxis],
@@ -1637,6 +1696,20 @@ class Window(QtWidgets.QMainWindow):
                                         self.kymo_left_noLoop[:, :, np.newaxis],
                                         np.zeros_like(self.kymo_right_noLoop[:, :, np.newaxis])),
                                         axis=2)
+                kymo_loop_comb = self.kymo_loop_comb[:,:,:-1]
+                for nChannel in range(kymo_loop_comb.shape[2]):
+                    temp = kymo_loop_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_loop_comb[:,:,:-1] = kymo_loop_comb
+
+                kymo_noLoop_comb = self.kymo_noLoop_comb[:,:,:-1]
+                for nChannel in range(kymo_noLoop_comb.shape[2]):
+                    temp = kymo_noLoop_comb[:,:,nChannel]
+                    temp /= np.max(temp)
+                    kymo_noLoop_comb[:,:,nChannel] = temp * (2**16-1)
+                self.kymo_noLoop_comb[:,:,:-1] = kymo_noLoop_comb
+
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
                 self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
         else:
