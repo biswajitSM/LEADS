@@ -1658,12 +1658,10 @@ class Window(QtWidgets.QMainWindow):
                                         self.kymo_col3_noLoop[:, :, np.newaxis],),
                                         axis=2)
 
-                kymo_noLoop_comb = self.kymo_noLoop_comb[:,:,:-1]
                 for nChannel in range(kymo_noLoop_comb.shape[2]):
                     temp = kymo_noLoop_comb[:,:,nChannel]
                     temp /= np.max(temp)
                     kymo_noLoop_comb[:,:,nChannel] = temp * (2**16-1)
-                self.kymo_noLoop_comb[:,:,:-1] = kymo_noLoop_comb
 
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
                 self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
@@ -1703,12 +1701,10 @@ class Window(QtWidgets.QMainWindow):
                     kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
                 self.kymo_loop_comb[:,:,:-1] = kymo_loop_comb
 
-                kymo_noLoop_comb = self.kymo_noLoop_comb[:,:,:-1]
                 for nChannel in range(kymo_noLoop_comb.shape[2]):
                     temp = kymo_noLoop_comb[:,:,nChannel]
                     temp /= np.max(temp)
                     kymo_noLoop_comb[:,:,nChannel] = temp * (2**16-1)
-                self.kymo_noLoop_comb[:,:,:-1] = kymo_noLoop_comb
 
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
                 self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
