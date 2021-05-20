@@ -933,6 +933,7 @@ class NapariTabs(QtWidgets.QWidget):
                                         [230, 159, 0], [240, 228, 66], 
                                         [0, 114, 178], [213, 94, 0], \
                                         [255, 255, 255]]) / 255 # color palette taken from https://www.nature.com/articles/nmeth.1618        
+        self.series2treat_ShiftRoutine = None
 
         # number of colors
         self.ui.numColorsCbox.setCurrentText("2")
@@ -989,89 +990,89 @@ class NapariTabs(QtWidgets.QWidget):
         # self.LPwin.show() # dont show it yet, only if we actually have something to plot
 
 
-        # upon clicking somewhere in the viewer, decide if we clicked into
-        # an image or in a shapes layer. Depending on that, make the layer we clicked
-        # into the active one
-        @viewer.mouse_drag_callbacks.append
-        def SwitchLayerUponMouseClick(self, event):
-            # at startup, we dont have any layers yet. in this case, do nothing
-            # !!! here, self is already self.viewer
-            if (not self.layers) or (not self._active_layer):
-                return
-            selected = self._active_layer.name
-            # if the selected layer, is the profile layer, we dont do this
-            if 'profile' in selected.lower():
-                return
-            # if we're currently drawing a shape, also dont trigger it
-            if hasattr(self._active_layer, 'nshapes'): # only works for shapes layers
-                if self._active_layer.mode != 'select':
-                    return
-            # get the mouse click coordinates. We have to get that
-            # from the currently active layer
-            mouseCoordinates = [self._active_layer.coordinates]
-            if len(mouseCoordinates[0])>2:  # omit z component on position 0 if present
-                mouseCoordinates[0] = mouseCoordinates[0][1:]
-            # loop through shape layers. If the mouse click was
-            # in any of the shapes, select this layer. 
-            # Otherwise, select the uppermost image layer
-            for nLayer in range(len(self.layers)):
-                if not hasattr(self.layers[nLayer], 'nshapes'):
-                    continue
-                if len(self.layers[nLayer].data) == 0:
-                    continue
-                if self.layers[nLayer].data[0].shape[0] != 4:
-                    continue # is not a rectangle
+        # # upon clicking somewhere in the viewer, decide if we clicked into
+        # # an image or in a shapes layer. Depending on that, make the layer we clicked
+        # # into the active one
+        # @viewer.mouse_drag_callbacks.append
+        # def SwitchLayerUponMouseClick(self, event):
+        #     # at startup, we dont have any layers yet. in this case, do nothing
+        #     # !!! here, self is already self.viewer
+        #     if (not self.layers) or (not self._active_layer):
+        #         return
+        #     selected = self._active_layer.name
+        #     # if the selected layer, is the profile layer, we dont do this
+        #     if 'profile' in selected.lower():
+        #         return
+        #     # if we're currently drawing a shape, also dont trigger it
+        #     if hasattr(self._active_layer, 'nshapes'): # only works for shapes layers
+        #         if self._active_layer.mode != 'select':
+        #             return
+        #     # get the mouse click coordinates. We have to get that
+        #     # from the currently active layer
+        #     mouseCoordinates = [self._active_layer.coordinates]
+        #     if len(mouseCoordinates[0])>2:  # omit z component on position 0 if present
+        #         mouseCoordinates[0] = mouseCoordinates[0][1:]
+        #     # loop through shape layers. If the mouse click was
+        #     # in any of the shapes, select this layer. 
+        #     # Otherwise, select the uppermost image layer
+        #     for nLayer in range(len(self.layers)):
+        #         if not hasattr(self.layers[nLayer], 'nshapes'):
+        #             continue
+        #         if len(self.layers[nLayer].data) == 0:
+        #             continue
+        #         if self.layers[nLayer].data[0].shape[0] != 4:
+        #             continue # is not a rectangle
                 
-                # now see if we find any shape which contains mouseCoordinates
-                for nShape in range(len(self.layers[nLayer].data)):
-                    # make the polygon 5% on each side larger, in order to 
-                    # not switch to an image layer when trying to resize 
-                    # the ROI   
-                    # issue: when a shape is already selected, it selects the layer
-                    # we should check for that and in case a shape is selected,
-                    # leave it 
-                    polygon = deepcopy(self.layers[nLayer].data[nShape])
-                    a = crop_images.get_rect_params(polygon)
-                    extension = 20 # 20 pixels on each side
-                    dx = extension * (np.cos(a['angle']*np.pi/180) + np.sin(a['angle']*np.pi/180))
-                    dy = extension * (np.cos(a['angle']*np.pi/180) - np.sin(a['angle']*np.pi/180))
-                    polygon[0][0] -= dx
-                    polygon[3][0] -= dx
-                    polygon[1][0] += dx
-                    polygon[2][0] += dx
-                    polygon[0][1] -= dy
-                    polygon[3][1] += dy
-                    polygon[1][1] -= dy
-                    polygon[2][1] += dy
+        #         # now see if we find any shape which contains mouseCoordinates
+        #         for nShape in range(len(self.layers[nLayer].data)):
+        #             # make the polygon 5% on each side larger, in order to 
+        #             # not switch to an image layer when trying to resize 
+        #             # the ROI   
+        #             # issue: when a shape is already selected, it selects the layer
+        #             # we should check for that and in case a shape is selected,
+        #             # leave it 
+        #             polygon = deepcopy(self.layers[nLayer].data[nShape])
+        #             a = crop_images.get_rect_params(polygon)
+        #             extension = 20 # 20 pixels on each side
+        #             dx = extension * (np.cos(a['angle']*np.pi/180) + np.sin(a['angle']*np.pi/180))
+        #             dy = extension * (np.cos(a['angle']*np.pi/180) - np.sin(a['angle']*np.pi/180))
+        #             polygon[0][0] -= dx
+        #             polygon[3][0] -= dx
+        #             polygon[1][0] += dx
+        #             polygon[2][0] += dx
+        #             polygon[0][1] -= dy
+        #             polygon[3][1] += dy
+        #             polygon[1][1] -= dy
+        #             polygon[2][1] += dy
                     
-                    path = mpltPath.Path(polygon)
-                    if path.contains_points(mouseCoordinates):
-                        if selected == nLayer:
-                            return
-                        # deselect what was selected before
-                        self.layers[selected].events.deselect()
-                        self.layers[selected].selected = False
-                        # select where we clicked
-                        self.layers[nLayer].events.select()
-                        self.layers[nLayer].selected = True
-                        self._active_layer = self.layers[nLayer]
-                        return
+        #             path = mpltPath.Path(polygon)
+        #             if path.contains_points(mouseCoordinates):
+        #                 if selected == nLayer:
+        #                     return
+        #                 # deselect what was selected before
+        #                 self.layers[selected].events.deselect()
+        #                 self.layers[selected].selected = False
+        #                 # select where we clicked
+        #                 self.layers[nLayer].events.select()
+        #                 self.layers[nLayer].selected = True
+        #                 self._active_layer = self.layers[nLayer]
+        #                 return
 
-            # if the function didnt return so far, we didnt find 
-            # any shape which has the mouse coord inside
-            # in thise case, check if we had an image layer selected before
-            # if yes, just stay there -> do nothing
-            # if no, change to the lowest layer
-            if hasattr(self.layers[selected], 'nshapes'): # if it was a shape layer
-                self.layers[selected].events.deselect()
-                self.layers[selected].selected = False
-                self.layers[0].events.select()
-                self.layers[0].selected = True
-                self._active_layer = self.layers[0]
+        #     # if the function didnt return so far, we didnt find 
+        #     # any shape which has the mouse coord inside
+        #     # in thise case, check if we had an image layer selected before
+        #     # if yes, just stay there -> do nothing
+        #     # if no, change to the lowest layer
+        #     if hasattr(self.layers[selected], 'nshapes'): # if it was a shape layer
+        #         self.layers[selected].events.deselect()
+        #         self.layers[selected].selected = False
+        #         self.layers[0].events.select()
+        #         self.layers[0].selected = True
+        #         self._active_layer = self.layers[0]
 
 
         # when changing layers, update the x-y and angle boxes
-        @viewer.events.active_layer.connect
+        @viewer.layers.selection.events.active.connect
         def UpdateXYShiftRotationAngleUponSwitchingLayerWrapper(event):
             self.UpdateXYShiftRotationAngleUponSwitchingLayer()
 
@@ -1079,7 +1080,7 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
     def UpdateXYShiftRotationAngleUponSwitchingLayer(self):
         # at startup, we dont have any layers yet. in this case, do nothing
-        if (not self.viewer.layers) or (not hasattr(self, 'numLayers') or (not self.viewer._active_layer)) or hasattr(self, 'xshift_estimate'):
+        if (not self.viewer.layers) or (not hasattr(self, 'numLayers') or (not self.viewer.layers.selection.active)) or hasattr(self, 'xshift_estimate'):
             return
         # check if we have currently as many layers as written in self.numLayers
         # if not, we are likely just building up the viewer after changing the FOV
@@ -1092,13 +1093,13 @@ class NapariTabs(QtWidgets.QWidget):
                 return
         else:
             return
-        self.getRelatedSelectedLayer(display=False)
+        self.getRelatedSelectedLayer(displayWarning=False)
         if self.series2treat is not None:
             ShiftColorsIndividually = False
             if self.numLayers == self.numColors:
                 ShiftColorsIndividually = True # if there is only one image series, move the layers independently
             if ShiftColorsIndividually:
-                currentLayer = self.viewer.active_layer.name
+                currentLayer = self.viewer.layers.selection.active.name
                 layerNames = [''] * self.numLayers
                 for nLayer in range(self.numLayers):
                     layerNames[nLayer] = self.viewer.layers[nLayer].name
@@ -1122,9 +1123,9 @@ class NapariTabs(QtWidgets.QWidget):
 
 
         # also update the help to show the folder path
-        if not self.viewer._active_layer:
+        if not self.viewer.layers.selection.active:
             return
-        activeLayerName = self.viewer._active_layer.name
+        activeLayerName = self.viewer.layers.selection.active.name
         for nLayer in range(len(self.viewer.layers)):
             if activeLayerName == self.viewer.layers[nLayer].name:
                 break
@@ -1160,10 +1161,18 @@ class NapariTabs(QtWidgets.QWidget):
         # get selected layers
         selected = []
         numLayers2align = 0
+        layerNames = []
+        for layer in self.viewer.layers.selection:
+            layerNames.append(layer.name)
         for nLayer in range(self.numLayers):
-            if self.viewer.layers[nLayer].selected:
-                selected.append(nLayer)
-                numLayers2align += 1
+            for nLayerName in range(len(layerNames)):
+                if self.viewer.layers[nLayer].name==layerNames[nLayerName]:
+                    selected.append(nLayer)
+                    numLayers2align += 1       
+        # for nLayer in range(self.numLayers):
+        #     if self.viewer.layers[nLayer].selected:
+        #         selected.append(nLayer)
+        #         numLayers2align += 1
                 # if count == 2:
                 #     break
         if numLayers2align < 2:
@@ -1221,16 +1230,17 @@ class NapariTabs(QtWidgets.QWidget):
         # deselect all layers but the lowest one
         self.series2treat_ShiftRoutine = None
         for nLayer in range(1, numLayers2align):
-            if self.viewer.layers[int(selected[nLayer])].selected:
-                try:
-                    self.viewer.layers[int(selected[nLayer])].events.deselect()
-                except:
-                    pass
-                try:
-                    self.viewer.layers[int(selected[nLayer])].selected = False
-                except:
-                    pass
-        self.viewer._active_layer = self.viewer.layers[int(selected[0])]
+            # if self.viewer.layers[int(selected[nLayer])].selected:
+                # try:
+                #     self.viewer.layers[int(selected[nLayer])].events.deselect()
+                # except:
+                #     pass
+            try:
+                # self.viewer.layers[int(selected[nLayer])].selected = False
+                self.viewer.layers.selection.remove(self.viewer.layers[int(selected[nLayer])])
+            except:
+                pass
+        self.viewer.layers.selection.active = self.viewer.layers[int(selected[0])]
         self.UpdateXYShiftRotationAngleUponSwitchingLayer()
 
 # ---------------------------------------------------------------------
@@ -1255,9 +1265,9 @@ class NapariTabs(QtWidgets.QWidget):
 
 # ---------------------------------------------------------------------
     def OpenPathExternally(self):
-        if not self.viewer._active_layer:
+        if not self.viewer.layers.selection.active:
             return
-        activeLayerName = self.viewer._active_layer.name
+        activeLayerName = self.viewer.layers.selection.active.name
         for nLayer in range(len(self.viewer.layers)):
             if activeLayerName == self.viewer.layers[nLayer].name:
                 break
@@ -1402,8 +1412,8 @@ class NapariTabs(QtWidgets.QWidget):
         for nShapeLayer in range(numShapeLayers):
             shapeLayers.append(self.viewer.layers[isShapeLayer[nShapeLayer]])
         for nShapeLayer in reversed(range(numShapeLayers)):
-            self.viewer.layers.remove(isShapeLayer[nShapeLayer]) # removes the layer at index isShapeLayer[nShapeLayer]
-        
+            self.viewer.layers.remove(self.viewer.layers[isShapeLayer[nShapeLayer]])
+
         # now add them back with updated properties
         currentTime  = self.viewer.dims.point[0]
         for nShapeLayer in range(numShapeLayers):
@@ -1460,7 +1470,7 @@ class NapariTabs(QtWidgets.QWidget):
             if self.numLayers == self.numColors:
                 ShiftColorsIndividually = True # if there is only one image series, move the layers independently
             if ShiftColorsIndividually:
-                currentLayer = self.viewer.active_layer.name
+                currentLayer = self.viewer.layers.selection.active.name
                 layerNames = [''] * self.numLayers
                 for nLayer in range(self.numLayers):
                     layerNames[nLayer] = self.viewer.layers[nLayer].name
@@ -1582,7 +1592,7 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
     def GetCurrentDisplaySettings(self):
         self.currentTime  = self.viewer.dims.point[0]
-        self.currentLayer = self.viewer.active_layer.name
+        self.currentLayer = self.viewer.layers.selection.active.name
         layerNames = [''] * self.numLayers
         self.visibility = [False] * self.numLayers
         for nLayer in range(self.numLayers): # loops only through non-shape layers
@@ -1650,13 +1660,11 @@ class NapariTabs(QtWidgets.QWidget):
         
         self.viewer.dims.set_point(0, self.currentTime)
         # deselect what is currently selected
-        selected = self.viewer.active_layer.name
-        self.viewer.layers[selected].events.deselect()
-        self.viewer.layers[selected].selected = False  
+        selected = self.viewer.layers.selection.active.name 
+        self.viewer.layers.selection.remove(self.viewer.layers[selected])
         # select what was selected before      
-        self.viewer.layers[self.currentLayer].events.select()
-        self.viewer.layers[self.currentLayer].selected = True 
-        self.viewer._active_layer = self.viewer.layers[self.currentLayer]
+        self.viewer.layers.selection.add(self.viewer.layers[self.currentLayer])
+        self.viewer.layers.selection.active = self.viewer.layers[self.currentLayer]
         for nLayer in range(self.numLayers): # the last entry in layers is the ROI
             self.viewer.layers[nLayer].contrast_limits_range = self.currentContrastRanges[nLayer]
             self.viewer.layers[nLayer].contrast_limits       = self.currentContrast[nLayer]
@@ -1664,14 +1672,16 @@ class NapariTabs(QtWidgets.QWidget):
         del self.visibility
 
 # ---------------------------------------------------------------------
-    def getRelatedSelectedLayer(self, display=True):
+    def getRelatedSelectedLayer(self, displayWarning=True):
+        for layer in self.viewer.layers.selection:
+            layerName = layer.name
         layers2treat = [0] * self.numLayers
         for nLayer in range(self.numLayers): # the last entry in layers is the ROI
-            layers2treat[nLayer] = self.viewer.layers[nLayer].selected
+            layers2treat[nLayer] = self.viewer.layers[nLayer].name==layerName
         layers2treat = [i for i, x in enumerate(layers2treat) if x]        
         if len(layers2treat)==0:
             self.series2treat = None
-            if display:
+            if displayWarning:
                 print('Select a layer different from the ROI layer.')
             return
         self.series2treat = int( np.floor(layers2treat[0] / self.numColors) )
@@ -2368,11 +2378,12 @@ class NapariTabs(QtWidgets.QWidget):
         )
 
 # ---------------------------------------------------------------------
-def main():
-    with napari.gui_qt():
-        viewer = napari.Viewer(title="Crop or make Kymograph")
-        ui = NapariTabs(viewer)
-        viewer.window.add_dock_widget(ui)        
+def main():       
+    viewer = napari.Viewer(title="Crop or make Kymograph")
+    viewer.window._qt_window.showFullScreen()
+    ui = NapariTabs(viewer)
+    viewer.window.add_dock_widget(ui)
+    napari.run()
 
 if __name__ == "__main__":
     main()
