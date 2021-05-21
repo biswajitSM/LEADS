@@ -733,6 +733,9 @@ class Window(QtWidgets.QMainWindow):
         saveyaml_as_action = file_menu.addAction("Save .yaml params As")
         saveyaml_as_action.setShortcut("Ctrl+Shift+Y")
         saveyaml_as_action.triggered.connect(self.save_yaml_as)
+        open_cropping_GUI_action = file_menu.addAction("Open cropping GUI")
+        open_cropping_GUI_action.setShortcut("Ctrl+Shift+O")
+        open_cropping_GUI_action.triggered.connect(self.openCroppingGUI)
         """ View """
         view_menu = menu_bar.addMenu("View")
         default_action = view_menu.addAction("Default View State")
@@ -1221,6 +1224,9 @@ class Window(QtWidgets.QMainWindow):
                 self.set_loop_detection_widgets()
             self.region_errbar.setRegion(self.params_yaml['Region Errbar'])
             self.detect_loops()
+
+    def openCroppingGUI(self):
+        print('this will open the cropping GUI in the future...')
 
     def processed_image_check(self):
         if self.ui.processImageCheckBox.isChecked():
