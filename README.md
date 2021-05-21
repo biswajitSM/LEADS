@@ -43,7 +43,7 @@ To open the gui for cropping large files in a folder
 
 Please use issues to post your bugs and send pull requests to merge your modifications/improvemnts.
 
-All the contributors will be acknowledged here and will be included if this ends up in a ppublication.
+All the contributors will be acknowledged here and will be included if this ends up in a publication.
 
 ## Authors & Contributors
 
