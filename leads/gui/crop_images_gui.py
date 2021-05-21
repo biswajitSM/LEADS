@@ -934,6 +934,7 @@ class NapariTabs(QtWidgets.QWidget):
                                         [0, 114, 178], [213, 94, 0], \
                                         [255, 255, 255]]) / 255 # color palette taken from https://www.nature.com/articles/nmeth.1618        
         self.series2treat_ShiftRoutine = None
+        self.CorrectChromaticShift = False
 
         # number of colors
         self.ui.numColorsCbox.setCurrentText("2")
@@ -944,6 +945,7 @@ class NapariTabs(QtWidgets.QWidget):
         if self.frame_end == -1:
             self.frame_end = None
         # image rotating and shifting
+        self.ui.CorrectChromaticShiftCheckBox.stateChanged.connect(self.switchCorrectChromaticShiftFlag)
         self.ui.angleSpinBox.valueChanged.connect(self.ShiftRotateImage)
         self.ui.xShiftSpinBox.valueChanged.connect(self.ShiftRotateImage)
         self.ui.yShiftSpinBox.valueChanged.connect(self.ShiftRotateImage)
@@ -987,7 +989,6 @@ class NapariTabs(QtWidgets.QWidget):
         # finally, get the window for a line profile
         self.LPwin = LineProfileWindow()
         self.viewer.dims.events.current_step.connect(self.updateSlider)
-        # self.LPwin.show() # dont show it yet, only if we actually have something to plot
 
 
         # # upon clicking somewhere in the viewer, decide if we clicked into
@@ -1095,20 +1096,12 @@ class NapariTabs(QtWidgets.QWidget):
             return
         self.getRelatedSelectedLayer(displayWarning=False)
         if self.series2treat is not None:
-            ShiftColorsIndividually = False
-            if self.numLayers == self.numColors:
-                ShiftColorsIndividually = True # if there is only one image series, move the layers independently
-            if ShiftColorsIndividually:
-                currentLayer = self.viewer.layers.selection.active.name
-                layerNames = [''] * self.numLayers
-                for nLayer in range(self.numLayers):
-                    layerNames[nLayer] = self.viewer.layers[nLayer].name
-                currentLayer = layerNames.index(currentLayer)
-                index = currentLayer
-            else:
-                # it doesnt matter which color we take here since both colors have the same
-                # x-shift, y-shift and angle value. So let's just take the first one
-                index = 0
+            currentLayer = self.viewer.layers.selection.active.name
+            layerNames = [''] * self.numLayers
+            for nLayer in range(self.numLayers):
+                layerNames[nLayer] = self.viewer.layers[nLayer].name
+            currentLayer = layerNames.index(currentLayer)
+            index = currentLayer % self.numColors
             # now we update what is shown in the spin boxes. First, however, block signals 
             # in order to prevent triggering self.ShiftRotateImage 
             self.ui.xShiftSpinBox.blockSignals(True)
@@ -1155,6 +1148,12 @@ class NapariTabs(QtWidgets.QWidget):
                 progressStr = progressStr.replace('Progress:', labelStr+':')
             self.ui.StatusBarLabel.setText(progressStr)
        
+# ---------------------------------------------------------------------
+    def switchCorrectChromaticShiftFlag(self):
+        if self.ui.CorrectChromaticShiftCheckBox.isChecked():
+            self.CorrectChromaticShift = True
+        else:
+            self.CorrectChromaticShift = False
 
 # ---------------------------------------------------------------------
     def EstimateShift(self):
@@ -1169,12 +1168,6 @@ class NapariTabs(QtWidgets.QWidget):
                 if self.viewer.layers[nLayer].name==layerNames[nLayerName]:
                     selected.append(nLayer)
                     numLayers2align += 1       
-        # for nLayer in range(self.numLayers):
-        #     if self.viewer.layers[nLayer].selected:
-        #         selected.append(nLayer)
-        #         numLayers2align += 1
-                # if count == 2:
-                #     break
         if numLayers2align < 2:
             print('Select 2 layers to estimate shift')
             return
@@ -1230,13 +1223,7 @@ class NapariTabs(QtWidgets.QWidget):
         # deselect all layers but the lowest one
         self.series2treat_ShiftRoutine = None
         for nLayer in range(1, numLayers2align):
-            # if self.viewer.layers[int(selected[nLayer])].selected:
-                # try:
-                #     self.viewer.layers[int(selected[nLayer])].events.deselect()
-                # except:
-                #     pass
             try:
-                # self.viewer.layers[int(selected[nLayer])].selected = False
                 self.viewer.layers.selection.remove(self.viewer.layers[int(selected[nLayer])])
             except:
                 pass
@@ -1459,22 +1446,18 @@ class NapariTabs(QtWidgets.QWidget):
             shift_supplied = True
         else:
             shift_supplied = False
-        # use the built-in translate/rotate method of napari viewer                
-        if self.series2treat_ShiftRoutine is not None:
-            self.series2treat = self.series2treat_ShiftRoutine
-        else:
+        ## use the built-in translate/rotate method of napari viewer                
+        # get which sereis to treat based on the selected layers
+        if self.CorrectChromaticShift: # if we want to correct for chromatic shift
             self.getRelatedSelectedLayer()
-        self.series2treat = int(self.series2treat)
-        if self.series2treat is not None:
-            ShiftColorsIndividually = False
-            if self.numLayers == self.numColors:
-                ShiftColorsIndividually = True # if there is only one image series, move the layers independently
-            if ShiftColorsIndividually:
+            self.series2treat = int(self.series2treat)
+            if self.series2treat is not None:
                 currentLayer = self.viewer.layers.selection.active.name
                 layerNames = [''] * self.numLayers
                 for nLayer in range(self.numLayers):
                     layerNames[nLayer] = self.viewer.layers[nLayer].name
                 currentLayer = layerNames.index(currentLayer)
+                currentLayer = currentLayer % self.numColors # "%" gives the remainder
                 if shift_supplied:
                     self.xShift[self.series2treat][currentLayer] = self.xshift_estimate
                     self.yShift[self.series2treat][currentLayer] = self.yshift_estimate
@@ -1482,82 +1465,106 @@ class NapariTabs(QtWidgets.QWidget):
                     self.xShift[self.series2treat][currentLayer] = self.ui.xShiftSpinBox.value()
                     self.yShift[self.series2treat][currentLayer] = self.ui.yShiftSpinBox.value()
                 self.RotationAngle[self.series2treat][currentLayer] = self.ui.angleSpinBox.value()
+        else: # if we dont to correct for chromatic shift
+            if self.series2treat_ShiftRoutine is not None:
+                self.series2treat = self.series2treat_ShiftRoutine
             else:
-                if not hasattr(self, 'xShift'):
-                    self.RotationAngle = [0] * self.numSeries
-                    self.xShift        = [0] * self.numSeries
-                    self.yShift        = [0] * self.numSeries
-                    for nSeries in range(self.numSeries):
-                        self.RotationAngle[nSeries] = [0] * self.MaxNumColors
-                        self.xShift[nSeries]        = [0] * self.MaxNumColors
-                        self.yShift[nSeries]        = [0] * self.MaxNumColors
-                for nColor in range(self.numColors):
+                self.getRelatedSelectedLayer()
+            self.series2treat = int(self.series2treat)
+            if self.series2treat is not None:
+                ShiftColorsIndividually = False
+                if self.numLayers == self.numColors:
+                    ShiftColorsIndividually = True # if there is only one image series, move the layers independently
+                if ShiftColorsIndividually:
+                    currentLayer = self.viewer.layers.selection.active.name
+                    layerNames = [''] * self.numLayers
+                    for nLayer in range(self.numLayers):
+                        layerNames[nLayer] = self.viewer.layers[nLayer].name
+                    currentLayer = layerNames.index(currentLayer)
+                    currentLayer = currentLayer % self.numColors # "%" gives the remainder
                     if shift_supplied:
-                        self.xShift[self.series2treat][nColor] = self.xshift_estimate
-                        self.yShift[self.series2treat][nColor] = self.yshift_estimate
+                        self.xShift[self.series2treat][currentLayer] = self.xshift_estimate
+                        self.yShift[self.series2treat][currentLayer] = self.yshift_estimate
                     else:
-                        self.xShift[self.series2treat][nColor] = self.ui.xShiftSpinBox.value()
-                        self.yShift[self.series2treat][nColor] = self.ui.yShiftSpinBox.value()
-                    self.RotationAngle[self.series2treat][nColor] = self.ui.angleSpinBox.value()
-            
-            # save the current x-y shift into a yaml file
-            folderpath = self.image_meta[self.series2treat]['folderpath']
-            self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
-            self.LoadShiftYamlFile()
-
-            if not hasattr(self.shift_yaml, 'angle'):
-                self.shift_yaml["angle"] = {}
-            for nColor in range(self.numColors):
-                self.shift_yaml["x"]["col"+str(int(nColor))] = int( self.xShift[self.series2treat][nColor] )
-                self.shift_yaml["y"]["col"+str(int(nColor))] = int( self.yShift[self.series2treat][nColor] )
-                self.shift_yaml["angle"]["col"+str(int(nColor))] = int( self.RotationAngle[self.series2treat][nColor] )
-        
-            # save the yaml file
-            self.shift_yaml = io.to_dict_walk(self.shift_yaml)
-            os.makedirs(os.path.dirname(self.yamlFileName), exist_ok=True)
-            with open(self.yamlFileName, "w") as shift_file:
-                yaml.dump(dict(self.shift_yaml), shift_file, default_flow_style=False)
-
-            # save current settings: selected layer, all contrast ranges and 
-            # contrast min/max, as well as the current frame
-            # we then call self.loadImgSeq(), which will read the updated shifts + angles
-            # from the yaml file we just saved such that the image is correctly rotated
-            # see if we already have a value for angle_old. If not, this is the first rotation
-            # we apply. Do it also when angle=0. Otherwise, we can check if the 
-            # new angle value is different from the old one. Only execute the rotation
-            # function if this is true.            
-            if not hasattr(self, 'angle_old'):
-                self.angle_old = [[n for n in m] for m in self.RotationAngle]
-                if sum(abs(np.asarray(self.RotationAngle[self.series2treat])))!=0:
-                    angleDiff = np.array((1,1))
+                        self.xShift[self.series2treat][currentLayer] = self.ui.xShiftSpinBox.value()
+                        self.yShift[self.series2treat][currentLayer] = self.ui.yShiftSpinBox.value()
+                    self.RotationAngle[self.series2treat][currentLayer] = self.ui.angleSpinBox.value()
                 else:
-                    angleDiff = np.array((0,0))
+                    if not hasattr(self, 'xShift'):
+                        self.RotationAngle = [0] * self.numSeries
+                        self.xShift        = [0] * self.numSeries
+                        self.yShift        = [0] * self.numSeries
+                        for nSeries in range(self.numSeries):
+                            self.RotationAngle[nSeries] = [0] * self.MaxNumColors
+                            self.xShift[nSeries]        = [0] * self.MaxNumColors
+                            self.yShift[nSeries]        = [0] * self.MaxNumColors
+                    for nColor in range(self.numColors):
+                        if shift_supplied:
+                            self.xShift[self.series2treat][nColor] = self.xshift_estimate
+                            self.yShift[self.series2treat][nColor] = self.yshift_estimate
+                        else:
+                            self.xShift[self.series2treat][nColor] = self.ui.xShiftSpinBox.value()
+                            self.yShift[self.series2treat][nColor] = self.ui.yShiftSpinBox.value()
+                        self.RotationAngle[self.series2treat][nColor] = self.ui.angleSpinBox.value()
+            
+        # save the current x-y shift into a yaml file
+        folderpath = self.image_meta[self.series2treat]['folderpath']
+        self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
+        self.LoadShiftYamlFile()
+
+        if not hasattr(self.shift_yaml, 'angle'):
+            self.shift_yaml["angle"] = {}
+        for nColor in range(self.numColors):
+            self.shift_yaml["x"]["col"+str(int(nColor))] = int( self.xShift[self.series2treat][nColor] )
+            self.shift_yaml["y"]["col"+str(int(nColor))] = int( self.yShift[self.series2treat][nColor] )
+            self.shift_yaml["angle"]["col"+str(int(nColor))] = int( self.RotationAngle[self.series2treat][nColor] )
+    
+        # save the yaml file
+        self.shift_yaml = io.to_dict_walk(self.shift_yaml)
+        os.makedirs(os.path.dirname(self.yamlFileName), exist_ok=True)
+        with open(self.yamlFileName, "w") as shift_file:
+            yaml.dump(dict(self.shift_yaml), shift_file, default_flow_style=False)
+
+        # save current settings: selected layer, all contrast ranges and 
+        # contrast min/max, as well as the current frame
+        # we then call self.loadImgSeq(), which will read the updated shifts + angles
+        # from the yaml file we just saved such that the image is correctly rotated
+        # see if we already have a value for angle_old. If not, this is the first rotation
+        # we apply. Do it also when angle=0. Otherwise, we can check if the 
+        # new angle value is different from the old one. Only execute the rotation
+        # function if this is true.            
+        if not hasattr(self, 'angle_old'):
+            self.angle_old = [[n for n in m] for m in self.RotationAngle]
+            if sum(abs(np.asarray(self.RotationAngle[self.series2treat])))!=0:
+                angleDiff = np.array((1,1))
             else:
-                angleDiff = np.asarray(self.RotationAngle[self.series2treat]) - np.asarray(self.angle_old[self.series2treat])
-            self.angle_old = [[n for n in m] for m in self.RotationAngle]            
-            if sum(abs(angleDiff))!=0:
-                self.GetCurrentDisplaySettings()
-                self.use_current_image_path = True
-                save_series2treat = self.series2treat
-                self.loadImgSeq(omitROIlayer=True)
-                self.series2treat = save_series2treat
-                # apply settings as before
-                self.applyDisplaySettings()  
+                angleDiff = np.array((0,0))
+        else:
+            angleDiff = np.asarray(self.RotationAngle[self.series2treat]) - np.asarray(self.angle_old[self.series2treat])
+        self.angle_old = [[n for n in m] for m in self.RotationAngle]            
+        if sum(abs(angleDiff))!=0:
+            self.GetCurrentDisplaySettings()
+            self.use_current_image_path = True
+            save_series2treat = self.series2treat
+            self.loadImgSeq(omitROIlayer=True)
+            self.series2treat = save_series2treat
+            # apply settings as before
+            self.applyDisplaySettings()  
 
-            # shift
-            for nColor in range(self.numColors):
-                # [z, y, x]
-                translationVector = np.array( [0, self.yShift[self.series2treat][nColor], self.xShift[self.series2treat][nColor]] )
-                self.viewer.layers[self.series2treat*self.numColors+nColor].translate = translationVector
+        # shift
+        for nColor in range(self.numColors):
+            # [z, y, x]
+            translationVector = np.array( [0, self.yShift[self.series2treat][nColor], self.xShift[self.series2treat][nColor]] )
+            self.viewer.layers[self.series2treat*self.numColors+nColor].translate = translationVector
 
-            # if line profiles are shown, also update those
-            if self.LPwin.isVisible():
-                self.profile_line()
+        # if line profiles are shown, also update those
+        if self.LPwin.isVisible():
+            self.profile_line()
 
-            # delete the estimate attribute so we dont take it next time again
-            if hasattr(self, 'xshift_estimate'):
-                delattr(self, 'xshift_estimate')
-                delattr(self, 'yshift_estimate')
+        # delete the estimate attribute so we dont take it next time again
+        if hasattr(self, 'xshift_estimate'):
+            delattr(self, 'xshift_estimate')
+            delattr(self, 'yshift_estimate')
 
 # ---------------------------------------------------------------------
     def LoadShiftYamlFile(self):
@@ -1763,6 +1770,7 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
     def fixContrast(self):
         for nLayer in range(self.numLayers): # the last entry in layers is the ROI
+            if hasattr(self.viewer.layers[nLayer], 'nshapes'): continue # shape layers dont have a contrast setting
             self.viewer.layers[nLayer].contrast_limits_range = self.viewer.layers[nLayer].contrast_limits_range
             self.viewer.layers[nLayer].contrast_limits       = self.viewer.layers[nLayer].contrast_limits
                     
@@ -2380,9 +2388,8 @@ class NapariTabs(QtWidgets.QWidget):
 # ---------------------------------------------------------------------
 def main():       
     viewer = napari.Viewer(title="Crop or make Kymograph")
-    viewer.window._qt_window.showFullScreen()
     ui = NapariTabs(viewer)
-    viewer.window.add_dock_widget(ui)
+    viewer.window.add_dock_widget(ui, area='bottom')
     napari.run()
 
 if __name__ == "__main__":
