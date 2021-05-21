@@ -121,7 +121,7 @@ def main():
     with napari.gui_qt():
         viewer = napari.Viewer(title="Crop or make Kymograph")
         ui = NapariTabs(viewer)
-        viewer.window.add_dock_widget(ui)
+        viewer.window.add_dock_widget(ui, area='bottom')
 
 if __name__ == "__main__":
     main()
