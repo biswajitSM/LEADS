@@ -12,8 +12,8 @@ import pims
 import trackpy
 import matplotlib.pyplot as plt
 from . import io
-plt.style.use('seaborn')
-
+from .utils import figure_params
+plt.rcParams.update(figure_params.params_dict)
 
 def read_img_stack(filepath):
     image_meta = {}
@@ -81,6 +81,7 @@ def bkg_substration(txy_array, size_bgs=10, light_bg=False):
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
                       smooth_length=7, prominence_min=1/2, peak_width=(None, None),
+                      threshold_glbal_peak=True, threshold_value=1, #threshold: threshold vlue in percentage that compare all peaks in the kymo
                       pix_width=11, plotting=False,
                       kymo_noLoop=None, correction_noLoop=True):
     '''
@@ -133,6 +134,9 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
             columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
     df_max_pks = pd.DataFrame(maxpeak_pos_list,
             columns=["FrameNumber", "PeakPosition", "PeakIntensity", "PeakUpIntensity", "PeakDownIntensity"])
+    if threshold_glbal_peak:
+        df_pks = threshold_all_peaks(df_pks, threshold_value)
+        df_max_pks = threshold_all_peaks(df_max_pks, threshold_value)
     peak_dict = {
         "All Peaks": df_pks,
         "Max Peak" : df_max_pks,
@@ -147,6 +151,17 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
         plt.plot(peak_dict["Max Peak"]["FrameNumber"],
                  peak_dict["Max Peak"]["PeakPosition"], '.r', alpha=0.5)
     return peak_dict
+
+
+def threshold_all_peaks(df_peaks, threshold=1):
+    '''threshold: threshold vlue in percentage that compare all peaks in the kymo
+    df_peaks    
+    '''
+    int_peaks = df_peaks["PeakIntensity"].median()
+    int_threshold = 1e-2*threshold*int_peaks
+    mask = df_peaks["PeakIntensity"] > int_threshold
+    df_peaks_threshold = df_peaks[mask]
+    return df_peaks_threshold.reset_index(drop=True)
 
 
 def analyze_maxpeak(df_maxpeak, smooth_length=11, fitting=False, fit_lim=[0, 30],
@@ -207,7 +222,9 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     peak_diff = pos_diff_kb_shift.values
     peak_diff_filt = savgol_filter(peak_diff, window_length=smooth_length, polyorder=2)
     loop_sm_dict = {
-        "FrameNumber": frame_number,
+        "FrameNumber" : frame_number,
+        "PositionDiff" : pos_diff,
+        "PositionDiff_kb" : pos_diff_kb,
         "PeakDiff" : peak_diff, # difference in peak position in kilobases
         "PeakDiffFiltered" : peak_diff_filt, #smoothed peaks
     }
@@ -229,7 +246,6 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
 
 def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
                plotting=True, axis=None,):
-    plt.style.use('seaborn')
     df_peaks["x"] = df_peaks["PeakPosition"]
     if df_peaks_sm is None:
         df_peaks["y"] = df_peaks["FrameNumber"]
@@ -266,13 +282,14 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
             search_range=10, memory=5, filter_length=10,
             plotting=True):
     # set axes and figsize
-    fig = plt.figure()
-    gs = fig.add_gridspec(3, 3)
+    fig = plt.figure(figsize=(10, 10))
+    gs = fig.add_gridspec(4, 4)
     ax1 = fig.add_subplot(gs[0, :])
     ax1.set_xticks([])
     ax2 = fig.add_subplot(gs[1, :])
     ax2.set_xticks([])
     ax3 = fig.add_subplot(gs[2, :])
+    ax4 = fig.add_subplot(gs[3, :])
     # link and plot data to it
     df_peaks_linked = link_peaks(df_peaks, search_range=search_range,
                           memory=memory, filter_length=filter_length,
@@ -280,19 +297,23 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
     df_peaks_linked_sm = link_peaks(df_peaks_sm, search_range=search_range,
                           memory=memory, filter_length=filter_length,
                           plotting=plotting, axis=ax2)
-    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.8, label='DNA')
-    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.8, label='SM')
+    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.5, label='SM')
+    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.3, label='DNA')
     ax3.legend(loc=4)
-    ax_list = [ax1, ax2, ax3]
+    ax4_sc = ax4.scatter(df_peaks_linked['frame'], df_peaks_linked['x'], marker='.',
+                         c=df_peaks_linked["PeakIntensity"].values, cmap='jet')
+    ax4_cbar = plt.colorbar(ax4_sc)
+    # ax4_cbar.set_ticks([])
+    ax_list = [ax1, ax2, ax3, ax4]
     for ax in ax_list:
         ax.set_ylim(0, None)
         ax.set_xlim(0, None)
         ax.set_ylabel('pixels')
-    ax3.set_xlabel('Frame Numbers')
+    ax4.set_xlabel('Frame Numbers')
     ax1.text(0.55, 0.9, 'DNA punctas')
     ax2.text(0.55, 0.9, 'Single molecules')
     ax3.text(0.55, 0.9, 'DNA punctas and SM')
-    fig.tight_layout()
+    # fig.tight_layout()
     plt.show()
     result = {
         'df_peaks_linked' : df_peaks_linked,
@@ -300,13 +321,14 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
         'ax1' : ax1,
         'ax2' : ax2,
         'ax3' : ax3,
+        'ax4' : ax4,
     }
     return result
 
 
 def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
                       dna_length=48.5, dna_length_um=16, pix_width=11, pix_size=0.115,
-                     interpolation=True):
+                     interpolation=True, dna_persistence_length=50):
     '''
     frame_width: same as the DA end to end distance
     pix_size: in micrometer
@@ -341,7 +363,7 @@ def analyze_multipeak(df_linked, convert_to_kb=True, frame_width=None,
     if interpolation:
         F = np.interp(nonpeak_rel_ext, RELATIVE_EXTENSION, FORCE)
     else:
-        F = force_wlc(nonpeak_rel_ext, Plen=50)
+        F = force_wlc(nonpeak_rel_ext, Plen=dna_persistence_length)
     df_linked_gb["Force"] = F
     return df_linked_gb
 
@@ -455,7 +477,7 @@ def msd_lagtime_allpeaks(df_linked_peaks, pixelsize, fps, max_lagtime=100, axis=
     axis.set_yscale('log')
     axis.set_xscale('log')
     axis.set_xlabel('lag time [s]')
-    axis.set_ylabel(r'$\langle \Delta r^2 \rangle$ [$\mu$m$^2$]');
+    axis.set_ylabel(r'$\angle \Delta r^2 \rangle$ [$\mu$m$^2$]')
     axis.legend()
     return imsd
 
