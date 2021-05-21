@@ -38,7 +38,7 @@ class NewWindow(Window):
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, msd_moving, 'g', label='color_1')
-            if self.numColors == "2":
+            if self.numColors == "2" or "3":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames* self.acquisitionTime, msd_moving, 'm', label='MSD particle')
@@ -91,7 +91,7 @@ class NewWindow(Window):
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'g', label='color_1')
-            if self.numColors == "2":
+            if self.numColors == "2" or "3":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames * self.acquisitionTime,
