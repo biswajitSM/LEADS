@@ -6,7 +6,10 @@ import qdarkstyle
 from leads.gui.kymograph_gui import Window
 from leads import kymograph
 import matplotlib.pyplot as plt
-
+import matplotlib.gridspec as gridspec
+# plt.style.use('science')
+# from leads.utils import hdf5dict, makevideo, figure_params
+# plt.rcParams.update(figure_params.params_dict)
 
 class NewWindow(Window):
     def __init__(self):
@@ -71,7 +74,14 @@ class NewWindow(Window):
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDsavgol":
             print("plot MSD savgol")
-            _, ax = plt.subplots()
+            # _, ax = plt.subplots()
+            # fig, (ax1,ax) = plt.subplots(nrows=2, sharex=True, figsize=(6, 10))
+            fig = plt.figure(figsize=(6, 10))
+            gs = gridspec.GridSpec(2, 1)
+            ax0 = plt.subplot(gs[0])
+            self.matplot_loop_kinetics(ax=ax0)
+            ax = plt.subplot(gs[1], sharex = ax0)
+
             n_savgol=self.multipeak_dialog.moving_window_spinbox.value()
             n = n_savgol
             if n_savgol%2 == 0:
@@ -80,10 +90,6 @@ class NewWindow(Window):
                 n = n+1
             n_order = 1
             n_savgol = 11
-            # n_order = 1
-            # n=12
-            # if n%2 != 0:
-            #     n = n+1
             ind = int(n/2)
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
@@ -96,10 +102,10 @@ class NewWindow(Window):
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames * self.acquisitionTime,
                         msd_moving * self.pixelSize**2, #converted to µm²
-                        '.', color='darkslategrey', label='MSD particle')
+                        '.', color='k', label='MSD particle')
                 ax.plot(frames * self.acquisitionTime,
                         savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order) * self.pixelSize**2, #converted to µm²
-                        color='darkslategrey', label='')
+                        color='k', label='')
                 peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
@@ -112,19 +118,20 @@ class NewWindow(Window):
                 ax_right = ax.twinx()
                 ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb,
-                              '.', color='darkorange', label='Distance')
+                              '.', color='peru', label='Distance')
                 ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb_smooth,
-                              color='darkorange', label='')
-                ax_right.set_ylabel("Distance/kb", color='darkorange')
-                ax_right.tick_params(axis='y', colors='darkorange')
-                ax_right.spines["right"].set_color('darkorange')
+                              color='peru', label='')
+                ax_right.set_ylabel("Distance/kb", color='peru')
+                ax_right.tick_params(axis='y', colors='peru')
+                ax_right.spines["right"].set_color('peru')
                 ax_right.legend(loc='center right', labelcolor='linecolor')
             ax.set_xlabel("time/s")
-            ax.tick_params(axis='y', colors='darkslategrey')
-            ax.spines["left"].set_color("darkslategrey")
-            ax.set_ylabel(r"MSD(${\mu} m^2$)", color='darkslategrey')
+            ax.tick_params(axis='y', colors='k')
+            ax.spines["left"].set_color("k")
+            ax.set_ylabel(r"MSD(${\mu} m^2$)", color='k')
             ax.legend(labelcolor='linecolor')
+            plt.subplots_adjust(hspace=.0)
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
             print("plot MSD")
