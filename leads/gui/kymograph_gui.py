@@ -14,7 +14,7 @@ from ..utils import hdf5dict, makevideo, figure_params
 import os, sys, glob, time, subprocess, webbrowser
 import yaml
 import matplotlib.pyplot as plt
-# plt.rcParams.update(figure_params.params_dict)
+plt.rcParams.update(figure_params.params_dict)
 from scipy.signal import savgol_filter
 import h5py
 import tqdm
