@@ -2040,7 +2040,7 @@ class Window(QtWidgets.QMainWindow):
             self.multipeak_dialog.leftpeak_num_combobox.clear()
             self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
 
-    def matplot_loop_kinetics(self):
+    def matplot_loop_kinetics(self, ax=None):
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
         right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
         self.loop_region_left = int(self.region_errbar.getRegion()[0])
@@ -2051,7 +2051,8 @@ class Window(QtWidgets.QMainWindow):
         peak_analyzed_dict = analyze_maxpeak(group_sel, smooth_length=7,
                 frame_width = self.loop_region_right - self.loop_region_left,
                 dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
-        _, ax = plt.subplots()
+        if ax is None:
+            _, ax = plt.subplots()
         df_peak_analyzed = peak_analyzed_dict["Max Peak"]
         n_moving = self.multipeak_dialog.moving_window_spinbox.value()
         if n_moving%2 == 0:
