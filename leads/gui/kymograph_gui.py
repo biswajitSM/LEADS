@@ -18,6 +18,7 @@ plt.rcParams.update(figure_params.params_dict)
 from scipy.signal import savgol_filter
 import h5py
 import tqdm
+from . import crop_images_gui
 
 DEFAULTS = {
     "ColorMap" : 'plasma',
@@ -1227,6 +1228,7 @@ class Window(QtWidgets.QMainWindow):
 
     def openCroppingGUI(self):
         print('this will open the cropping GUI in the future...')
+        crop_images_gui.main()
 
     def processed_image_check(self):
         if self.ui.processImageCheckBox.isChecked():

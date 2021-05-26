@@ -922,6 +922,10 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui = crop_images_ui.Ui_Form()
         self.ui.setupUi(self)
         self.viewer = viewer
+        this_directory = os.path.dirname(os.path.realpath(__file__))
+        icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar_crop.png")
+        icon = QtGui.QIcon(icon_path)
+        self.setWindowIcon(icon)
 
         # set defaults
         self.use_current_image_path = False
@@ -2387,7 +2391,7 @@ class NapariTabs(QtWidgets.QWidget):
 
 # ---------------------------------------------------------------------
 def main():       
-    viewer = napari.Viewer(title="Crop or make Kymograph")
+    viewer = napari.Viewer(title="LEADS: Cropping routine")
     ui = NapariTabs(viewer)
     viewer.window.add_dock_widget(ui, area='bottom')
     napari.run()
