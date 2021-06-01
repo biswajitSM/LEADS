@@ -442,7 +442,6 @@ class Worker(QObject):
         #     sub_dirs = [sub_dirs[i] for i in choice]
         if not sub_dirs:
             print('No directories found. Try again.')
-            self.batchCropFromDirectory()
             return
             
         # outdated: remove all subdirectories which contain a roi file which has 2x "-f" in the name since those are files which are saved together with the crops    
