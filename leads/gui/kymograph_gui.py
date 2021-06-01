@@ -1227,7 +1227,6 @@ class Window(QtWidgets.QMainWindow):
             self.detect_loops()
 
     def openCroppingGUI(self):
-        print('this will open the cropping GUI in the future...')
         crop_images_gui.main()
 
     def processed_image_check(self):
