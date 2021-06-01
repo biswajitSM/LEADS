@@ -14,7 +14,7 @@ It's best to use an isolated environment for this program. But it might just wor
 You can create an environment in conda by running the following line in a terminal
 
 ```sh
-conda create -n leads-env python=3.7
+conda create -n leads-env python=3.8
 ```
 
 Then activate the environment by
@@ -23,8 +23,13 @@ Then activate the environment by
 conda activate leads-env
 ```
 
-You can install the LEADS module by dowloading this [repo](https://github.com/biswajitSM/LEADS/archive/master.zip). Go to the folder containing setup file in terminal and install by the following command.
+You can install the LEADS module by dowloading this [repo](https://github.com/biswajitSM/LEADS/archive/master.zip). Go to the folder containing setup file in terminal and install by the following commands.
 
+Install all the dpendencies
+```sh
+pip install -r requirements.txt
+```
+And then install the leads program
 ```sh
 python setup.py install
 ```
