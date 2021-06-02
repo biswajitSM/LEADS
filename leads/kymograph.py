@@ -91,7 +91,7 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     kymo_noLoop: needs have same number of rows as kym_arr
     '''
     if skip_left is None: skip_left = 0
-    if skip_right is 0 or None: skip_right = 1
+    if skip_right is None or skip_right == 0: skip_right = 1
     if kymo_noLoop is not None and correction_noLoop:
         kymo_noLoop_avg = np.sum(kymo_noLoop, axis=1)
         kymo_noLoop_avg = 1 + (kymo_noLoop_avg/max(kymo_noLoop_avg))
