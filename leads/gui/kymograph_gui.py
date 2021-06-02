@@ -63,7 +63,7 @@ class ParametersDialog(QtWidgets.QDialog):
         # Pixel Size
         general_grid.addWidget(QtWidgets.QLabel("Pixel Size:"), 0, 0)
         self.pix_spinbox = QtWidgets.QSpinBox()
-        self.pix_spinbox.setRange(0, 1e3)
+        self.pix_spinbox.setRange(0, int(1e3))
         self.pix_spinbox.setSuffix(" nm")
         self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
         self.pix_spinbox.setKeyboardTracking(False)
@@ -73,7 +73,7 @@ class ParametersDialog(QtWidgets.QDialog):
         # ROI Width
         general_grid.addWidget(QtWidgets.QLabel("ROI Size:"), 1, 0)
         self.roi_spinbox = QtWidgets.QSpinBox()
-        self.roi_spinbox.setRange(0, 1e3)
+        self.roi_spinbox.setRange(0, int(1e3))
         self.roi_spinbox.setSuffix(" pixels")
         self.roi_spinbox.setValue(DEFAULT_PARAMETERS["ROI Width"])
         self.roi_spinbox.setKeyboardTracking(False)
@@ -83,7 +83,7 @@ class ParametersDialog(QtWidgets.QDialog):
         # Acquisition Time
         general_grid.addWidget(QtWidgets.QLabel("Acquisition time:"), 2, 0)
         self.aqt_spinbox = QtWidgets.QSpinBox()
-        self.aqt_spinbox.setRange(0, 1e5)
+        self.aqt_spinbox.setRange(0, int(1e5))
         self.aqt_spinbox.setSuffix(" ms")
         self.aqt_spinbox.setValue(DEFAULT_PARAMETERS["Acquisition Time"])
         self.aqt_spinbox.valueChanged.connect(self.on_paramter_change)
@@ -142,7 +142,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # Puncta size
         general_grid.addWidget(QtWidgets.QLabel("Puncta diameter:"), 3, 2)
         self.DNApuncta_spinbox = QtWidgets.QSpinBox()
-        self.DNApuncta_spinbox.setRange(1, 1e3)
+        self.DNApuncta_spinbox.setRange(1, int(1e3))
         self.DNApuncta_spinbox.setValue(DEFAULT_PARAMETERS["DNA Puncta Diameter"])
         self.DNApuncta_spinbox.setSuffix(" pixels")
         self.DNApuncta_spinbox.setKeyboardTracking(False)
@@ -176,20 +176,20 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # Smoothing length
         general_grid.addWidget(QtWidgets.QLabel("Smoothing Length:"), 5, 2)
         self.smoothlength_spinbox = QtWidgets.QSpinBox()
-        self.smoothlength_spinbox.setRange(1, 1e3)
+        self.smoothlength_spinbox.setRange(1, int(1e3))
         self.smoothlength_spinbox.setValue(7)
         self.smoothlength_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(self.smoothlength_spinbox, 5, 3)
         # Peak widths: Min and Max
         self.minwidth_spinbox = QtWidgets.QSpinBox()
-        self.minwidth_spinbox.setRange(1, 1e2)
+        self.minwidth_spinbox.setRange(1, int(1e2))
         self.minwidth_spinbox.setValue(1)
         self.minwidth_spinbox.setSuffix(" pixels")
         self.minwidth_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(QtWidgets.QLabel("Min Peak Width:"), 6, 0)
         general_grid.addWidget(self.minwidth_spinbox, 6, 1)
         self.maxwidth_spinbox = QtWidgets.QSpinBox()
-        self.maxwidth_spinbox.setRange(1, 1e3)
+        self.maxwidth_spinbox.setRange(1, int(1e3))
         self.maxwidth_spinbox.setValue(20)
         self.maxwidth_spinbox.setSuffix(" pixels")
         self.maxwidth_spinbox.setKeyboardTracking(False)
@@ -225,21 +225,21 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # search range
         linking_grid.addWidget(QtWidgets.QLabel("Search Range:"), 0, 0)
         self.searchrange_spinbox = QtWidgets.QSpinBox()
-        self.searchrange_spinbox.setRange(1, 1e3)
+        self.searchrange_spinbox.setRange(1, int(1e3))
         self.searchrange_spinbox.setValue(DEFAULT_PARAMETERS["Search Range"])
         self.searchrange_spinbox.setKeyboardTracking(False)
         linking_grid.addWidget(self.searchrange_spinbox, 0, 1)
         # Memory
         linking_grid.addWidget(QtWidgets.QLabel("Memory:"), 0, 2)
         self.memory_spinbox = QtWidgets.QSpinBox()
-        self.memory_spinbox.setRange(1, 1e3)
+        self.memory_spinbox.setRange(1, int(1e3))
         self.memory_spinbox.setValue(DEFAULT_PARAMETERS["Memory"])
         self.memory_spinbox.setKeyboardTracking(False)
         linking_grid.addWidget(self.memory_spinbox, 0, 3)
         # Filter length
         linking_grid.addWidget(QtWidgets.QLabel("Filter Length:"), 1, 0)
         self.filterlen_spinbox = QtWidgets.QSpinBox()
-        self.filterlen_spinbox.setRange(1, 1e3)
+        self.filterlen_spinbox.setRange(1, int(1e3))
         self.filterlen_spinbox.setValue(DEFAULT_PARAMETERS["Filter Length"])
         self.filterlen_spinbox.setKeyboardTracking(False)
         linking_grid.addWidget(self.filterlen_spinbox, 1, 1)
@@ -249,17 +249,17 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # link col1 and col2
         self.link_col1col2_checkbox = QtWidgets.QCheckBox("LinkTwoColors")
         self.max_frame_diff_spinbox = QtWidgets.QSpinBox()
-        self.max_frame_diff_spinbox.setRange(1, 1e3)
+        self.max_frame_diff_spinbox.setRange(1, int(1e3))
         self.max_frame_diff_spinbox.setValue(10)
         self.max_frame_diff_spinbox.setPrefix("\u0394frames ")
         self.max_frame_diff_spinbox.setKeyboardTracking(False)
         self.max_pix_diff_spinbox = QtWidgets.QSpinBox()
-        self.max_pix_diff_spinbox.setRange(1, 1e3)
+        self.max_pix_diff_spinbox.setRange(1, int(1e3))
         self.max_pix_diff_spinbox.setValue(10)
         self.max_pix_diff_spinbox.setPrefix("\u0394pixs ")
         self.max_pix_diff_spinbox.setKeyboardTracking(False)
         self.min_coloc_diff_spinbox = QtWidgets.QSpinBox()
-        self.min_coloc_diff_spinbox.setRange(1, 1e3)
+        self.min_coloc_diff_spinbox.setRange(1, int(1e3))
         self.min_coloc_diff_spinbox.setValue(10)
         self.min_coloc_diff_spinbox.setPrefix("\u0394coloc ")
         self.min_coloc_diff_spinbox.setKeyboardTracking(False)
@@ -285,7 +285,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.loopkinetics_pushbutton = QtWidgets.QPushButton("Plot Loop Kinetics")
         self.loopVsmol_pushbutton = QtWidgets.QPushButton("Plot Loop Vs Mol")
         self.moving_window_spinbox = QtWidgets.QSpinBox()
-        self.moving_window_spinbox.setRange(1, 1e3)
+        self.moving_window_spinbox.setRange(1, int(1e3))
         self.moving_window_spinbox.setValue(51)
         self.moving_window_spinbox.setKeyboardTracking(False)
         plot_grid.addWidget(self.loopkinetics_pushbutton, 1, 0)
@@ -630,11 +630,11 @@ class MainWidget(QtWidgets.QWidget):
         grid_frame = QtWidgets.QGridLayout()
         self.bottomlayout.addLayout(grid_frame, 0, 3)
         self.frameStartSpinBox = QtWidgets.QSpinBox()
-        self.frameStartSpinBox.setRange(0, 1e5)
+        self.frameStartSpinBox.setRange(0, int(1e5))
         self.frameStartSpinBox.setValue(0)
         self.frameStartSpinBox.setKeyboardTracking(False)
         self.frameEndSpinBox = QtWidgets.QSpinBox()
-        self.frameEndSpinBox.setRange(-1, 1e5)
+        self.frameEndSpinBox.setRange(-1, int(1e5))
         self.frameEndSpinBox.setValue(-1)
         self.frameEndSpinBox.setKeyboardTracking(False)
         grid_frame.addWidget(QtWidgets.QLabel("FrameStart:"), 0, 0)
@@ -642,7 +642,7 @@ class MainWidget(QtWidgets.QWidget):
         grid_frame.addWidget(self.frameStartSpinBox, 0, 1)
         grid_frame.addWidget(self.frameEndSpinBox, 0, 3)
         self.save_nth_frameSpinBox = QtWidgets.QSpinBox()
-        self.save_nth_frameSpinBox.setRange(1, 1e5)
+        self.save_nth_frameSpinBox.setRange(1, int(1e5))
         self.save_nth_frameSpinBox.setValue(1)
         self.save_nth_frameSpinBox.setKeyboardTracking(False)
         grid_frame.addWidget(QtWidgets.QLabel("Save nth frames:"), 1, 0, 1, 2)
@@ -662,7 +662,7 @@ class MainWidget(QtWidgets.QWidget):
                                           ".pdf", ".png", ".jpeg",
                                           ".tif", ".svg"])
         self.saveFramerateSpinBox = QtWidgets.QSpinBox()
-        self.saveFramerateSpinBox.setRange(1, 1e3)
+        self.saveFramerateSpinBox.setRange(1, int(1e3))
         self.saveFramerateSpinBox.setValue(7)
         self.saveFramerateSpinBox.setSuffix(" fps")
         grid_save.addWidget(self.saveSectionBtn, 0, 0)
@@ -1772,31 +1772,6 @@ class Window(QtWidgets.QMainWindow):
         self.d3_left.addWidget(self.plot_loop_errbar, 0, 0)
         self.d3_left.addWidget(self.plot_loop_kinetics, 0, 1)
         self.dockarea.addDock(self.d3_left, 'bottom', self.d2_left)
-        if self.numColors == "2" or "3":
-            self.d3_right = pg_da.Dock("Single Molecule detections")
-            self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
-            self.plot_loop_vs_sm = pg.PlotItem()
-            self.imv31 = pg.ImageView(view=self.plot_loop_vs_sm)
-            self.imv31.setPredefinedGradient(DEFAULTS["ColorMap"])
-            self.plot_loop_vs_sm.getViewBox().invertY(False)
-            self.hide_imgv_cmap(self.imv31)
-            self.d3_right.addWidget(self.imv31)
-            # self.d3_right.addWidget(self.plot_loop_vs_sm)
-            self.plot_loop_vs_sm_smdata = self.plot_loop_vs_sm.plot(title='SM',
-                symbol='o', symbolSize=4, pen=pg.mkPen(None),
-                symbolPen=pg.mkPen(None), symbolBrush='r')
-            self.plot_loop_vs_sm_loopdata = self.plot_loop_vs_sm.plot(title='loop',
-                symbol='o', symbolSize=4, pen=pg.mkPen(None),
-                symbolPen=pg.mkPen(None), symbolBrush='g')
-            self.plot_loop_vs_sm_linetop = pg.InfiniteLine(
-                                    movable=False, angle=0, pen=(3, 9))
-            self.plot_loop_vs_sm_linebottom = pg.InfiniteLine(
-                                    movable=False, angle=0, pen=(3, 9))
-            self.plotSmolPosData = self.plot_loop_vs_sm.scatterPlot(
-                    symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
-            if self.numColors == "3":
-                self.d3_right = pg_da.Dock("Color 3 detections")
-                self.dockarea.addDock(self.d3_right, 'bottom', self.d2_col3)
 
         # adding errorbar plot items for data updating later
         self.errbar_loop = pg.ErrorBarItem(beam=0.5, pen=pg.mkPen('r'))
@@ -1838,6 +1813,31 @@ class Window(QtWidgets.QMainWindow):
         # change the default docking positions to the new one
         self.defaultDockState = self.dockarea.saveState()
         self.dockarea.restoreState(self.defaultDockState)
+        if self.numColors == "2" or "3":
+            self.d3_right = pg_da.Dock("Single Molecule detections")
+            self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
+            self.plot_loop_vs_sm = pg.PlotItem()
+            self.imv31 = pg.ImageView(view=self.plot_loop_vs_sm)
+            self.imv31.setPredefinedGradient(DEFAULTS["ColorMap"])
+            self.plot_loop_vs_sm.getViewBox().invertY(False)
+            self.hide_imgv_cmap(self.imv31)
+            self.d3_right.addWidget(self.imv31)
+            # self.d3_right.addWidget(self.plot_loop_vs_sm)
+            self.plot_loop_vs_sm_smdata = self.plot_loop_vs_sm.plot(title='SM',
+                symbol='o', symbolSize=4, pen=pg.mkPen(None),
+                symbolPen=pg.mkPen(None), symbolBrush='r')
+            self.plot_loop_vs_sm_loopdata = self.plot_loop_vs_sm.plot(title='loop',
+                symbol='o', symbolSize=4, pen=pg.mkPen(None),
+                symbolPen=pg.mkPen(None), symbolBrush='g')
+            self.plot_loop_vs_sm_linetop = pg.InfiniteLine(
+                                    movable=False, angle=0, pen=(3, 9))
+            self.plot_loop_vs_sm_linebottom = pg.InfiniteLine(
+                                    movable=False, angle=0, pen=(3, 9))
+            self.plotSmolPosData = self.plot_loop_vs_sm.scatterPlot(
+                    symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))
+            if self.numColors == "3":
+                self.d3_right = pg_da.Dock("Color 3 detections")
+                self.dockarea.addDock(self.d3_right, 'bottom', self.d2_col3)
 
     def params_change_loop_detection(self):
         self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
@@ -1869,7 +1869,7 @@ class Window(QtWidgets.QMainWindow):
                 frame_width = self.loop_region_right - self.loop_region_left,
                 dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
                 )
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
                 prominence_min=self.peak_prominence_smol,
@@ -1884,7 +1884,7 @@ class Window(QtWidgets.QMainWindow):
                                      self.all_peaks_dict["All Peaks"]["PeakPosition"])
 
     def params_change_smol_detection(self):
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             self.peak_prominence_smol = self.multipeak_dialog.smol_prominence_spinbox.value()
             if self.multipeak_dialog.smol_preview_checkbox.isChecked():
                 self.preview_smol_peaks_on_params_change()
@@ -1896,7 +1896,7 @@ class Window(QtWidgets.QMainWindow):
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
         min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
         max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
                 self.loop_region_left, -self.loop_region_right,
                 prominence_min=self.peak_prominence_smol,
@@ -1946,7 +1946,7 @@ class Window(QtWidgets.QMainWindow):
                         self.max_peak_dict["Max Peak"]["PeakIntUpFiltered"])
         self.plot_data_loopDown_filt.setData(frame_no,
                         self.max_peak_dict["Max Peak"]["PeakIntDownFiltered"])
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             # self.all_smpeaks_dict = peakfinder_savgol(self.kymo_right_loop.T,
             #     self.loop_region_left, -self.loop_region_right,
             #     prominence_min=self.peak_prominence, pix_width=self.dna_puncta_size, plotting=False,
@@ -1977,7 +1977,7 @@ class Window(QtWidgets.QMainWindow):
         self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
         self.memory_link = self.multipeak_dialog.memory_spinbox.value()
         self.filter_length_link = self.multipeak_dialog.filterlen_spinbox.value()
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             result = kymograph.link_and_plot_two_color(
                     self.all_peaks_dict["All Peaks"], self.all_smpeaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
@@ -2033,11 +2033,12 @@ class Window(QtWidgets.QMainWindow):
             plt.hlines([0, self.loop_region_right], 0, self.all_peaks_dict["shape_kymo"][1], 'g', alpha=0.5)
             plt.ylim(0, self.all_peaks_dict["shape_kymo"][0])
             df_gb = self.df_peaks_linked.groupby("particle")
-            gb_names = list(df_gb.groups.keys())
-            for i in range(len(gb_names)):
-                gb_names[i] = str(gb_names[i])
-            self.multipeak_dialog.leftpeak_num_combobox.clear()
-            self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
+            if len(df_gb) > 0:
+                gb_names = list(df_gb.groups.keys())
+                for i in range(len(gb_names)):
+                    gb_names[i] = str(gb_names[i])
+                self.multipeak_dialog.leftpeak_num_combobox.clear()
+                self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
 
     def matplot_loop_kinetics(self, ax=None):
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
@@ -2075,7 +2076,7 @@ class Window(QtWidgets.QMainWindow):
         ax.plot(df_peak_analyzed["FrameNumber"] * self.acquisitionTime,
                 savgol_filter(df_peak_analyzed["PeakDownIntensity"].values,  window_length=n_moving, polyorder=n_order),
                 'b', label=r'$I_{down} filtered$')
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel = df_gb.get_group(right_peak_no)
             group_sel = group_sel.reset_index(drop=True)
@@ -2217,7 +2218,7 @@ class Window(QtWidgets.QMainWindow):
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'g', label='color_1')
-            if self.numColors == "2" or "3":
+            if self.numColors == "2" or self.numColors == "3":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames * self.acquisitionTime,
@@ -2257,7 +2258,7 @@ class Window(QtWidgets.QMainWindow):
             _, ax = plt.subplots()
             msd = kymograph.msd_1d_nb1(group_sel_col1['x'].values)
             plt.plot(msd, 'g', label="MSD color-1")
-            if self.numColors == "2" or "3":
+            if self.numColors == "2" or self.numColors == "3":
                 msd = kymograph.msd_1d_nb1(group_sel_col2['x'].values)
                 plt.plot(msd, 'm', label="MSD color-1")
             ax.set_xlabel("Frame Number")
@@ -2273,7 +2274,7 @@ class Window(QtWidgets.QMainWindow):
                                 fps=int(self.numColors) * (1/self.acquisitionTime),
                                 max_lagtime=100, axis=ax1)
                 ax1.set_title("Color 1")
-            elif self.numColors == "2" or "3":
+            elif self.numColors == "2" or self.numColors == "3":
                 fig,(ax1, ax2) = plt.subplots(nrows=1, ncols=2)
                 _ = kymograph.msd_lagtime_allpeaks(self.df_peaks_linked,
                                 pixelsize = self.pixelSize,
@@ -2323,7 +2324,7 @@ class Window(QtWidgets.QMainWindow):
             h5_analysis["Left Kymograph"] = self.kymo_left.T
             h5_analysis["Left Kymograph Loop"] = self.kymo_left_loop.T
             h5_analysis["Left Kymograph No Loop"] = self.kymo_left_noLoop.T
-            if self.numColors == "2" or "3":
+            if self.numColors == "2" or self.numColors == "3":
                 h5_analysis["Right Image Array"] = self.roirect_right.getArrayRegion(
                                 self.imgarr_right,
                                 self.imv01.imageItem, axes=(1, 2))
