@@ -1,4 +1,4 @@
-# import ptvsd # only for debugging
+import ptvsd # only for debugging
 import napari
 import platform
 import subprocess
@@ -82,7 +82,7 @@ class Worker(QObject):
         FOVs can be sorted by their description into another folder while keeping their name and source path
         '''
 
-        # ptvsd.debug_this_thread()
+        ptvsd.debug_this_thread()
 
         directory = self.BatchCropPath
         saveCollectively = False
