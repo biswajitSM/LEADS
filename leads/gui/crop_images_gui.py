@@ -82,7 +82,10 @@ class Worker(QObject):
         FOVs can be sorted by their description into another folder while keeping their name and source path
         '''
 
-        # ptvsd.debug_this_thread()
+        try:
+            ptvsd.debug_this_thread()
+        except:
+            pass
 
         directory = self.BatchCropPath
         saveCollectively = False
@@ -692,11 +695,12 @@ class BatchProcessingDialog(QtWidgets.QDialog):
         # checks if path is a file
         if os.path.isfile(filepath):
             folderpath = os.path.dirname(filepath)
-        elif os.path.isdir(filepath):
+        else:
             folderpath = filepath
-        else: # do nothing, this will execute while a path is being written in the lineEdit
-            # self.BatchCropPath = ''
-            return
+        # elif os.path.isdir(filepath):
+        #     folderpath = filepath
+        # else: # do nothing, this will execute while a path is being written in the lineEdit
+        #     return
 
         if len(folderpath) > 0:
             settings = io.load_user_settings()

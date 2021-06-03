@@ -15,10 +15,10 @@ from . import io
 
 # ---------------------------------------------------------------------
 def get_rect_params(rect, printing=False):
-    length = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
-    width = int(np.sqrt((rect[0][0] - rect[1][0])**2 + (rect[0][1] - rect[1][1])**2))
+    width = int(np.sqrt((rect[0][0] - rect[3][0])**2 + (rect[0][1] - rect[3][1])**2))
+    length = int(np.sqrt((rect[0][0] - rect[1][0])**2 + (rect[0][1] - rect[1][1])**2))
     dy = rect[3][1] - rect[0][1]
-    dx = rect[3][0] - rect[0][0]
+    dx = rect[1][0] - rect[0][0] # edit 20210602 from dx = rect[3][0] - rect[0][0]
     if dx == 0:
         angle = 0
     else:
