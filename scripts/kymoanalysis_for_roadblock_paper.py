@@ -76,12 +76,12 @@ class NewWindow(Window):
             print("plot MSD savgol")
             # _, ax = plt.subplots()
             # fig, (ax1,ax) = plt.subplots(nrows=2, sharex=True, figsize=(6, 10))
-            fig = plt.figure(figsize=(6, 10))
+            fig = plt.figure(figsize=(6.4, 9.6))
             gs = gridspec.GridSpec(2, 1)
             ax0 = plt.subplot(gs[0])
             self.matplot_loop_kinetics(ax=ax0)
             ax = plt.subplot(gs[1], sharex = ax0)
-
+            color_distance = "#FF4000"
             n_savgol=self.multipeak_dialog.moving_window_spinbox.value()
             n = n_savgol
             if n_savgol%2 == 0:
@@ -118,13 +118,13 @@ class NewWindow(Window):
                 ax_right = ax.twinx()
                 ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb,
-                              '.', color='peru', label='Distance')
+                              '.', color=color_distance, label='Distance')
                 ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
                               pos_diff_kb_smooth,
-                              color='peru', label='')
-                ax_right.set_ylabel("Distance/kb", color='peru')
-                ax_right.tick_params(axis='y', colors='peru')
-                ax_right.spines["right"].set_color('peru')
+                              color=color_distance, label='')
+                ax_right.set_ylabel("Distance/kb", color=color_distance)
+                ax_right.tick_params(axis='y', colors=color_distance)
+                ax_right.spines["right"].set_color(color_distance)
                 ax_right.legend(loc='center right', labelcolor='linecolor')
             ax.set_xlabel("time/s")
             ax.tick_params(axis='y', colors='k')
