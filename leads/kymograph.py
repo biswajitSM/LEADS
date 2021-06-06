@@ -267,8 +267,15 @@ def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_len
     if plotting:
         if axis is None:
             fig, axis = plt.subplots()
+            gs = fig.add_gridspec(1, 4)
+            axis = fig.add_subplot(gs[0, :-1])
             axis.set_xlabel('Frames')
             axis.set_ylabel('Pixels')
+            axis_r = fig.add_subplot(gs[0, -1:])
+            axis_r.set_xticks([])
+            axis_r.set_yticks([])
+
+            axis_r.hist(df_peaks["PeakPosition"], orientation='horizontal')
         for name in gb_names:
             gp_sel = peaks_linked_gb.get_group(name)
             axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
@@ -284,25 +291,43 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
     # set axes and figsize
     fig = plt.figure(figsize=(10, 10))
     gs = fig.add_gridspec(4, 4)
-    ax1 = fig.add_subplot(gs[0, :])
+    ax1 = fig.add_subplot(gs[0, :-1])
     ax1.set_xticks([])
-    ax2 = fig.add_subplot(gs[1, :])
+    ax2 = fig.add_subplot(gs[1, :-1])
     ax2.set_xticks([])
-    ax3 = fig.add_subplot(gs[2, :])
-    ax4 = fig.add_subplot(gs[3, :])
+    ax3 = fig.add_subplot(gs[2, :-1])
+    ax4 = fig.add_subplot(gs[3, :-1])
+    # add axs for histogram
+    ax1_r = fig.add_subplot(gs[0, -1:])
+    ax1_r.set_xticks([])
+    ax1_r.set_yticks([])
+    ax2_r = fig.add_subplot(gs[1, -1:])
+    ax2_r.set_xticks([])
+    ax2_r.set_yticks([])
+    ax3_r = fig.add_subplot(gs[2, -1:])
+    ax3_r.set_xticks([])
+    ax3_r.set_yticks([])
     # link and plot data to it
     df_peaks_linked = link_peaks(df_peaks, search_range=search_range,
                           memory=memory, filter_length=filter_length,
                           plotting=plotting, axis=ax1)
+    ax1_r.hist(df_peaks["PeakPosition"], orientation='horizontal')
     df_peaks_linked_sm = link_peaks(df_peaks_sm, search_range=search_range,
                           memory=memory, filter_length=filter_length,
                           plotting=plotting, axis=ax2)
+    ax2_r.hist(df_peaks_sm["PeakPosition"], orientation='horizontal')
+    ax3_r.hist(df_peaks["PeakPosition"], histtype='step', orientation='horizontal')
+    ax3_r.hist(df_peaks_sm["PeakPosition"], histtype='step', orientation='horizontal')
+
     ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.5, label='SM')
     ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.3, label='DNA')
     ax3.legend(loc=4)
     ax4_sc = ax4.scatter(df_peaks_linked['frame'], df_peaks_linked['x'], marker='.',
                          c=df_peaks_linked["PeakIntensity"].values, cmap='jet')
     ax4_cbar = plt.colorbar(ax4_sc)
+    l, b, w, h = ax4.get_position().bounds
+    ll, bb, ww, hh = ax4_cbar.ax.get_position().bounds
+    ax4_cbar.ax.set_position([ll- ll*0.1, b, ww - ww*0.1, h])
     # ax4_cbar.set_ticks([])
     ax_list = [ax1, ax2, ax3, ax4]
     for ax in ax_list:

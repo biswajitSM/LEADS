@@ -1054,11 +1054,10 @@ class Window(QtWidgets.QMainWindow):
         self.image_meta = read_img_stack(self.filepath)
         self.frame_start = 0
         self.frame_end = -1
-        self.set_img_stack()
-        self.load_yaml_params()
         if self.ui.processImageCheckBox.isChecked():
             self.image_meta = self.get_processed_image()
-            self.set_img_stack()
+        self.set_img_stack()
+        self.load_yaml_params()
         # disconnect the dependent signals
         self.multipeak_dialog.disconnect_signals()
         try:
@@ -1473,7 +1472,7 @@ class Window(QtWidgets.QMainWindow):
         frame_numer = int(self.infline_left.value())
         pos = self.infline_left.getPos()
         self.imv00.setCurrentIndex(frame_numer)
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             self.imv01.setCurrentIndex(frame_numer)
             self.infline_right.setPos(pos)
             if self.numColors == "3":
@@ -2015,8 +2014,8 @@ class Window(QtWidgets.QMainWindow):
                     self.all_peaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True,)
-            plt.hlines([0, self.loop_region_left], 0, self.all_peaks_dict["shape_kymo"][1], 'g', alpha=0.5)
-            plt.hlines([0, self.loop_region_right], 0, self.all_peaks_dict["shape_kymo"][1], 'g', alpha=0.5)
+            plt.axhline(self.loop_region_left, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
+            plt.axhline(self.loop_region_right, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
             plt.ylim(0, self.all_peaks_dict["shape_kymo"][0])
             df_gb = self.df_peaks_linked.groupby("particle")
             if len(df_gb) > 0:
@@ -2115,7 +2114,7 @@ class Window(QtWidgets.QMainWindow):
         group_sel = df_gb.get_group(left_peak_no)
         group_sel = group_sel.reset_index(drop=True)
         ax.plot(group_sel["FrameNumber"], group_sel["x"], 'g', label='DNA')
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel = df_gb.get_group(right_peak_no)
             group_sel = group_sel.reset_index(drop=True)
