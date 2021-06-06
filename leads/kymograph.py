@@ -299,14 +299,11 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm,
     ax4 = fig.add_subplot(gs[3, :-1])
     # add axs for histogram
     ax1_r = fig.add_subplot(gs[0, -1:], sharey=ax1)
-    ax1_r.set_xticks([])
-    ax1_r.set_yticks([])
+    ax1_r.set_xticklabels([])
     ax2_r = fig.add_subplot(gs[1, -1:], sharey=ax2)
-    ax2_r.set_xticks([])
-    ax2_r.set_yticks([])
+    ax2_r.set_xticklabels([])
     ax3_r = fig.add_subplot(gs[2, -1:], sharey=ax3)
-    ax3_r.set_xticks([])
-    ax3_r.set_yticks([])
+    ax3_r.set_xticklabels([])
     # link and plot data to it
     df_peaks_linked = link_peaks(df_peaks, search_range=search_range,
                           memory=memory, filter_length=filter_length,
