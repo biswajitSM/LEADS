@@ -596,7 +596,7 @@ class MainWidget(QtWidgets.QWidget):
         self.bottomlayout.addLayout(grid_numc, 0, 0)
         grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
         self.numColorsComboBox = QtWidgets.QComboBox()
-        self.numColorsComboBox.addItems(["2", "1", "3"])
+        self.numColorsComboBox.addItems(["1", "2", "3"])
         grid_numc.addWidget(self.numColorsComboBox, 0, 1)
         # Current ROI width
         grid_roi = QtWidgets.QGridLayout()
@@ -1019,7 +1019,7 @@ class Window(QtWidgets.QMainWindow):
         if self.scalebar_img is not None:
             self.scalebar_img.size = 2/self.pixelSize
             self.scalebar_img.updateBar()
-            if self.numColors == "2" or "3":
+            if self.numColors == "2" or self.numColors == "3":
                 self.scalebar_img2.size = 2/self.pixelSize
                 self.scalebar_img2.updateBar()
                 self.scalebar_kymoloop_right.size = 10/self.acquisitionTime
@@ -1039,7 +1039,7 @@ class Window(QtWidgets.QMainWindow):
             # scalebar_kymoloop_left.text.setText('10 sec')
             # scalebar_kymoloop_left.setParentItem(self.imv21.view)
             # scalebar_kymoloop_left.anchor((1, 1), (1, 1), offset=(-40, -40))
-            if self.numColors == "2" or "3":
+            if self.numColors == "2" or self.numColors == "3":
                 self.scalebar_img2 = pg.ScaleBar(size=2/self.pixelSize, suffix='um') #2 um
                 self.scalebar_img2.text.setText('2 um')
                 self.scalebar_img2.setParentItem(self.imv01.view)
@@ -1813,7 +1813,7 @@ class Window(QtWidgets.QMainWindow):
         # change the default docking positions to the new one
         self.defaultDockState = self.dockarea.saveState()
         self.dockarea.restoreState(self.defaultDockState)
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             self.d3_right = pg_da.Dock("Single Molecule detections")
             self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
             self.plot_loop_vs_sm = pg.PlotItem()
