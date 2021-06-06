@@ -597,6 +597,7 @@ class MainWidget(QtWidgets.QWidget):
         grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
         self.numColorsComboBox = QtWidgets.QComboBox()
         self.numColorsComboBox.addItems(["1", "2", "3"])
+        self.numColorsComboBox.setCurrentText("2")
         grid_numc.addWidget(self.numColorsComboBox, 0, 1)
         # Current ROI width
         grid_roi = QtWidgets.QGridLayout()
@@ -989,22 +990,7 @@ class Window(QtWidgets.QMainWindow):
         self.imv02_text.setParentItem(self.imv02.imageItem)
 
     def remove_all_widgets(self):
-        try:
-            self.d0_left.close()
-            self.d1_left.close()
-            self.d2_left.close()
-            if self.plot_loop_errbar is not None:
-                self.d3_left.close()
-            self.d0_right.close()
-            self.d1_right.close()
-            self.d2_right.close()
-            if self.plot_loop_errbar is not None:
-                self.d3_right.close()
-            if self.d0_col3 is not None:
-                self.d0_col3.close()
-                self.d1_col3.close()
-                self.d2_col3.close()
-        except: print('already removed')
+        self.dockarea.clear()
 
     def restore_default_dockstate(self):
         self.dockarea.restoreState(self.defaultDockState)
@@ -2145,7 +2131,7 @@ class Window(QtWidgets.QMainWindow):
         df_gb = self.df_peaks_linked.groupby("particle")
         group_sel_col1 = df_gb.get_group(left_peak_no)
         group_sel_col1 = group_sel_col1.reset_index(drop=True)
-        if self.numColors == "2" or "3":
+        if self.numColors == "2" or self.numColors == "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel_col2 = df_gb.get_group(right_peak_no)
             group_sel_col2 = group_sel_col2.reset_index(drop=True)
@@ -2165,7 +2151,7 @@ class Window(QtWidgets.QMainWindow):
                     frame_width = self.loop_region_right - self.loop_region_left,
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, msd_moving, 'g', label='color_1')
-            if self.numColors == "2" or "3":
+            if self.numColors == "2" or self.numColors == "3":
                 msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames* self.acquisitionTime, msd_moving, 'm', label='MSD particle')
