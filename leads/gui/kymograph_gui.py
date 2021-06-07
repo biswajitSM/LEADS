@@ -2014,17 +2014,31 @@ class Window(QtWidgets.QMainWindow):
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
-                    filter_length=self.filter_length_link, plotting=True,)
-            plt.axhline(self.loop_region_left, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
-            plt.axhline(self.loop_region_right, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
-            plt.ylim(0, self.all_peaks_dict["shape_kymo"][0])
+                    filter_length=self.filter_length_link, plotting=False,)
+            fig = plt.figure(figsize=(10, 4))
+            gs = fig.add_gridspec(1, 4)
+            axis = fig.add_subplot(gs[0, :-1])
+            axis.set_xlabel('Frames')
+            axis.set_ylabel('Pixels')
+            axis_r = fig.add_subplot(gs[0, -1:], sharey=axis)
+            axis_r.set_xticklabels([])
+
             df_gb = self.df_peaks_linked.groupby("particle")
             if len(df_gb) > 0:
                 gb_names = list(df_gb.groups.keys())
                 for i in range(len(gb_names)):
+                    name = gb_names[i]
+                    gp_sel = df_gb.get_group(name)
+                    axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
+                    axis.text(gp_sel["frame"].values[0], np.average(gp_sel["x"].values[:10]), str(name))
                     gb_names[i] = str(gb_names[i])
                 self.multipeak_dialog.leftpeak_num_combobox.clear()
                 self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
+            axis_r.hist(self.df_peaks_linked["PeakPosition"], orientation='horizontal')
+            axis.axhline(self.loop_region_left, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
+            axis.axhline(self.loop_region_right, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
+            axis.set_ylim(0, self.all_peaks_dict["shape_kymo"][0])
+            plt.show()
 
     def matplot_loop_kinetics(self, ax=None):
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
