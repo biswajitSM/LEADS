@@ -1054,10 +1054,11 @@ class Window(QtWidgets.QMainWindow):
         self.image_meta = read_img_stack(self.filepath)
         self.frame_start = 0
         self.frame_end = -1
-        if self.ui.processImageCheckBox.isChecked():
-            self.image_meta = self.get_processed_image()
         self.set_img_stack()
         self.load_yaml_params()
+        if self.ui.processImageCheckBox.isChecked():
+            self.image_meta = self.get_processed_image()
+            self.set_img_stack()
         # disconnect the dependent signals
         self.multipeak_dialog.disconnect_signals()
         try:
