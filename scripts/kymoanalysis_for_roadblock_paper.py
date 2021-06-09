@@ -16,7 +16,7 @@ import pandas as pd
 class NewWindow(Window):
     def __init__(self):
         super().__init__()
-        self.multipeak_dialog.plottype_combobox.addItems(["all"])        
+        # self.multipeak_dialog.plottype_combobox.addItems(["all"])        
 
     def plottype_multipeak(self):        
 
@@ -136,12 +136,12 @@ class NewWindow(Window):
             ax.set_ylabel("Intensity")
             ax.legend()
             plt.show()
-        elif self.multipeak_dialog.plottype_combobox.currentText() == "all":
-            df=pd.DataFrame([self.filename_base + '_'])
-            df.to_clipboard(index=False,header=False)
-            print('plot loop kinetics')
-            self.matplot_loop_kinetics()
-            self.plotMSDsavgol()
+        # elif self.multipeak_dialog.plottype_combobox.currentText() == "all":
+        #     df=pd.DataFrame([self.filename_base + '_'])
+        #     df.to_clipboard(index=False,header=False)
+        #     print('plot loop kinetics')
+        #     self.matplot_loop_kinetics()
+        #     self.plotMSDsavgol()
 
     def plotMSDsavgol(self):
         print("plot MSD savgol")

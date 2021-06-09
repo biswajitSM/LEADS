@@ -2146,6 +2146,10 @@ class Window(QtWidgets.QMainWindow):
         plt.show()
 
     def plottype_multipeak(self):
+        matplotlib.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
+        df=pd.DataFrame([self.filename_base + '_'])
+        df.to_clipboard(index=False,header=False) # copy file name to clipboard for easy figure saving
+
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
         right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
         df_gb = self.df_peaks_linked.groupby("particle")
@@ -2494,7 +2498,7 @@ class Window(QtWidgets.QMainWindow):
                     kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
                 imwrite(filename, kymo_loop_comb.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
-                exporter = pyqtgraph.exporters.ImageExporter(self.imv12.imageItem)
+                exporter = pyqtgraph.exporters.ImageExporter(self.imv23.imageItem)
                 exporter.export(filename.replace('.tif', '.png'))
             else:
                 imwrite(filename, self.kymo_right_loop.T.astype(np.uint16), imagej=True,
