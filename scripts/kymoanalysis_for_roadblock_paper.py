@@ -142,16 +142,6 @@ class NewWindow(Window):
             print('plot loop kinetics')
             self.matplot_loop_kinetics()
             self.plotMSDsavgol()
-            # print("plot TimeTrace")
-            # _, ax = plt.subplots()
-            # trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
-            # trace_col2_bg = trace_col2# - np.average(group_sel_col2["PeakIntensity"].values)
-            # ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
-            # ax.plot(trace_col2_bg, label="Background")
-            # ax.set_xlabel("Frame Number")
-            # ax.set_ylabel("Intensity")
-            # ax.legend()
-            # plt.show()
 
     def plotMSDsavgol(self):
         print("plot MSD savgol")
