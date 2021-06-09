@@ -5,8 +5,10 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import qdarkstyle
 from leads.gui.kymograph_gui import Window
 from leads import kymograph
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import pandas as pd
 # plt.style.use('science')
 # from leads.utils import hdf5dict, makevideo, figure_params
 # plt.rcParams.update(figure_params.params_dict)
@@ -14,8 +16,12 @@ import matplotlib.gridspec as gridspec
 class NewWindow(Window):
     def __init__(self):
         super().__init__()
+        self.multipeak_dialog.plottype_combobox.addItems(["all"])        
 
-    def plottype_multipeak(self):
+    def plottype_multipeak(self):        
+
+        matplotlib.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
+
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
         right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
         df_gb = self.df_peaks_linked.groupby("particle")
@@ -73,66 +79,7 @@ class NewWindow(Window):
             ax.legend()
             plt.show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDsavgol":
-            print("plot MSD savgol")
-            # _, ax = plt.subplots()
-            # fig, (ax1,ax) = plt.subplots(nrows=2, sharex=True, figsize=(6, 10))
-            fig = plt.figure(figsize=(6.4, 9.6))
-            gs = gridspec.GridSpec(2, 1)
-            ax0 = plt.subplot(gs[0])
-            self.matplot_loop_kinetics(ax=ax0)
-            ax = plt.subplot(gs[1], sharex = ax0)
-            color_distance = "#FF4000"
-            n_savgol=self.multipeak_dialog.moving_window_spinbox.value()
-            n = n_savgol
-            if n_savgol%2 == 0:
-                n_savgol = n_savgol + 1
-            else:
-                n = n+1
-            n_order = 1
-            n_savgol = 11
-            ind = int(n/2)
-            msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
-            frames = group_sel_col1['FrameNumber'].values[ind:-ind]
-            peak_analyzed_dict = kymograph.analyze_maxpeak(group_sel_col1, smooth_length=7,
-                    frame_width = self.loop_region_right - self.loop_region_left,
-                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
-            # ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'g', label='color_1')
-            if self.numColors == "2" or "3":
-                msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
-                frames = group_sel_col2['FrameNumber'].values[ind:-ind]
-                ax.plot(frames * self.acquisitionTime,
-                        msd_moving * self.pixelSize**2, #converted to µm²
-                        '.', color='k', label='MSD particle')
-                ax.plot(frames * self.acquisitionTime,
-                        savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order) * self.pixelSize**2, #converted to µm²
-                        color='k', label='')
-                peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
-                    frame_width = self.loop_region_right - self.loop_region_left,
-                    dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
-                sel_loop_sm_dict = kymograph.loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=7)
-                pos_diff_kb = sel_loop_sm_dict['PositionDiff_kb']
-                pos_diff_kb_smooth = savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1)
-                if pos_diff_kb_smooth.min() < 0:
-                    pos_diff_kb = pos_diff_kb - pos_diff_kb_smooth.min()
-                    pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
-                ax_right = ax.twinx()
-                ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
-                              pos_diff_kb,
-                              '.', color=color_distance, label='Distance')
-                ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
-                              pos_diff_kb_smooth,
-                              color=color_distance, label='')
-                ax_right.set_ylabel("Distance/kb", color=color_distance)
-                ax_right.tick_params(axis='y', colors=color_distance)
-                ax_right.spines["right"].set_color(color_distance)
-                ax_right.legend(loc='center right', labelcolor='linecolor')
-            ax.set_xlabel("time/s")
-            ax.tick_params(axis='y', colors='k')
-            ax.spines["left"].set_color("k")
-            ax.set_ylabel(r"MSD(${\mu} m^2$)", color='k')
-            ax.legend(labelcolor='linecolor')
-            plt.subplots_adjust(hspace=.0)
-            plt.show()
+            self.plotMSDsavgol()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
             print("plot MSD")
             _, ax = plt.subplots()
@@ -189,6 +136,93 @@ class NewWindow(Window):
             ax.set_ylabel("Intensity")
             ax.legend()
             plt.show()
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "all":
+            df=pd.DataFrame([self.filename_base + '_'])
+            df.to_clipboard(index=False,header=False)
+            print('plot loop kinetics')
+            self.matplot_loop_kinetics()
+            self.plotMSDsavgol()
+            # print("plot TimeTrace")
+            # _, ax = plt.subplots()
+            # trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
+            # trace_col2_bg = trace_col2# - np.average(group_sel_col2["PeakIntensity"].values)
+            # ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
+            # ax.plot(trace_col2_bg, label="Background")
+            # ax.set_xlabel("Frame Number")
+            # ax.set_ylabel("Intensity")
+            # ax.legend()
+            # plt.show()
+
+    def plotMSDsavgol(self):
+        print("plot MSD savgol")
+        left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
+        right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
+        df_gb = self.df_peaks_linked.groupby("particle")
+        group_sel_col1 = df_gb.get_group(left_peak_no)
+        group_sel_col1 = group_sel_col1.reset_index(drop=True)
+        if self.numColors == "2" or "3":
+            df_gb = self.df_peaks_linked_sm.groupby("particle")
+            group_sel_col2 = df_gb.get_group(right_peak_no)
+            group_sel_col2 = group_sel_col2.reset_in
+        # _, ax = plt.subplots()
+        # fig, (ax1,ax) = plt.subplots(nrows=2, sharex=True, figsize=(6, 10))
+        fig = plt.figure(figsize=(6.4, 9.6))
+        gs = gridspec.GridSpec(2, 1)
+        ax0 = plt.subplot(gs[0])
+        self.matplot_loop_kinetics(ax=ax0)
+        ax = plt.subplot(gs[1], sharex = ax0)
+        color_distance = "#FF4000"
+        n_savgol=self.multipeak_dialog.moving_window_spinbox.value()
+        n = n_savgol
+        if n_savgol%2 == 0:
+            n_savgol = n_savgol + 1
+        else:
+            n = n+1
+        n_order = 1
+        n_savgol = 11
+        ind = int(n/2)
+        msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
+        frames = group_sel_col1['FrameNumber'].values[ind:-ind]
+        peak_analyzed_dict = kymograph.analyze_maxpeak(group_sel_col1, smooth_length=7,
+                frame_width = self.loop_region_right - self.loop_region_left,
+                dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+        # ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'g', label='color_1')
+        if self.numColors == "2" or "3":
+            msd_moving = kymograph.msd_moving(group_sel_col2['x'].values, n=n)
+            frames = group_sel_col2['FrameNumber'].values[ind:-ind]
+            ax.plot(frames * self.acquisitionTime,
+                    msd_moving * self.pixelSize**2, #converted to µm²
+                    '.', color='k', label='MSD particle')
+            ax.plot(frames * self.acquisitionTime,
+                    savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order) * self.pixelSize**2, #converted to µm²
+                    color='k', label='')
+            peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
+                frame_width = self.loop_region_right - self.loop_region_left,
+                dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+            sel_loop_sm_dict = kymograph.loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=7)
+            pos_diff_kb = sel_loop_sm_dict['PositionDiff_kb']
+            pos_diff_kb_smooth = savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1)
+            if pos_diff_kb_smooth.min() < 0:
+                pos_diff_kb = pos_diff_kb - pos_diff_kb_smooth.min()
+                pos_diff_kb_smooth = pos_diff_kb_smooth - pos_diff_kb_smooth.min()
+            ax_right = ax.twinx()
+            ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
+                        pos_diff_kb,
+                        '.', color=color_distance, label='Distance')
+            ax_right.plot(sel_loop_sm_dict['FrameNumber'] * self.acquisitionTime,
+                        pos_diff_kb_smooth,
+                        color=color_distance, label='')
+            ax_right.set_ylabel("Distance/kb", color=color_distance)
+            ax_right.tick_params(axis='y', colors=color_distance)
+            ax_right.spines["right"].set_color(color_distance)
+            ax_right.legend(loc='center right', labelcolor='linecolor')
+        ax.set_xlabel("time/s")
+        ax.tick_params(axis='y', colors='k')
+        ax.spines["left"].set_color("k")
+        ax.set_ylabel(r"MSD(${\mu} m^2$)", color='k')
+        ax.legend(labelcolor='linecolor')
+        plt.subplots_adjust(hspace=.0)
+        plt.show()
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
