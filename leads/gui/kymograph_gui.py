@@ -19,6 +19,7 @@ from scipy.signal import savgol_filter
 import h5py
 import tqdm
 from . import crop_images_gui
+import pandas as pd
 
 DEFAULTS = {
     "ColorMap" : 'plasma',
