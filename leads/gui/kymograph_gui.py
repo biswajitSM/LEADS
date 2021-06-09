@@ -738,6 +738,9 @@ class Window(QtWidgets.QMainWindow):
         open_cropping_GUI_action = file_menu.addAction("Open cropping GUI")
         open_cropping_GUI_action.setShortcut("Ctrl+Shift+O")
         open_cropping_GUI_action.triggered.connect(self.openCroppingGUI)
+        close_all_mpl_figures = file_menu.addAction("Close all figures")
+        close_all_mpl_figures.setShortcut("Ctrl+Shift+W")
+        close_all_mpl_figures.triggered.connect(self.closeAllMPLFigures)
         """ View """
         view_menu = menu_bar.addMenu("View")
         default_action = view_menu.addAction("Default View State")
@@ -1211,6 +1214,9 @@ class Window(QtWidgets.QMainWindow):
                 self.set_loop_detection_widgets()
             self.region_errbar.setRegion(self.params_yaml['Region Errbar'])
             self.detect_loops()
+
+    def closeAllMPLFigures(self):
+        plt.close('all')
 
     def openCroppingGUI(self):
         crop_images_gui.main()
@@ -1966,7 +1972,7 @@ class Window(QtWidgets.QMainWindow):
         if self.numColors == "2" or self.numColors == "3":
             result = kymograph.link_and_plot_two_color(
                     self.all_peaks_dict["All Peaks"], self.all_smpeaks_dict["All Peaks"],
-                    search_range=self.search_range_link, memory=self.memory_link,
+                    acqTime=self.acquisitionTime, search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True,)
             self.df_peaks_linked = result['df_peaks_linked']
             self.df_peaks_linked_sm = result['df_peaks_linked_sm']
@@ -2190,7 +2196,7 @@ class Window(QtWidgets.QMainWindow):
                 ax_right.spines["right"].set_color("r")
                 ax_right.legend(loc='center right')
 
-            ax.set_xlabel("Frame Number", color='m')
+            ax.set_xlabel("time/s", color='m')
             ax.tick_params(axis='y', colors='m')
             ax.spines["left"].set_color("m")
             ax.set_ylabel("Moving MSD(" + str(n) + " points)")
@@ -2382,7 +2388,7 @@ class Window(QtWidgets.QMainWindow):
             makevideo.png_to_video_cv2(temp_folder, filename, fps=int(frame_rate), scaling=4)
             for file in filelist_png:
                 os.remove(file)
-            # subprocess.call([filename])
+            os.rmdir(temp_folder)
             pbar.close()
             self.imv00.setCurrentIndex(current_index)
             print("Video conversion FINISHED")
@@ -2419,6 +2425,7 @@ class Window(QtWidgets.QMainWindow):
             makevideo.png_to_video_cv2(temp_folder, filename, fps=int(frame_rate), scaling=4)
             for file in filelist_png:
                 os.remove(file)
+            os.rmdir(temp_folder)
             pbar.close()
             self.imv00.setCurrentIndex(current_index)
             print("Video conversion FINISHED")
@@ -2466,6 +2473,8 @@ class Window(QtWidgets.QMainWindow):
                     kymo_comb[:,:,nChannel] = temp * (2**16-1)
                 imwrite(filename, kymo_comb.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+                exporter = pyqtgraph.exporters.ImageExporter(self.imv11.imageItem)
+                exporter.export(filename.replace('.tif', '.png'))
             else:
                 imwrite(filename, self.kymo_right.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
@@ -2485,6 +2494,8 @@ class Window(QtWidgets.QMainWindow):
                     kymo_loop_comb[:,:,nChannel] = temp * (2**16-1)
                 imwrite(filename, kymo_loop_comb.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})
+                exporter = pyqtgraph.exporters.ImageExporter(self.imv12.imageItem)
+                exporter.export(filename.replace('.tif', '.png'))
             else:
                 imwrite(filename, self.kymo_right_loop.T.astype(np.uint16), imagej=True,
                         metadata={'axis': 'TCYX', 'channels': self.numColors, 'mode': 'composite',})

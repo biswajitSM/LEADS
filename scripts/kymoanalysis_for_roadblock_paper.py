@@ -153,7 +153,7 @@ class NewWindow(Window):
         if self.numColors == "2" or "3":
             df_gb = self.df_peaks_linked_sm.groupby("particle")
             group_sel_col2 = df_gb.get_group(right_peak_no)
-            group_sel_col2 = group_sel_col2.reset_in
+            group_sel_col2 = group_sel_col2.reset_index(drop=True)
         # _, ax = plt.subplots()
         # fig, (ax1,ax) = plt.subplots(nrows=2, sharex=True, figsize=(6, 10))
         fig = plt.figure(figsize=(6.4, 9.6))
@@ -206,6 +206,7 @@ class NewWindow(Window):
             ax_right.tick_params(axis='y', colors=color_distance)
             ax_right.spines["right"].set_color(color_distance)
             ax_right.legend(loc='center right', labelcolor='linecolor')
+            ax_right.set_xlabel("time/s")
         ax.set_xlabel("time/s")
         ax.tick_params(axis='y', colors='k')
         ax.spines["left"].set_color("k")
