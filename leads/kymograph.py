@@ -270,7 +270,7 @@ def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory
     gb_names = list(peaks_linked_gb.groups.keys())
     if plotting:
         if axis is None:
-            fig, axis = plt.subplots()
+            fig = plt.figure(figsize=(10, 4))
             gs = fig.add_gridspec(1, 4)
             axis = fig.add_subplot(gs[0, :-1])
             if xLabelIsFrames:

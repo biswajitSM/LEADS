@@ -872,6 +872,12 @@ class Window(QtWidgets.QMainWindow):
         self.imv21 = pg.ImageView(view=self.plotLoopPos)
         self.imv21.setPredefinedGradient(DEFAULTS["ColorMap"])
         self.hide_imgv_roi_norm(self.imv21)
+        self.infline_loopkymo_top = pg.InfiniteLine(movable=False, pos=0, angle=0, pen=(3, 9), label='left={value:0.0f}',
+            labelOpts={'position':0.05, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
+        self.infline_loopkymo_bottom = pg.InfiniteLine(movable=False, pos=40, angle=0, pen=(3, 9), label='right={value:0.0f}',
+            labelOpts={'position':0.05, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
+        self.imv21.addItem(self.infline_loopkymo_top)
+        self.imv21.addItem(self.infline_loopkymo_bottom)
         # invert Y-axis of kymos
         self.imv10.view.invertY(False)
         self.imv20.view.invertY(False)
@@ -1845,6 +1851,8 @@ class Window(QtWidgets.QMainWindow):
             self.set_loop_detection_widgets()
         self.loop_region_left = int(self.region_errbar.getRegion()[0])
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        self.infline_loopkymo_top.setPos(self.loop_region_left)
+        self.infline_loopkymo_bottom.setPos(self.loop_region_right)
         min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
         max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
         self.all_peaks_dict = peakfinder_savgol(self.kymo_left_loop.T,
