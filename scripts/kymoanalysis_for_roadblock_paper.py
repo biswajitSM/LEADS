@@ -21,6 +21,8 @@ class NewWindow(Window):
     def plottype_multipeak(self):        
 
         matplotlib.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
+        df = pd.DataFrame([self.filename_base + '_'])
+        df.to_clipboard(index=False,header=False)
 
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
         right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
