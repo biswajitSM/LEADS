@@ -1809,9 +1809,6 @@ class Window(QtWidgets.QMainWindow):
         # loop position in imv21
         self.plotLoopPosData = self.plotLoopPos.scatterPlot(
             symbol='o', symbolSize=5, pen=pg.mkPen('r'), symbolPen=pg.mkPen(None))#symbolBrush=pg.mkPen('r')
-        # change the default docking positions to the new one
-        self.defaultDockState = self.dockarea.saveState()
-        self.dockarea.restoreState(self.defaultDockState)
         if self.numColors == "2" or self.numColors == "3":
             self.d3_right = pg_da.Dock("Single Molecule detections")
             self.dockarea.addDock(self.d3_right, 'bottom', self.d2_right)
@@ -1837,7 +1834,9 @@ class Window(QtWidgets.QMainWindow):
             if self.numColors == "3":
                 self.d3_right = pg_da.Dock("Color 3 detections")
                 self.dockarea.addDock(self.d3_right, 'bottom', self.d2_col3)
-
+        # change the default docking positions to the new one
+        self.defaultDockState = self.dockarea.saveState()
+        self.dockarea.restoreState(self.defaultDockState)
     def params_change_loop_detection(self):
         self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
         self.dna_length_kb = self.multipeak_dialog.DNAlength_spinbox.value()
@@ -1851,6 +1850,12 @@ class Window(QtWidgets.QMainWindow):
             self.set_loop_detection_widgets()
         self.loop_region_left = int(self.region_errbar.getRegion()[0])
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        if self.loop_region_left < 0:
+            self.loop_region_left = 0
+            self.region_errbar.setRegion((self.loop_region_left, self.loop_region_right))
+        if self.loop_region_right > self.kymo_left_loop.shape[1]:
+            self.loop_region_right = self.kymo_left_loop.shape[1] - 1
+            self.region_errbar.setRegion((self.loop_region_left, self.loop_region_right))
         self.infline_loopkymo_top.setPos(self.loop_region_left)
         self.infline_loopkymo_bottom.setPos(self.loop_region_right)
         min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
