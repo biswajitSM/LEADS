@@ -91,7 +91,7 @@ def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
     kymo_noLoop: needs have same number of rows as kym_arr
     '''
     if skip_left is None: skip_left = 0
-    if skip_right is 0 or None: skip_right = 1
+    if skip_right is None or skip_right == 0: skip_right = 1
     if kymo_noLoop is not None and correction_noLoop:
         kymo_noLoop_avg = np.sum(kymo_noLoop, axis=1)
         kymo_noLoop_avg = 1 + (kymo_noLoop_avg/max(kymo_noLoop_avg))
@@ -244,8 +244,12 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
         plt.legend()
     return loop_sm_dict
 
-def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
+def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
                plotting=True, axis=None,):
+    xLabelIsFrames = False
+    if acqTime is None:
+        acqTime = 1
+        xLabelIsFrames = True
     df_peaks["x"] = df_peaks["PeakPosition"]
     if df_peaks_sm is None:
         df_peaks["y"] = df_peaks["FrameNumber"]
@@ -266,50 +270,84 @@ def link_peaks(df_peaks, df_peaks_sm=None, search_range=10, memory=5, filter_len
     gb_names = list(peaks_linked_gb.groups.keys())
     if plotting:
         if axis is None:
-            fig, axis = plt.subplots()
-            axis.set_xlabel('Frames')
+            fig = plt.figure(figsize=(10, 4))
+            gs = fig.add_gridspec(1, 4)
+            axis = fig.add_subplot(gs[0, :-1])
+            if xLabelIsFrames:
+                axis.set_xlabel('Frames')
+            else:
+                axis.set_xlabel('time/s')
             axis.set_ylabel('Pixels')
+            axis_r = fig.add_subplot(gs[0, -1:])
+            axis_r.set_xticks([])
+            axis_r.set_yticks([])
+
+            axis_r.hist(df_peaks["PeakPosition"], orientation='horizontal')
         for name in gb_names:
             gp_sel = peaks_linked_gb.get_group(name)
-            axis.plot(gp_sel["frame"], gp_sel["x"], label=str(name), alpha=0.8)
-            axis.text(gp_sel["frame"].values[0], np.average(gp_sel["x"].values[:10]), str(name))
+            axis.plot(gp_sel["frame"]*acqTime, gp_sel["x"], label=str(name), alpha=0.8)
+            axis.text(gp_sel["frame"].values[0]*acqTime, np.average(gp_sel["x"].values[:10]), str(name))
         plt.show()
     peaks_linked = peaks_linked.reset_index(drop=True)
     return peaks_linked
 
 
-def link_and_plot_two_color(df_peaks, df_peaks_sm,
+def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
             search_range=10, memory=5, filter_length=10,
             plotting=True):
     # set axes and figsize
     fig = plt.figure(figsize=(10, 10))
     gs = fig.add_gridspec(4, 4)
-    ax1 = fig.add_subplot(gs[0, :])
+    ax1 = fig.add_subplot(gs[0, :-1])
     ax1.set_xticks([])
-    ax2 = fig.add_subplot(gs[1, :])
+    ax2 = fig.add_subplot(gs[1, :-1])
     ax2.set_xticks([])
-    ax3 = fig.add_subplot(gs[2, :])
-    ax4 = fig.add_subplot(gs[3, :])
+    ax3 = fig.add_subplot(gs[2, :-1])
+    ax4 = fig.add_subplot(gs[3, :-1])
+    # add axs for histogram
+    ax1_r = fig.add_subplot(gs[0, -1:], sharey=ax1)
+    ax1_r.set_xticklabels([])
+    ax2_r = fig.add_subplot(gs[1, -1:], sharey=ax2)
+    ax2_r.set_xticklabels([])
+    ax3_r = fig.add_subplot(gs[2, -1:], sharey=ax3)
+    ax3_r.set_xticklabels([])
+
+    xLabelIsFrames = False
+    if acqTime is None:
+        acqTime = 1
+        xLabelIsFrames = True
+        
     # link and plot data to it
-    df_peaks_linked = link_peaks(df_peaks, search_range=search_range,
+    df_peaks_linked = link_peaks(df_peaks, acqTime=acqTime, search_range=search_range,
                           memory=memory, filter_length=filter_length,
                           plotting=plotting, axis=ax1)
-    df_peaks_linked_sm = link_peaks(df_peaks_sm, search_range=search_range,
+    ax1_r.hist(df_peaks["PeakPosition"], orientation='horizontal')
+    df_peaks_linked_sm = link_peaks(df_peaks_sm, acqTime=acqTime, search_range=search_range,
                           memory=memory, filter_length=filter_length,
                           plotting=plotting, axis=ax2)
-    ax3.plot(df_peaks_linked_sm['frame'], df_peaks_linked_sm['x'], '.m', alpha=0.5, label='SM')
-    ax3.plot(df_peaks_linked['frame'], df_peaks_linked['x'], '.g', alpha=0.3, label='DNA')
+    ax2_r.hist(df_peaks_sm["PeakPosition"], orientation='horizontal')
+    ax3_r.hist(df_peaks["PeakPosition"], histtype='step', orientation='horizontal')
+    ax3_r.hist(df_peaks_sm["PeakPosition"], histtype='step', orientation='horizontal')
+
+    ax3.plot(df_peaks_linked_sm['frame']*acqTime, df_peaks_linked_sm['x'], '.m', alpha=0.5, label='SM')
+    ax3.plot(df_peaks_linked['frame']*acqTime, df_peaks_linked['x'], '.g', alpha=0.3, label='DNA')
     ax3.legend(loc=4)
-    ax4_sc = ax4.scatter(df_peaks_linked['frame'], df_peaks_linked['x'], marker='.',
+    ax4_sc = ax4.scatter(df_peaks_linked['frame']*acqTime, df_peaks_linked['x'], marker='.',
                          c=df_peaks_linked["PeakIntensity"].values, cmap='jet')
     ax4_cbar = plt.colorbar(ax4_sc)
+    l, b, w, h = ax4.get_position().bounds
+    ll, bb, ww, hh = ax4_cbar.ax.get_position().bounds
+    ax4_cbar.ax.set_position([ll- ll*0.1, b, ww - ww*0.1, h])
     # ax4_cbar.set_ticks([])
     ax_list = [ax1, ax2, ax3, ax4]
     for ax in ax_list:
         ax.set_ylim(0, None)
         ax.set_xlim(0, None)
         ax.set_ylabel('pixels')
-    ax4.set_xlabel('Frame Numbers')
+    if xLabelIsFrames:
+        ax4.set_xlabel('Frame Numbers')
+    else:
+        ax4.set_xlabel('time/s')
     ax1.text(0.55, 0.9, 'DNA punctas')
     ax2.text(0.55, 0.9, 'Single molecules')
     ax3.text(0.55, 0.9, 'DNA punctas and SM')
