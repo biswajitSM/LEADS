@@ -1,4 +1,4 @@
-# import ptvsd # only for debugging
+import ptvsd # only for debugging
 import napari
 import platform
 import subprocess
@@ -124,7 +124,7 @@ class Worker(QObject):
             isMultipage = self.TIFisMultipage(tif_file_list[0])
             if isMultipage[0]: 
                 continue
-            # tif_file_list = [tif_file_list[i] for i in range(len(tif_file_list)) if not isMultipage[i]]
+
             subfolders.extend( list(set([os.path.dirname(file) for file in tif_file_list])) )
             subfolders = list(set(subfolders))
 
@@ -361,7 +361,12 @@ class Worker(QObject):
                         #     a.show()
                         #     a=1
                         #     a=1
-                        img_array_all[rect_keys[j]][i, col, :, :] = img_cropped
+                        try:
+                            img_array_all[rect_keys[j]][i, col, :, :] = img_cropped
+                        except:
+                            if i == 0:
+                                print('Failed cropping in '+roi_file_list[j])
+                            pass
         
         for i in range(len(roi_coord_list)):
             try:
