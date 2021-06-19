@@ -19,7 +19,7 @@ def get_rect_params(rect, printing=False):
     width = int(np.sqrt((rect[0][0] - rect[1][0])**2 + (rect[0][1] - rect[1][1])**2))
     dy = rect[3][1] - rect[0][1]
     dx = rect[3][0] - rect[0][0]
-    if dx == 0:
+    if dx == 0 or dy == 0:
         angle = 0
     else:
         m1 = (dy/dx);   # tan(A)
@@ -43,7 +43,6 @@ def crop_rect(img, rect, angle=0):
     rect_params = get_rect_params(rect)
     if rect_params['angle'] != 0 or angle!=0:
         img_rot = rotate(img, angle=rect_params['angle']+angle)
-                        #  center=(rect_params['y_cent'], rect_params['x_cent']))
     else:
         img_rot = img
     x = int(rect_params['x_cent'] - rect_params['width']/2)

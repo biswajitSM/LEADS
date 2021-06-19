@@ -1,4 +1,4 @@
-# import ptvsd # only for debugging
+import ptvsd # only for debugging
 import napari
 import platform
 import subprocess
@@ -124,7 +124,7 @@ class Worker(QObject):
             isMultipage = self.TIFisMultipage(tif_file_list[0])
             if isMultipage[0]: 
                 continue
-            # tif_file_list = [tif_file_list[i] for i in range(len(tif_file_list)) if not isMultipage[i]]
+
             subfolders.extend( list(set([os.path.dirname(file) for file in tif_file_list])) )
             subfolders = list(set(subfolders))
 
@@ -345,23 +345,12 @@ class Worker(QObject):
                     if (not skipIMG[j]):
                         img_cropped = crop_images.crop_rect(img, roi_coord_list[j], angle=angle[j][col])
 
-                        # # shift the whole image if necessary
-                        # if shift_wholeImage and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
-                        #     img_shift = crop_images.geometric_shift(img, angle=angle[j][col],
-                        #                         shift_x=shift_x[j][col], shift_y=shift_y[j][col])
-                        # else:
-                        #     img_shift = img
-                        # # ... or just shift the crop
-                        # img_cropped = crop_images.crop_rect(img_shift, roi_coord_list[j])
-                        # if (not shift_wholeImage) and ((angle[j][col]!=0) or (shift_x[j][col]!=0) or (shift_y[j][col]!=0)):
-                        #     img_cropped = crop_images.geometric_shift(img_cropped, angle=angle[j][col],
-                        #                     shift_x=shift_x[j][col], shift_y=shift_y[j][col])
-                        # if j == 0 and i == 0 and col == 0 and abs(shift_y[j][col])>10:
-                        #     a = Image.fromarray(np.uint16(img_cropped/np.max(img_cropped.ravel())*(2**16)))
-                        #     a.show()
-                        #     a=1
-                        #     a=1
-                        img_array_all[rect_keys[j]][i, col, :, :] = img_cropped
+                        try:
+                            img_array_all[rect_keys[j]][i, col, :, :] = img_cropped
+                        except:
+                            if i == 0:
+                                print('Failed cropping in '+roi_file_list[j])
+                            pass
         
         for i in range(len(roi_coord_list)):
             try:
@@ -942,6 +931,7 @@ class NapariTabs(QtWidgets.QWidget):
                                         [255, 255, 255]]) / 255 # color palette taken from https://www.nature.com/articles/nmeth.1618        
         self.series2treat_ShiftRoutine = None
         self.CorrectChromaticShift = False
+        self._drag_start = None
 
         # number of colors
         self.ui.numColorsCbox.setCurrentText("2")
@@ -990,6 +980,8 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui.BatchProcessBtn.clicked.connect(self.callBatchProcessing)
         # button to estimate shift
         self.ui.ShiftEstimateBtn.clicked.connect(self.EstimateShift)
+        # tickbox to drag image layers
+        self.ui.DragImageLayerCheckBox.stateChanged.connect(self.toggleImageLayerDraggingToggleSettings)
         # button to open the current dir outside python (on the OS)
         self.ui.CopyPathBtn.clicked.connect(self.OpenPathExternally)
 
@@ -997,93 +989,120 @@ class NapariTabs(QtWidgets.QWidget):
         self.LPwin = LineProfileWindow()
         self.viewer.dims.events.current_step.connect(self.updateSlider)
 
-
-        # # upon clicking somewhere in the viewer, decide if we clicked into
-        # # an image or in a shapes layer. Depending on that, make the layer we clicked
-        # # into the active one
-        # @viewer.mouse_drag_callbacks.append
-        # def SwitchLayerUponMouseClick(self, event):
-        #     # at startup, we dont have any layers yet. in this case, do nothing
-        #     # !!! here, self is already self.viewer
-        #     if (not self.layers) or (not self._active_layer):
-        #         return
-        #     selected = self._active_layer.name
-        #     # if the selected layer, is the profile layer, we dont do this
-        #     if 'profile' in selected.lower():
-        #         return
-        #     # if we're currently drawing a shape, also dont trigger it
-        #     if hasattr(self._active_layer, 'nshapes'): # only works for shapes layers
-        #         if self._active_layer.mode != 'select':
-        #             return
-        #     # get the mouse click coordinates. We have to get that
-        #     # from the currently active layer
-        #     mouseCoordinates = [self._active_layer.coordinates]
-        #     if len(mouseCoordinates[0])>2:  # omit z component on position 0 if present
-        #         mouseCoordinates[0] = mouseCoordinates[0][1:]
-        #     # loop through shape layers. If the mouse click was
-        #     # in any of the shapes, select this layer. 
-        #     # Otherwise, select the uppermost image layer
-        #     for nLayer in range(len(self.layers)):
-        #         if not hasattr(self.layers[nLayer], 'nshapes'):
-        #             continue
-        #         if len(self.layers[nLayer].data) == 0:
-        #             continue
-        #         if self.layers[nLayer].data[0].shape[0] != 4:
-        #             continue # is not a rectangle
-                
-        #         # now see if we find any shape which contains mouseCoordinates
-        #         for nShape in range(len(self.layers[nLayer].data)):
-        #             # make the polygon 5% on each side larger, in order to 
-        #             # not switch to an image layer when trying to resize 
-        #             # the ROI   
-        #             # issue: when a shape is already selected, it selects the layer
-        #             # we should check for that and in case a shape is selected,
-        #             # leave it 
-        #             polygon = deepcopy(self.layers[nLayer].data[nShape])
-        #             a = crop_images.get_rect_params(polygon)
-        #             extension = 20 # 20 pixels on each side
-        #             dx = extension * (np.cos(a['angle']*np.pi/180) + np.sin(a['angle']*np.pi/180))
-        #             dy = extension * (np.cos(a['angle']*np.pi/180) - np.sin(a['angle']*np.pi/180))
-        #             polygon[0][0] -= dx
-        #             polygon[3][0] -= dx
-        #             polygon[1][0] += dx
-        #             polygon[2][0] += dx
-        #             polygon[0][1] -= dy
-        #             polygon[3][1] += dy
-        #             polygon[1][1] -= dy
-        #             polygon[2][1] += dy
-                    
-        #             path = mpltPath.Path(polygon)
-        #             if path.contains_points(mouseCoordinates):
-        #                 if selected == nLayer:
-        #                     return
-        #                 # deselect what was selected before
-        #                 self.layers[selected].events.deselect()
-        #                 self.layers[selected].selected = False
-        #                 # select where we clicked
-        #                 self.layers[nLayer].events.select()
-        #                 self.layers[nLayer].selected = True
-        #                 self._active_layer = self.layers[nLayer]
-        #                 return
-
-        #     # if the function didnt return so far, we didnt find 
-        #     # any shape which has the mouse coord inside
-        #     # in thise case, check if we had an image layer selected before
-        #     # if yes, just stay there -> do nothing
-        #     # if no, change to the lowest layer
-        #     if hasattr(self.layers[selected], 'nshapes'): # if it was a shape layer
-        #         self.layers[selected].events.deselect()
-        #         self.layers[selected].selected = False
-        #         self.layers[0].events.select()
-        #         self.layers[0].selected = True
-        #         self._active_layer = self.layers[0]
-
-
         # when changing layers, update the x-y and angle boxes
         @viewer.layers.selection.events.active.connect
         def UpdateXYShiftRotationAngleUponSwitchingLayerWrapper(event):
             self.UpdateXYShiftRotationAngleUponSwitchingLayer()
 
+        @viewer.mouse_drag_callbacks.append
+        def toggleImageLayerDragging(viewer, event):
+            translationVector = None
+            self._drag_start = self.viewer.cursor.position
+            yield
+            self.ui.xShiftSpinBox.blockSignals(True)
+            self.ui.yShiftSpinBox.blockSignals(True)
+            # on move
+            while event.type == 'mouse_move':
+                drag_now = self.viewer.cursor.position
+                translationVector = np.round( np.array(drag_now) - np.array(self._drag_start) )
+                for layer in self.viewer.layers.selection: 
+                    layerNames = [''] * self.numLayers
+                    for nLayer in range(self.numLayers):
+                        layerNames[nLayer] = self.viewer.layers[nLayer].name
+                    currentLayer = layerNames.index(layer.name)
+                    currentColor = currentLayer % self.numColors # "%" gives the remainder
+                    currentSeries = int( (currentLayer-currentColor) / self.numColors )  
+
+                    if self.CorrectChromaticShift:
+                        # get the shift that was already present
+                        xShift = self.xShift[currentSeries][currentColor]
+                        yShift = self.yShift[currentSeries][currentColor]
+                        # translate
+                        layer.translate = translationVector + np.array([0, yShift, xShift])
+                        # add the translation vector to the shift for display                        
+                        self.ui.xShiftSpinBox.setValue(self.xShift[currentSeries][currentColor]+translationVector[2])
+                        self.ui.yShiftSpinBox.setValue(self.yShift[currentSeries][currentColor]+translationVector[1])
+                    else:
+                        for nCol in range(self.numColors):
+                            layer2treat = self.viewer.layers[currentSeries*self.numColors+nCol]
+                            xShift = self.xShift[currentSeries][nCol]
+                            yShift = self.yShift[currentSeries][nCol]
+                            layer2treat.translate = translationVector + np.array([0, yShift, xShift])
+                
+                # if line profiles are shown, also update those
+                if self.LPwin.isVisible():
+                    self.profile_line()
+                yield
+                        
+            
+            # save shift to yaml file 
+            if translationVector is not None:
+                for layer in self.viewer.layers.selection: 
+                    layerNames = [''] * self.numLayers
+                    for nLayer in range(self.numLayers):
+                        layerNames[nLayer] = self.viewer.layers[nLayer].name
+                    currentLayer = layerNames.index(layer.name)
+                    currentColor = currentLayer % self.numColors # "%" gives the remainder
+                    currentSeries = int( (currentLayer-currentColor) / self.numColors )  
+
+                    # save to file
+                    folderpath = self.image_meta[currentSeries]['folderpath']
+                    self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
+                    self.LoadShiftYamlFile()
+
+                    if not hasattr(self.shift_yaml, 'angle'):
+                        self.shift_yaml["angle"] = {}
+                    if self.CorrectChromaticShift:
+                            # write new shift to self.xShift and self.yShift
+                            self.xShift[currentSeries][currentColor] += translationVector[2]
+                            self.yShift[currentSeries][currentColor] += translationVector[1]
+
+                            self.shift_yaml["x"]["col"+str(int(currentColor))] = int( self.xShift[currentSeries][currentColor] )
+                            self.shift_yaml["y"]["col"+str(int(currentColor))] = int( self.yShift[currentSeries][currentColor] )
+                            self.shift_yaml["angle"]["col"+str(int(currentColor))] = int( self.RotationAngle[currentSeries][currentColor] )
+                    else:
+                        for nColor in range(self.numColors):
+                            # write new shift to self.xShift and self.yShift
+                            self.xShift[currentSeries][nColor] += translationVector[2]
+                            self.yShift[currentSeries][nColor] += translationVector[1]
+
+                            self.shift_yaml["x"]["col"+str(int(nColor))] = int( self.xShift[currentSeries][nColor] )
+                            self.shift_yaml["y"]["col"+str(int(nColor))] = int( self.yShift[currentSeries][nColor] )
+                            self.shift_yaml["angle"]["col"+str(int(nColor))] = int( self.RotationAngle[currentSeries][nColor] )
+            
+                    # save the yaml file
+                    self.shift_yaml = io.to_dict_walk(self.shift_yaml)
+                    os.makedirs(os.path.dirname(self.yamlFileName), exist_ok=True)
+                    with open(self.yamlFileName, "w") as shift_file:
+                        yaml.dump(dict(self.shift_yaml), shift_file, default_flow_style=False)
+
+            # display the current shift values for the active layer
+            layerNames = [''] * self.numLayers
+            for nLayer in range(self.numLayers):
+                layerNames[nLayer] = self.viewer.layers[nLayer].name
+            currentLayer = layerNames.index(self.viewer.active_layer.name)
+            currentColor = currentLayer % self.numColors # "%" gives the remainder
+            currentSeries = int( (currentLayer-currentColor) / self.numColors ) 
+            self.ui.xShiftSpinBox.setValue(self.xShift[currentSeries][currentColor])
+            self.ui.yShiftSpinBox.setValue(self.yShift[currentSeries][currentColor])
+            self.ui.xShiftSpinBox.blockSignals(False)
+            self.ui.yShiftSpinBox.blockSignals(False)
+# ---------------------------------------------------------------------
+    def toggleImageLayerDraggingToggleSettings(self):
+        if self.ui.DragImageLayerCheckBox.isChecked():            
+            # remove all shape layers from the selection since translation only works on image layers
+            layersToRemove = []
+            for selectedLayer in self.viewer.layers.selection:
+                if selectedLayer._type_string!='image':
+                    layersToRemove.append( selectedLayer )
+            for layer in layersToRemove:
+                self.viewer.layers.selection.remove(layer)
+            if self.viewer.layers.selection.active is None:
+                print('Shape layers are not supported for drag events. Choose image layers only.')
+                return
+            self.viewer.window.qt_viewer.view.camera.interactive = False
+        else:
+            self.viewer.window.qt_viewer.view.camera.interactive = True
 
 # ---------------------------------------------------------------------
     def UpdateXYShiftRotationAngleUponSwitchingLayer(self):
@@ -1836,6 +1855,7 @@ class NapariTabs(QtWidgets.QWidget):
     def loadImgSeq(self, path_in="", omitROIlayer=False, buttonPressed=False):
         if (not hasattr(self, 'image_meta')) and (not buttonPressed):
             return # no images were opened yet
+        self.toggleImageLayerDraggingToggleSettings()
 
         # first remove all layers
         for l in reversed(self.viewer.layers[:]):
