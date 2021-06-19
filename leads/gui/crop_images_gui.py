@@ -299,7 +299,7 @@ class Worker(QObject):
 
         if all(skipIMG):
             print('All crops already exist in subfolder '+str(nDir+1)+'/'+str(numDirs)+'.')
-            for i in range(len(roi_coord_list)):
+            for i in trange(len(roi_coord_list), desc='Copying crops to collective directory'):
                 if (not skipROI[i]):
                     roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
                     roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
@@ -361,7 +361,7 @@ class Worker(QObject):
                                 print('Failed cropping in '+roi_file_list[j])
                             pass
         
-        for i in range(len(roi_coord_list)):
+        for i in trange(len(roi_coord_list), desc='Saving and evtl. processing crops'):
             # try:
             roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
             if (not skipROI[i]):                    
