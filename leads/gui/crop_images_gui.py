@@ -1081,13 +1081,14 @@ class NapariTabs(QtWidgets.QWidget):
             layerNames = [''] * self.numLayers
             for nLayer in range(self.numLayers):
                 layerNames[nLayer] = self.viewer.layers[nLayer].name
-            currentLayer = layerNames.index(self.viewer.active_layer.name)
+            currentLayer = layerNames.index(self.viewer.layers.selection.active.name)
             currentColor = currentLayer % self.numColors # "%" gives the remainder
             currentSeries = int( (currentLayer-currentColor) / self.numColors ) 
             self.ui.xShiftSpinBox.setValue(self.xShift[currentSeries][currentColor])
             self.ui.yShiftSpinBox.setValue(self.yShift[currentSeries][currentColor])
             self.ui.xShiftSpinBox.blockSignals(False)
             self.ui.yShiftSpinBox.blockSignals(False)
+            
 # ---------------------------------------------------------------------
     def toggleImageLayerDraggingToggleSettings(self):
         if self.ui.DragImageLayerCheckBox.isChecked():            
