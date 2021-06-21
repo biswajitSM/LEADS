@@ -612,7 +612,9 @@ class MainWidget(QtWidgets.QWidget):
         self.bottomlayout.addLayout(grid_btn1, 0, 1)
         self.detectLoopsBtn = QtWidgets.QPushButton("Detect loops")
         self.detectLoopsBtn.setShortcut("Ctrl+D")
-        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0, 1, 2)
+        grid_btn1.addWidget(self.detectLoopsBtn, 0, 0, 1, 1)
+        self.findDNAendsBtn = QtWidgets.QPushButton("Find DNA Ends")
+        grid_btn1.addWidget(self.findDNAendsBtn, 0, 1, 1, 1)
         self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
         self.processImageCheckBox.setChecked(True)
         grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
@@ -794,6 +796,7 @@ class Window(QtWidgets.QMainWindow):
         self.ui.frameEndSpinBox.valueChanged.connect(self.frames_changed)
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
+        self.ui.findDNAendsBtn.clicked.connect(self.find_dna_ends)
 
     def connect_signals(self):
         # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
@@ -1179,6 +1182,7 @@ class Window(QtWidgets.QMainWindow):
         self.params_yaml['region3_Loop'] = list(self.region3_Loop.getRegion())
         if self.plot_loop_errbar is not None:
             self.params_yaml['Region Errbar'] = list(self.region_errbar.getRegion())
+            self.params_yaml['dna ends'] = self.dna_ends
         multipeak_settings = self.multipeak_dialog.on_close_event()
         self.params_yaml["MultiPeak"] = multipeak_settings["kymograph"]["MultiPeak"]
         with open(filepath_yaml, 'w') as f:
@@ -1786,6 +1790,13 @@ class Window(QtWidgets.QMainWindow):
 
         self.region_errbar = pg.LinearRegionItem(self.params_yaml['Region Errbar'])
         self.plot_loop_errbar.addItem(self.region_errbar, ignoreBounds=True)
+        self.dna_ends = [2, 20]
+        self.dna_infline_left = pg.InfiniteLine(movable=True, pos=self.dna_ends[0], angle=90, pen=(3, 9), label='dna left end ={value:0.0f}',
+            labelOpts={'position':0.15, 'angle':90, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
+        self.plot_loop_errbar.addItem(self.dna_infline_left, ignoreBounds=True)
+        self.dna_infline_right = pg.InfiniteLine(movable=True, pos=self.dna_ends[1], angle=90, pen=(3, 9), label='dna right end ={value:0.0f}',
+            labelOpts={'position':0.15, 'angle':90, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
+        self.plot_loop_errbar.addItem(self.dna_infline_right, ignoreBounds=True)
         # adding plot items for loop kinetics
         self.plot_data_loop = self.plot_loop_kinetics.plot(title='Loop',
                 symbol='o', symbolSize=4, pen=pg.mkPen(None),
@@ -1837,6 +1848,7 @@ class Window(QtWidgets.QMainWindow):
         # change the default docking positions to the new one
         self.defaultDockState = self.dockarea.saveState()
         self.dockarea.restoreState(self.defaultDockState)
+
     def params_change_loop_detection(self):
         self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
         self.dna_length_kb = self.multipeak_dialog.DNAlength_spinbox.value()
@@ -1852,14 +1864,19 @@ class Window(QtWidgets.QMainWindow):
         self.loop_region_right = int(self.region_errbar.getRegion()[1])
         if self.loop_region_left < 0:
             self.loop_region_left = 0
+            self.dna_ends[0] = self.loop_region_left + 5
             self.region_errbar.setRegion((self.loop_region_left, self.loop_region_right))
         if self.loop_region_right > self.kymo_left_loop.shape[1]:
             self.loop_region_right = self.kymo_left_loop.shape[1] - 1
+            self.dna_ends[1] = self.loop_region_left - 5
             self.region_errbar.setRegion((self.loop_region_left, self.loop_region_right))
-        self.infline_loopkymo_top.setPos(self.loop_region_left)
-        self.infline_loopkymo_bottom.setPos(self.loop_region_right)
+        self.dna_ends[0] = float(self.dna_infline_left.getXPos())
+        self.dna_ends[1] = float(self.dna_infline_right.getXPos())
+        self.infline_loopkymo_top.setPos(self.dna_ends[0])
+        self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
         min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
         max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
+        self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
         self.all_peaks_dict = peakfinder_savgol(self.kymo_left_loop.T,
                 self.loop_region_left, -self.loop_region_right,
                 prominence_min=self.peak_prominence,
@@ -1872,7 +1889,7 @@ class Window(QtWidgets.QMainWindow):
                 correction_noLoop=self.correction_with_no_loop
                 )
         self.max_peak_dict = analyze_maxpeak(self.all_peaks_dict['Max Peak'], smooth_length=7,
-                frame_width = self.loop_region_right - self.loop_region_left,
+                frame_width = self.dna_ends[1] - self.dna_ends[0],
                 dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
                 )
         if self.numColors == "2" or self.numColors == "3":
@@ -1916,6 +1933,15 @@ class Window(QtWidgets.QMainWindow):
             self.imv31.setImage(self.kymo_right_loop)
             self.plotSmolPosData.setData(self.all_smpeaks_dict["All Peaks"]["FrameNumber"],
                                      self.all_smpeaks_dict["All Peaks"]["PeakPosition"])
+
+    def find_dna_ends(self):
+        non_loop_dna_avg = self.kymo_left_noLoop.mean(axis=0)
+        self.dna_ends = kymograph.find_ends_supergauss(non_loop_dna_avg, threshold_Imax=0.5, plotting=True)
+        self.dna_infline_left.setPos(self.dna_ends[0])
+        self.dna_infline_right.setPos(self.dna_ends[1])
+        self.infline_loopkymo_top.setPos(self.dna_ends[0])
+        self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
+        plt.show()
 
     def detect_loops(self):
         if self.plot_loop_errbar is None:
@@ -2005,7 +2031,7 @@ class Window(QtWidgets.QMainWindow):
             if self.multipeak_dialog.link_col1col2_checkbox.isChecked():
                 dna_contour_len = self.multipeak_dialog.DNAcontourlength_spinbox.value()
                 self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
-                        frame_width=self.loop_region_right - self.loop_region_left,
+                        frame_width=self.dna_ends[1] - self.dna_ends[0],
                         dna_length=self.dna_length_kb, dna_length_um=dna_contour_len,
                         pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
                         # interpolation=interpolation_bool,
@@ -2026,10 +2052,13 @@ class Window(QtWidgets.QMainWindow):
                                 axesA=result["ax1"], axesB=result["ax2"], color="red")
                     result["ax2"].add_artist(con)
                 print(self.df_cols_linked)
-            result["ax1"].set_ylim(self.loop_region_left, self.loop_region_right)
-            result["ax2"].set_ylim(self.loop_region_left, self.loop_region_right)
-            result["ax3"].set_ylim(self.loop_region_left, self.loop_region_right)
-            result["ax4"].set_ylim(self.loop_region_left, self.loop_region_right)
+            result["ax1"].axhline(self.dna_ends[0], color='g', alpha=0.5)
+            result["ax1"].axhline(self.dna_ends[1], color='g', alpha=0.5)
+
+            result["ax1"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
+            result["ax2"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
+            result["ax3"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
+            result["ax4"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
         else:
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
@@ -2055,21 +2084,21 @@ class Window(QtWidgets.QMainWindow):
                 self.multipeak_dialog.leftpeak_num_combobox.clear()
                 self.multipeak_dialog.leftpeak_num_combobox.addItems(gb_names)
             axis_r.hist(self.df_peaks_linked["PeakPosition"], orientation='horizontal')
-            axis.axhline(self.loop_region_left, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
-            axis.axhline(self.loop_region_right, 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
+            axis.axhline(self.dna_ends[0], 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
+            axis.axhline(self.dna_ends[1], 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
             axis.set_ylim(0, self.all_peaks_dict["shape_kymo"][0])
             plt.show()
 
     def matplot_loop_kinetics(self, ax=None):
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
         right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
-        self.loop_region_left = int(self.region_errbar.getRegion()[0])
-        self.loop_region_right = int(self.region_errbar.getRegion()[1])
+        # self.loop_region_left = int(self.region_errbar.getRegion()[0])
+        # self.loop_region_right = int(self.region_errbar.getRegion()[1])
         df_gb = self.df_peaks_linked.groupby("particle")
         group_sel = df_gb.get_group(left_peak_no)
         group_sel = group_sel.reset_index(drop=True)
         peak_analyzed_dict = analyze_maxpeak(group_sel, smooth_length=7,
-                frame_width = self.loop_region_right - self.loop_region_left,
+                frame_width = self.dna_ends[1] - self.dna_ends[0],
                 dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
         if ax is None:
             _, ax = plt.subplots()

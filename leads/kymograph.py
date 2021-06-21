@@ -3,6 +3,7 @@ import numpy as np
 from numba import jit
 import pandas as pd
 import h5py
+from scipy.optimize import curve_fit
 from scipy.ndimage import median_filter, white_tophat, black_tophat
 from scipy.signal import find_peaks, savgol_filter, peak_prominences
 from scipy.spatial import cKDTree
@@ -77,6 +78,83 @@ def bkg_substration(txy_array, size_bgs=10, light_bg=False):
             img_bgs = white_tophat(img, size=size_bgs)
         array_processed[i, :, :] = img_bgs
     return array_processed
+
+
+def find_ends_canny(dna_kym, sigma=2, threshold_min=0.1, threshold_max=None, plotting=False):
+    if threshold_max is not None:
+        threshold_max = threshold_max * dna_kym.max()
+    if threshold_min is not None:
+        threshold_min = threshold_min*dna_kym.mean()
+    edges = canny(dna_kym, sigma=sigma, low_threshold=threshold_min, high_threshold=threshold_max)
+    left_ends = []
+    right_ends = []
+    for i in range(edges.shape[1]):
+        bool_i = edges[:, i]
+        bool_i_inds = np.where(bool_i)
+        if bool_i_inds[0].shape[0] == 0:
+            left_ends.append(0)
+            right_ends.append(0)
+        else:
+            left_ends.append(bool_i_inds[0][0] - 1)
+            right_ends.append(bool_i_inds[0][-1] + 1)
+    left_ends[0] = left_ends[1]
+    right_ends[0] = right_ends[1]
+    left_ends[-1] = left_ends[-2]
+    right_ends[-1] = right_ends[-2]
+    if plotting:
+        fig,(ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(15,10))
+        ax1.imshow(dna_kym)
+        ax2.imshow(edges)
+        ax1.plot(right_ends, '.y')
+        ax1.plot(left_ends, '.w')
+    return left_ends, right_ends
+
+
+def find_ends_supergauss(line_data, threshold_Imax=0.5, plotting=True):
+    xdata = np.arange(len(line_data))
+    line_data_temp = line_data
+    line_data = np.array([float(value)/max(line_data_temp) for value in line_data_temp])
+    initial_guess = [.2,1.,np.median(xdata),20, 6]
+    constraints =([0, 0, 0, 0, 5.],[np.inf, np.inf, np.inf, np.inf, np.inf])
+    popt, pcov = curve_fit(super_gauss_function, xdata, line_data,
+                           p0 = initial_guess, bounds = constraints)
+    fine_scale_x = np.linspace(xdata[0],xdata[-1],len(xdata)*1000)
+    maximum = max(super_gauss_function(xdata, *popt))
+    #--- this is the threshold
+    intersection_value = maximum-(maximum - popt[0])*threshold_Imax
+    linedata = [intersection_value for x in fine_scale_x]
+    index = np.argwhere(np.diff(np.sign(linedata - super_gauss_function(fine_scale_x, *popt)))).flatten()
+    index_intersection = [fine_scale_x[index[0]], fine_scale_x[index[1]]]
+    # index_intersection = [int(fine_scale_x[index[0]]), int(fine_scale_x[index[1]])]
+    #-- Here is where we ensure two crossings and select for length
+    if len(index)==2 and fine_scale_x[index[1]]-fine_scale_x[index[0]] > 30 and plotting: 
+        plt.plot(xdata, line_data)
+        plt.plot(fine_scale_x, super_gauss_function(fine_scale_x, *popt), 'g--')
+        plt.plot(index_intersection,
+                super_gauss_function([fine_scale_x[index[0]],fine_scale_x[index[1]]], *popt), 'ro')
+    return index_intersection
+
+
+def super_gauss_function(x, floor, amplitude, mean, sigma, power):
+    '''https://en.wikipedia.org/wiki/Gaussian_function'''
+    return floor + amplitude*np.exp((-((x-mean)**2/(2*sigma**2))**power))
+
+
+def find_dna_ends_from_kymo(kymo):
+    kymo_avg = kymo.mean(axis=1)
+    left_ends = []
+    right_ends = []
+    for i in range(kymo.shape[1]):
+        line_kymo_i = kymo[:, i]
+        try:
+            index_intersection = find_ends_supergauss(line_kymo_i, plotting=False)
+            left_ends.append(index_intersection[0])
+            right_ends.append(index_intersection[1])
+        except:
+            left_ends.append(0)
+            right_ends.append(0)
+            pass
+    return left_ends, right_ends
 
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,
@@ -303,6 +381,7 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
     ax2 = fig.add_subplot(gs[1, :-1])
     ax2.set_xticks([])
     ax3 = fig.add_subplot(gs[2, :-1])
+    ax3.set_xticks([])
     ax4 = fig.add_subplot(gs[3, :-1])
     # add axs for histogram
     ax1_r = fig.add_subplot(gs[0, -1:], sharey=ax1)
@@ -340,9 +419,12 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
     ax4_cbar.ax.set_position([ll- ll*0.1, b, ww - ww*0.1, h])
     # ax4_cbar.set_ticks([])
     ax_list = [ax1, ax2, ax3, ax4]
+    max_frame_no = df_peaks['FrameNumber'].max()
+    max_frame_no_sm = df_peaks_sm['FrameNumber'].max()
+    xmax = acqTime * max(max_frame_no, max_frame_no_sm)
     for ax in ax_list:
         ax.set_ylim(0, None)
-        ax.set_xlim(0, None)
+        ax.set_xlim(0, xmax)
         ax.set_ylabel('pixels')
     if xLabelIsFrames:
         ax4.set_xlabel('Frame Numbers')

@@ -19,7 +19,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from skimage import measure
 from pathlib import Path
 from roifile import ImagejRoi
-from tifffile import imwrite
+from tifffile import imwrite, imread
 from pyqtgraph import PlotWidget, plot, mkPen
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 from colorharmonies import Color, complementaryColor, triadicColor, tetradicColor 
@@ -30,6 +30,7 @@ from scipy.signal import correlate2d
 from scipy.interpolate import interp1d
 from napari.layers.utils.text import TextManager
 from napari.layers.utils._text_utils import format_text_properties
+from leads.kymograph import read_img_stack, median_bkg_substration
 
 
 # ---------------------------------------------------------------------
@@ -165,7 +166,7 @@ class Worker(QObject):
                     print('Could not read the number of colors (setting to default 2 colors) in '+os.path.join(sub_dirs[i], subfolders[sf]))
                 self.Batchcrop(sub_dirs[i], subfolders[sf], roi_coord_list, roi_file_list, 
                 roi_original_names, ROIdescriptions, save_directory, numColors, 
-                saveCollectively, sf, len(subfolders))
+                saveCollectively, sf, len(subfolders), medianProcessing=self.medianProcessing)
             print()
             
         print('Batch cropping finished.')
@@ -173,7 +174,7 @@ class Worker(QObject):
 
 # ---------------------------------------------------------------
     def Batchcrop(self, dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names, 
-        ROIdescriptions, sort_directory, num_colors, sort_FOVs, nDir, numDirs):
+        ROIdescriptions, sort_directory, num_colors, sort_FOVs, nDir, numDirs, medianProcessing=False):
         # dir is the directory where ROIs are stored
         # sub_dir is where the crops go
 
@@ -298,7 +299,7 @@ class Worker(QObject):
 
         if all(skipIMG):
             print('All crops already exist in subfolder '+str(nDir+1)+'/'+str(numDirs)+'.')
-            for i in range(len(roi_coord_list)):
+            for i in trange(len(roi_coord_list), desc='Copying crops to collective directory'):
                 if (not skipROI[i]):
                     roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
                     roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
@@ -310,6 +311,14 @@ class Worker(QObject):
                     # copying the images from the dir to the sorted one
                     shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
                         name_sorted[i]+'.tif') # copy the file to the sorted dir
+                    if not os.path.isfile(name_sorted[i]+'_processed.tif') and medianProcessing:
+                        if os.path.isfile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif')):
+                            # copy the preccesed version as well
+                            shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif'),\
+                        name_sorted[i]+'_processed.tif') 
+                        else:
+                            self.medianProcess(name_sorted[i]+'.tif')
+                    
             return
         
         # loop through colors, then time, finally ROIs and crop
@@ -352,24 +361,57 @@ class Worker(QObject):
                                 print('Failed cropping in '+roi_file_list[j])
                             pass
         
-        for i in range(len(roi_coord_list)):
-            try:
-                roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
-                if (not skipROI[i]):                    
-                    roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
-                    roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
-                    # os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
-                if (not skipIMG[i]):
-                    imwrite(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),
-                            img_array_all[rect_keys[i]], imagej=True,
-                            metadata={'axis': 'TCYX', 'channels': num_colors,
-                            'mode': 'composite',})
-                if (not skipSORT[i]):
-                        roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
-                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
-                            name_sorted[i]+'.tif') # copy the file to the sorted dir
-            except:
-                print(names_roi_tosave_no_frames[i]+" not found anymore. Skipping.")
+        for i in trange(len(roi_coord_list), desc='Saving and evtl. processing crops'):
+            # try:
+            roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
+            if (not skipROI[i]):                    
+                roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
+                roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
+                # os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
+            if (not skipIMG[i]):
+                imwrite(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),
+                        img_array_all[rect_keys[i]], imagej=True,
+                        metadata={'axis': 'TCYX', 'channels': num_colors,
+                        'mode': 'composite',})
+                if medianProcessing:
+                    self.medianProcess(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'))
+            if (not skipSORT[i]):
+                roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
+                shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
+                    name_sorted[i]+'.tif') # copy the file to the sorted dir
+                if not os.path.isfile(name_sorted[i]+'_processed.tif') and medianProcessing:
+                    if os.path.isfile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif')):
+                        # copy the preccesed version as well
+                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif'),\
+                    name_sorted[i]+'_processed.tif') 
+                    else:
+                        self.medianProcess(name_sorted[i]+'.tif')
+            # except:
+            #     print(names_roi_tosave_no_frames[i]+" not found anymore. Skipping.")
+
+# ---------------------------------------------------------------
+    def medianProcess(self, tif_stack_path):
+        '''
+        filters a tifstack file with dimension 3 or 4;
+        and save the processed file with an extension '{filename}_processed.tif'
+        '''
+        outputdir = os.path.dirname(tif_stack_path)
+        base_filename = os.path.basename(tif_stack_path)
+        fpath_processed = os.path.join(outputdir, base_filename[:-4]+"_processed.tif")
+        img_arr = imread(tif_stack_path)
+        ndim = img_arr.ndim
+        if ndim == 3:
+            num_colors = 1
+            img_arr_processed = median_bkg_substration(img_arr)
+        elif ndim == 4:
+            # make it work for any umber of colors e.g. 3
+            num_colors = img_arr.shape[1]
+            img_arr_processed = np.zeros_like(img_arr) #, dtype=np.float32
+            for color in range(num_colors):
+                img_arr_processed[:, color, :, :] = median_bkg_substration(img_arr[:, color, :, :])
+        imwrite(fpath_processed, img_arr_processed, imagej=True,
+                metadata={'axis': 'TCYX', 'channels': num_colors,
+                'mode': 'composite',})
 
 # ---------------------------------------------------------------
     def BatchLoadROIs(self, roi_file_list):
@@ -434,7 +476,6 @@ class Worker(QObject):
         #     sub_dirs = [sub_dirs[i] for i in choice]
         if not sub_dirs:
             print('No directories found. Try again.')
-            self.batchCropFromDirectory()
             return
             
         # outdated: remove all subdirectories which contain a roi file which has 2x "-f" in the name since those are files which are saved together with the crops    
@@ -558,6 +599,7 @@ class BatchProcessingDialog(QtWidgets.QDialog):
         self.setWindowTitle("Batch Processing")
         # self.resize(300, 0)
         self.resize(481, 436)
+        self.medianProcessing = True
 
         # load settings
         self.settings = io.load_user_settings()
@@ -578,7 +620,6 @@ class BatchProcessingDialog(QtWidgets.QDialog):
         self.OKCancelButtonBox.setObjectName("OKCancelButtonBox")
 
         # group box to contain several h layouts within a v layout
-        # add up to 10 horizontalLayouts like these
         self.groupBox = QtWidgets.QGroupBox(self)
         self.groupBox.setGeometry(QtCore.QRect(10, 10, 463, 380))
         self.groupBox.setObjectName("groupBox")
@@ -615,6 +656,24 @@ class BatchProcessingDialog(QtWidgets.QDialog):
             self.BrowseButton[nPath].setObjectName("BrowseButton_"+str(nPath))
             self.horizontalLayout[nPath].addWidget(self.BrowseButton[nPath]) 
 
+        # checkbox and label for median filtering
+        self.horizontalLayoutWidgetMedian = QtWidgets.QWidget(self.groupBox)
+        self.horizontalLayoutWidgetMedian.setGeometry(QtCore.QRect(10, 30+(nPath+1)*40, 441, 30))
+        self.horizontalLayoutWidgetMedian.setObjectName("horizontalLayoutWidgetMedian")
+
+        self.horizontalLayoutMedian = QtWidgets.QHBoxLayout(self.horizontalLayoutWidgetMedian)
+        self.horizontalLayoutMedian.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayoutMedian.setObjectName("horizontalLayoutMedian")
+
+        self.MedianFilterLabel = QtWidgets.QLabel(self.horizontalLayoutWidgetMedian)
+        self.MedianFilterLabel.setObjectName("MedianFilterLabel")
+        self.MedianFilterCheckBox = QtWidgets.QCheckBox(self.horizontalLayoutWidgetMedian)
+        self.MedianFilterCheckBox.setObjectName("MedianFilterCheckBox")
+        self.MedianFilterCheckBox.setChecked(True)        
+        self.MedianFilterCheckBox.stateChanged.connect(self.toggleMedianFilteringForBatchProcessing)
+        self.horizontalLayoutMedian.addWidget(self.MedianFilterLabel)   
+        self.horizontalLayoutMedian.addWidget(self.MedianFilterCheckBox)   
+
         self.retranslateUi()
         self.connect_signals_init()
         self.OKCancelButtonBox.accepted.connect(self.accept)
@@ -625,6 +684,7 @@ class BatchProcessingDialog(QtWidgets.QDialog):
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("Dialog", "Dialog"))
+        self.MedianFilterLabel.setText(_translate("Dialog", "Median filter images?"))
         self.Label[0].setText(_translate("Dialog", "Folder to process:"))
         self.Label[1].setText(_translate("Dialog", "Folder to save all crops collectively to:"))
         for nPath in range(2):            
@@ -635,6 +695,13 @@ class BatchProcessingDialog(QtWidgets.QDialog):
         for nPath in range(2):
             self.BrowseButton[nPath].clicked.connect(lambda _, nPath=nPath: self.BrowseDirectory(nPath=nPath))
             self.PathLineEdit[nPath].textChanged.connect(lambda _, nPath=nPath: self.updatePath(nPath=nPath))
+
+# ---------------------------------------------------------------------
+    def toggleMedianFilteringForBatchProcessing(self):
+        if self.MedianFilterCheckBox.isChecked():
+            self.medianProcessing = True
+        else:
+            self.medianProcessing = False
 
 # ---------------------------------------------------------------------
     def BrowseDirectory(self, nPath):      
@@ -678,7 +745,6 @@ class BatchProcessingDialog(QtWidgets.QDialog):
     def updatePath(self, nPath):
         filepath = self.PathLineEdit[nPath].text()
         if filepath is None:
-            # self.BatchCropPath = ''
             return
 
         # checks if path is a file
@@ -686,10 +752,6 @@ class BatchProcessingDialog(QtWidgets.QDialog):
             folderpath = os.path.dirname(filepath)
         else:
             folderpath = filepath
-        # elif os.path.isdir(filepath):
-        #     folderpath = filepath
-        # else: # do nothing, this will execute while a path is being written in the lineEdit
-        #     return
 
         if len(folderpath) > 0:
             settings = io.load_user_settings()
@@ -1767,6 +1829,7 @@ class NapariTabs(QtWidgets.QWidget):
             self.BatchCropPath = d.BatchCropPath
             if hasattr(d, 'BatchSavePath'):
                 self.BatchSavePath = d.BatchSavePath
+            self.medianProcessing = d.medianProcessing
             self.batchCropFromDirectory()
 
 # ---------------------------------------------------------------------
@@ -2397,6 +2460,7 @@ class NapariTabs(QtWidgets.QWidget):
         # Step 3.1: Add everything necessary to self.worker to assure execution of the cropping
         self.worker.BatchCropPath = self.BatchCropPath
         self.worker.BatchSavePath = self.BatchSavePath
+        self.worker.medianProcessing = self.medianProcessing
         # Step 4: Move worker to the thread
         self.worker.moveToThread(self.thread)
         # Step 5: Connect signals and slots
