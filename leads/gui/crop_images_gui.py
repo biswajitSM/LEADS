@@ -409,6 +409,9 @@ class Worker(QObject):
             img_arr_processed = np.zeros_like(img_arr) #, dtype=np.float32
             for color in range(num_colors):
                 img_arr_processed[:, color, :, :] = median_bkg_substration(img_arr[:, color, :, :])
+        else:
+            print('Found '+str(ndim)+' dimensions in file '+tif_stack_path+'. Skipping.')
+            return
         imwrite(fpath_processed, img_arr_processed, imagej=True,
                 metadata={'axis': 'TCYX', 'channels': num_colors,
                 'mode': 'composite',})
@@ -1059,6 +1062,9 @@ class NapariTabs(QtWidgets.QWidget):
 
         @viewer.mouse_drag_callbacks.append
         def toggleImageLayerDragging(viewer, event):
+            if not self.ui.DragImageLayerCheckBox.isChecked():
+                return
+                
             translationVector = None
             self._drag_start = self.viewer.cursor.position
             yield
@@ -1153,7 +1159,7 @@ class NapariTabs(QtWidgets.QWidget):
             
 # ---------------------------------------------------------------------
     def toggleImageLayerDraggingToggleSettings(self):
-        if self.ui.DragImageLayerCheckBox.isChecked():            
+        if self.ui.DragImageLayerCheckBox.isChecked():
             # remove all shape layers from the selection since translation only works on image layers
             layersToRemove = []
             for selectedLayer in self.viewer.layers.selection:
