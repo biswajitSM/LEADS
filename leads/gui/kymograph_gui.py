@@ -22,6 +22,7 @@ from . import crop_images_gui
 import pandas as pd
 
 DEFAULTS = {
+    "Number of colors" : "3",
     "ColorMap" : 'plasma',
     }
 DEFAULT_PARAMETERS = {
@@ -598,7 +599,7 @@ class MainWidget(QtWidgets.QWidget):
         grid_numc.addWidget(QtWidgets.QLabel("NumColors:"), 0, 0)
         self.numColorsComboBox = QtWidgets.QComboBox()
         self.numColorsComboBox.addItems(["1", "2", "3"])
-        self.numColorsComboBox.setCurrentText("2")
+        self.numColorsComboBox.setCurrentText(DEFAULTS["Number of colors"])
         grid_numc.addWidget(self.numColorsComboBox, 0, 1)
         # Current ROI width
         grid_roi = QtWidgets.QGridLayout()
@@ -712,6 +713,9 @@ class Window(QtWidgets.QMainWindow):
         self.add_col1_imvs()
         if self.numColors == "2":
             self.add_col2_imvs()
+        elif self.numColors == "3":
+            self.add_col2_imvs()
+            self.add_col3_imvs()
         self.defaultDockState = self.dockarea.saveState()
         self.load_user_settings()
         self.connect_signals_init()
