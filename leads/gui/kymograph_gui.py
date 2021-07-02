@@ -2374,6 +2374,7 @@ class Window(QtWidgets.QMainWindow):
             params_group = h5_analysis.create_group("parameters")
             hdf5dict.dump(self.params_yaml, params_group)
             h5_analysis["filepath"] = self.filepath
+            h5_analysis["DNA ends"] = self.dna_ends
             # if self.kymo_left is not None:
             h5_analysis["Left Image Array"] = self.roirect_left.getArrayRegion(
                                 self.imgarr_left,
