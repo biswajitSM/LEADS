@@ -74,7 +74,13 @@ def median_tifstack(tif_stack_path):
     outputdir = os.path.dirname(tif_stack_path)
     base_filename = os.path.basename(tif_stack_path)
     fpath_processed = os.path.join(outputdir, base_filename[:-4]+"_processed.tif")
-    img_arr = imread(tif_stack_path)
+    try:        
+        img_arr = imread(tif_stack_path)
+    except:
+        print('Cant read '+tif_stack_path)
+        return
+
+
     ndim = img_arr.ndim
     if ndim == 3:
         num_colors = 1
@@ -85,9 +91,14 @@ def median_tifstack(tif_stack_path):
         img_arr_processed = np.zeros_like(img_arr) #, dtype=np.float32
         for color in range(num_colors):
             img_arr_processed[:, color, :, :] = median_bkg_substration(img_arr[:, color, :, :])
-    imwrite(fpath_processed, img_arr_processed, imagej=True,
+    elif ndim ==2:
+        print('Single image. Skipping '+fpath_processed)
+    try:
+        imwrite(fpath_processed, img_arr_processed, imagej=True,
             metadata={'axis': 'TCYX', 'channels': num_colors,
             'mode': 'composite',})
+    except:
+        pass
 
 if __name__ == '__main__':
     _ = QApplication([])
