@@ -110,11 +110,11 @@ def find_ends_canny(dna_kym, sigma=2, threshold_min=0.1, threshold_max=None, plo
     return left_ends, right_ends
 
 
-def find_ends_supergauss(line_data, threshold_Imax=0.5, plotting=True):
+def find_ends_supergauss(line_data, gauss_length=20, threshold_Imax=0.5, plotting=True):
     xdata = np.arange(len(line_data))
     line_data_temp = line_data
     line_data = np.array([float(value)/max(line_data_temp) for value in line_data_temp])
-    initial_guess = [.2,1.,np.median(xdata),20, 6]
+    initial_guess = [.2,1.,np.median(xdata),gauss_length, 6]
     constraints =([0, 0, 0, 0, 5.],[np.inf, np.inf, np.inf, np.inf, np.inf])
     popt, pcov = curve_fit(super_gauss_function, xdata, line_data,
                            p0 = initial_guess, bounds = constraints)

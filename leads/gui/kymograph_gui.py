@@ -616,6 +616,12 @@ class MainWidget(QtWidgets.QWidget):
         grid_btn1.addWidget(self.detectLoopsBtn, 0, 0, 1, 1)
         self.findDNAendsBtn = QtWidgets.QPushButton("Find DNA Ends")
         grid_btn1.addWidget(self.findDNAendsBtn, 0, 1, 1, 1)
+        self.findDNAendsSpinBox = QtWidgets.QSpinBox()
+        #  self.frameEndSpinBox = QtWidgets.QSpinBox()
+        self.findDNAendsSpinBox.setRange(-1, int(1e5))
+        self.findDNAendsSpinBox.setValue(20)
+        self.findDNAendsSpinBox.setKeyboardTracking(False)
+        grid_btn1.addWidget(self.findDNAendsSpinBox, 0, 2, 1, 1)
         self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
         self.processImageCheckBox.setChecked(True)
         grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
@@ -1940,7 +1946,8 @@ class Window(QtWidgets.QMainWindow):
 
     def find_dna_ends(self):
         non_loop_dna_avg = self.kymo_left_noLoop.mean(axis=0)
-        self.dna_ends = kymograph.find_ends_supergauss(non_loop_dna_avg, threshold_Imax=0.5, plotting=True)
+        self.gauss_length = self.ui.findDNAendsSpinBox.value()
+        self.dna_ends = kymograph.find_ends_supergauss(non_loop_dna_avg, gauss_length=self.gauss_length, threshold_Imax=0.5, plotting=True)
         self.dna_infline_left.setPos(self.dna_ends[0])
         self.dna_infline_right.setPos(self.dna_ends[1])
         self.infline_loopkymo_top.setPos(self.dna_ends[0])
