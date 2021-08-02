@@ -110,12 +110,12 @@ def find_ends_canny(dna_kym, sigma=2, threshold_min=0.1, threshold_max=None, plo
     return left_ends, right_ends
 
 
-def find_ends_supergauss(line_data, gauss_length=20, threshold_Imax=0.5, plotting=True):
+def find_ends_supergauss(line_data, gauss_length=10, threshold_Imax=0.5, plotting=True):
     xdata = np.arange(len(line_data))
     line_data_temp = line_data
     line_data = np.array([float(value)/max(line_data_temp) for value in line_data_temp])
     initial_guess = [.2,1.,np.median(xdata),gauss_length, 6]
-    constraints =([0, 0, 0, 0, 5.],[np.inf, np.inf, np.inf, np.inf, np.inf])
+    constraints =([0, 0, 0, gauss_length, 0.],[np.inf, np.inf, np.inf, np.inf, np.inf])
     popt, pcov = curve_fit(super_gauss_function, xdata, line_data,
                            p0 = initial_guess, bounds = constraints)
     fine_scale_x = np.linspace(xdata[0],xdata[-1],len(xdata)*1000)
@@ -127,11 +127,12 @@ def find_ends_supergauss(line_data, gauss_length=20, threshold_Imax=0.5, plottin
     index_intersection = [fine_scale_x[index[0]], fine_scale_x[index[1]]]
     # index_intersection = [int(fine_scale_x[index[0]]), int(fine_scale_x[index[1]])]
     #-- Here is where we ensure two crossings and select for length
-    if len(index)==2 and fine_scale_x[index[1]]-fine_scale_x[index[0]] > 30 and plotting: 
+    if len(index)==2 and plotting: 
         plt.plot(xdata, line_data)
         plt.plot(fine_scale_x, super_gauss_function(fine_scale_x, *popt), 'g--')
         plt.plot(index_intersection,
                 super_gauss_function([fine_scale_x[index[0]],fine_scale_x[index[1]]], *popt), 'ro')
+        plt.show()
     return index_intersection
 
 
