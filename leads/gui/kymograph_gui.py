@@ -516,10 +516,7 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
                 gauss_order=self.gauss_order, threshold_Imax=0.5, plotting=True)
             self.canvas.draw()
             if self.dna_ends is not None:
-                self.window.dna_infline_left.setPos(self.dna_ends[0])
-                self.window.dna_infline_right.setPos(self.dna_ends[1])
-                self.window.infline_loopkymo_top.setPos(self.dna_ends[0])
-                self.window.infline_loopkymo_bottom.setPos(self.dna_ends[1])
+                self.window.dna_ends_changed()
                 self.superGaussianStatusLabel.setText(formula)
 
                 self.figure.suptitle(formula)
@@ -806,6 +803,7 @@ class Window(QtWidgets.QMainWindow):
         self.multipeak_dialog = MultiPeakDialog(self)
         self.roi_dialog = ROIDialog(self)
         self.supergauss_dialog = SuperGaussFittingDialog(self)
+        # self.supergauss_dialog.exec_() # this ensures that SuperGaussFittingDialog generates its own loop
         self.init_menu_bar()
         # load params
         self.load_parameters()
@@ -1287,7 +1285,7 @@ class Window(QtWidgets.QMainWindow):
         self.params_yaml['region3_Loop'] = list(self.region3_Loop.getRegion())
         if self.plot_loop_errbar is not None:
             self.params_yaml['Region Errbar'] = list(self.region_errbar.getRegion())
-            self.params_yaml['dna ends'] = self.dna_ends
+            self.params_yaml['dna ends'] = [float(x) for x in self.dna_ends]#list(self.dna_ends)
         multipeak_settings = self.multipeak_dialog.on_close_event()
         self.params_yaml["MultiPeak"] = multipeak_settings["kymograph"]["MultiPeak"]
         with open(filepath_yaml, 'w') as f:
@@ -2039,6 +2037,12 @@ class Window(QtWidgets.QMainWindow):
             self.plotSmolPosData.setData(self.all_smpeaks_dict["All Peaks"]["FrameNumber"],
                                      self.all_smpeaks_dict["All Peaks"]["PeakPosition"])
 
+    def dna_ends_changed(self):
+        self.dna_ends = self.supergauss_dialog.dna_ends
+        self.dna_infline_left.setPos(self.dna_ends[0])
+        self.dna_infline_right.setPos(self.dna_ends[1])
+        self.infline_loopkymo_top.setPos(self.dna_ends[0])
+        self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
     # def find_dna_ends(self):
     #     non_loop_dna_avg = self.kymo_left_noLoop.mean(axis=0)
     #     self.gauss_length = self.ui.superGaussianWidthSpinBox.value()
