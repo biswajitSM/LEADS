@@ -110,12 +110,12 @@ def find_ends_canny(dna_kym, sigma=2, threshold_min=0.1, threshold_max=None, plo
     return left_ends, right_ends
 
 
-def find_ends_supergauss(line_data, gauss_length=10, threshold_Imax=0.5, plotting=True):
+def find_ends_supergauss(line_data, gauss_length=10, gauss_order=6, threshold_Imax=0.5, plotting=True):
     xdata = np.arange(len(line_data))
     line_data_temp = line_data
     line_data = np.array([float(value)/max(line_data_temp) for value in line_data_temp])
-    initial_guess = [.2,1.,np.median(xdata),gauss_length, 6]
-    constraints =([0, 0, 0, gauss_length, 0.],[np.inf, np.inf, np.inf, np.inf, np.inf])
+    initial_guess = [.2,1.,np.median(xdata),gauss_length, gauss_order]
+    constraints =([0, 0, 0, gauss_length, gauss_order],[np.inf, np.inf, np.inf, np.inf, np.inf])
     popt, pcov = curve_fit(super_gauss_function, xdata, line_data,
                            p0 = initial_guess, bounds = constraints)
     fine_scale_x = np.linspace(xdata[0],xdata[-1],len(xdata)*1000)
@@ -124,15 +124,18 @@ def find_ends_supergauss(line_data, gauss_length=10, threshold_Imax=0.5, plottin
     intersection_value = maximum-(maximum - popt[0])*threshold_Imax
     linedata = [intersection_value for x in fine_scale_x]
     index = np.argwhere(np.diff(np.sign(linedata - super_gauss_function(fine_scale_x, *popt)))).flatten()
-    index_intersection = [fine_scale_x[index[0]], fine_scale_x[index[1]]]
+    if len(index) != 2:
+        print('WARNING: no sensible fit found which intersects with data.')    
     # index_intersection = [int(fine_scale_x[index[0]]), int(fine_scale_x[index[1]])]
     #-- Here is where we ensure two crossings and select for length
-    if len(index)==2 and plotting: 
-        plt.plot(xdata, line_data)
-        plt.plot(fine_scale_x, super_gauss_function(fine_scale_x, *popt), 'g--')
+     
+    plt.plot(xdata, line_data)
+    plt.plot(fine_scale_x, super_gauss_function(fine_scale_x, *popt), 'g--')
+    if len(index)==2 and plotting:
+        index_intersection = [fine_scale_x[index[0]], fine_scale_x[index[1]]]
         plt.plot(index_intersection,
-                super_gauss_function([fine_scale_x[index[0]],fine_scale_x[index[1]]], *popt), 'ro')
-        plt.show()
+            super_gauss_function([fine_scale_x[index[0]],fine_scale_x[index[1]]], *popt), 'ro')
+    plt.show()
     return index_intersection
 
 
