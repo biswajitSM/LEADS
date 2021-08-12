@@ -135,30 +135,25 @@ def find_ends_supergauss(line_data, gauss_length=10, gauss_order=6, threshold_Im
         index_intersection = [fine_scale_x[index[0]], fine_scale_x[index[1]]]
         plt.plot(index_intersection,
             super_gauss_function([fine_scale_x[index[0]],fine_scale_x[index[1]]], *popt), 'ro')
-    plt.show()
-    return index_intersection
+        formula = '$'\
+            +str(np.round(popt[1], decimals=1))\
+            +'\cdot e^{-(\\frac{(x-'\
+            +str(np.round(popt[2], decimals=1))\
+            +')^2}{2'\
+            +str(np.round(popt[3], decimals=1))\
+            +'^2})^{'\
+            +str(np.round(popt[4], decimals=1))\
+            +'}}+'\
+            +str(np.round(popt[0], decimals=1))\
+            +'$'
+        return index_intersection, formula
+    else:
+        return None
 
 
 def super_gauss_function(x, floor, amplitude, mean, sigma, power):
     '''https://en.wikipedia.org/wiki/Gaussian_function'''
     return floor + amplitude*np.exp((-((x-mean)**2/(2*sigma**2))**power))
-
-
-def find_dna_ends_from_kymo(kymo):
-    kymo_avg = kymo.mean(axis=1)
-    left_ends = []
-    right_ends = []
-    for i in range(kymo.shape[1]):
-        line_kymo_i = kymo[:, i]
-        try:
-            index_intersection = find_ends_supergauss(line_kymo_i, plotting=False)
-            left_ends.append(index_intersection[0])
-            right_ends.append(index_intersection[1])
-        except:
-            left_ends.append(0)
-            right_ends.append(0)
-            pass
-    return left_ends, right_ends
 
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,

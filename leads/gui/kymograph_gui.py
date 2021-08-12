@@ -14,6 +14,8 @@ from ..utils import hdf5dict, makevideo, figure_params
 import os, sys, glob, time, subprocess, webbrowser
 import yaml
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 plt.rcParams.update(figure_params.params_dict)
 from scipy.signal import savgol_filter
 import h5py
@@ -447,6 +449,90 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.settings = settings
         return self.settings
 
+class SuperGaussFittingDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Find DNA ends")
+
+        # a figure instance to plot on
+        self.figure = plt.figure()
+
+        # this is the Canvas Widget that displays the `figure`
+        # it takes the `figure` instance as a parameter to __init__
+        self.canvas = FigureCanvas(self.figure)
+
+        # this is the Navigation widget
+        # it takes the Canvas widget and a parent
+        self.toolbar = NavigationToolbar(self.canvas, self)
+
+        statusGroupBox = QtWidgets.QGroupBox("Formula")
+        hLayoutFormula = QtWidgets.QHBoxLayout(statusGroupBox)
+        self.superGaussianStatusLabel = QtWidgets.QLabel("Idle")
+        hLayoutFormula.addWidget(self.superGaussianStatusLabel)
+
+        # spin boxes and labels for supergauss parameters        
+        constraintGroupBox = QtWidgets.QGroupBox("Constraints")
+        hLayout = QtWidgets.QHBoxLayout(constraintGroupBox)
+
+        self.superGaussianWidthLabel = QtWidgets.QLabel("Width:")
+        hLayout.addWidget(self.superGaussianWidthLabel)
+
+        self.superGaussianWidthSpinBox = QtWidgets.QSpinBox()        
+        self.superGaussianWidthSpinBox.setRange(1, int(1e5))
+        self.superGaussianWidthSpinBox.setValue(20)
+        self.superGaussianWidthSpinBox.setKeyboardTracking(False)
+        hLayout.addWidget(self.superGaussianWidthSpinBox)
+
+        self.superGaussianOrderLabel = QtWidgets.QLabel("Order:")
+        hLayout.addWidget(self.superGaussianOrderLabel)
+
+        self.superGaussianOrderSpinBox = QtWidgets.QSpinBox()        
+        self.superGaussianOrderSpinBox.setRange(1, int(99))
+        self.superGaussianOrderSpinBox.setValue(6)
+        self.superGaussianOrderSpinBox.setKeyboardTracking(False)
+        hLayout.addWidget(self.superGaussianOrderSpinBox)
+
+        self.superGaussianWidthSpinBox.valueChanged.connect(self.find_dna_ends)
+        self.superGaussianOrderSpinBox.valueChanged.connect(self.find_dna_ends)
+
+        # set the layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)        
+        layout.addWidget(constraintGroupBox)
+        layout.addWidget(statusGroupBox)
+        self.setLayout(layout)
+        self.find_dna_ends() # do it the first time with default parameters
+
+    def find_dna_ends(self):
+        try:
+            self.figure.clear()
+            self.canvas.draw()        
+            non_loop_dna_avg = self.window.kymo_left_noLoop.mean(axis=0)
+            self.gauss_length = self.superGaussianWidthSpinBox.value()
+            self.gauss_order  = self.superGaussianOrderSpinBox.value()
+            self.dna_ends, formula = kymograph.find_ends_supergauss(non_loop_dna_avg, gauss_length=self.gauss_length, \
+                gauss_order=self.gauss_order, threshold_Imax=0.5, plotting=True)
+            self.canvas.draw()
+            if self.dna_ends is not None:
+                self.window.dna_infline_left.setPos(self.dna_ends[0])
+                self.window.dna_infline_right.setPos(self.dna_ends[1])
+                self.window.infline_loopkymo_top.setPos(self.dna_ends[0])
+                self.window.infline_loopkymo_bottom.setPos(self.dna_ends[1])
+                self.superGaussianStatusLabel.setText(formula)
+
+                self.figure.suptitle(formula)
+                self.superGaussianStatusLabel.setText("Fit found.")
+                self.superGaussianStatusLabel.setStyleSheet("color: green")
+                self.canvas.draw()
+            
+        except:
+            self.superGaussianStatusLabel.setText("No suitable fit found.")
+            self.superGaussianStatusLabel.setStyleSheet("color: red")
+            pass
+        self.canvas.draw()
+
 class KineticsFitting(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -617,17 +703,17 @@ class MainWidget(QtWidgets.QWidget):
         self.findDNAendsBtn = QtWidgets.QPushButton("Find DNA Ends")
         grid_btn1.addWidget(self.findDNAendsBtn, 0, 1, 1, 1)
 
-        self.superGaussianWidthSpinBox = QtWidgets.QSpinBox()        
-        self.superGaussianWidthSpinBox.setRange(1, int(1e5))
-        self.superGaussianWidthSpinBox.setValue(20)
-        self.superGaussianWidthSpinBox.setKeyboardTracking(False)
-        grid_btn1.addWidget(self.superGaussianWidthSpinBox, 0, 2, 1, 1)
+        # self.superGaussianWidthSpinBox = QtWidgets.QSpinBox()        
+        # self.superGaussianWidthSpinBox.setRange(1, int(1e5))
+        # self.superGaussianWidthSpinBox.setValue(20)
+        # self.superGaussianWidthSpinBox.setKeyboardTracking(False)
+        # grid_btn1.addWidget(self.superGaussianWidthSpinBox, 0, 2, 1, 1)
 
-        self.superGaussianOrderSpinBox = QtWidgets.QSpinBox()        
-        self.superGaussianOrderSpinBox.setRange(1, int(99))
-        self.superGaussianOrderSpinBox.setValue(6)
-        self.superGaussianOrderSpinBox.setKeyboardTracking(False)
-        grid_btn1.addWidget(self.superGaussianOrderSpinBox, 0, 3, 1, 1)
+        # self.superGaussianOrderSpinBox = QtWidgets.QSpinBox()        
+        # self.superGaussianOrderSpinBox.setRange(1, int(99))
+        # self.superGaussianOrderSpinBox.setValue(6)
+        # self.superGaussianOrderSpinBox.setKeyboardTracking(False)
+        # grid_btn1.addWidget(self.superGaussianOrderSpinBox, 0, 3, 1, 1)
 
         self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
         self.processImageCheckBox.setChecked(True)
@@ -719,6 +805,7 @@ class Window(QtWidgets.QMainWindow):
         self.parameters_dialog = ParametersDialog(self)
         self.multipeak_dialog = MultiPeakDialog(self)
         self.roi_dialog = ROIDialog(self)
+        self.supergauss_dialog = SuperGaussFittingDialog(self)
         self.init_menu_bar()
         # load params
         self.load_parameters()
@@ -813,7 +900,8 @@ class Window(QtWidgets.QMainWindow):
         self.ui.frameEndSpinBox.valueChanged.connect(self.frames_changed)
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
-        self.ui.findDNAendsBtn.clicked.connect(self.find_dna_ends)
+        # self.ui.findDNAendsBtn.clicked.connect(self.find_dna_ends)
+        self.ui.findDNAendsBtn.clicked.connect(self.supergauss_dialog.show)
 
     def connect_signals(self):
         # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
@@ -1951,17 +2039,17 @@ class Window(QtWidgets.QMainWindow):
             self.plotSmolPosData.setData(self.all_smpeaks_dict["All Peaks"]["FrameNumber"],
                                      self.all_smpeaks_dict["All Peaks"]["PeakPosition"])
 
-    def find_dna_ends(self):
-        non_loop_dna_avg = self.kymo_left_noLoop.mean(axis=0)
-        self.gauss_length = self.ui.superGaussianWidthSpinBox.value()
-        self.gauss_order  = self.ui.superGaussianOrderSpinBox.value()
-        self.dna_ends = kymograph.find_ends_supergauss(non_loop_dna_avg, gauss_length=self.gauss_length, \
-            gauss_order=self.gauss_order, threshold_Imax=0.5, plotting=True)
-        self.dna_infline_left.setPos(self.dna_ends[0])
-        self.dna_infline_right.setPos(self.dna_ends[1])
-        self.infline_loopkymo_top.setPos(self.dna_ends[0])
-        self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
-        plt.show()
+    # def find_dna_ends(self):
+    #     non_loop_dna_avg = self.kymo_left_noLoop.mean(axis=0)
+    #     self.gauss_length = self.ui.superGaussianWidthSpinBox.value()
+    #     self.gauss_order  = self.ui.superGaussianOrderSpinBox.value()
+    #     self.dna_ends = kymograph.find_ends_supergauss(non_loop_dna_avg, gauss_length=self.gauss_length, \
+    #         gauss_order=self.gauss_order, threshold_Imax=0.5, plotting=True)
+    #     self.dna_infline_left.setPos(self.dna_ends[0])
+    #     self.dna_infline_right.setPos(self.dna_ends[1])
+    #     self.infline_loopkymo_top.setPos(self.dna_ends[0])
+    #     self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
+    #     plt.show()
 
     def detect_loops(self):
         if self.plot_loop_errbar is None:
