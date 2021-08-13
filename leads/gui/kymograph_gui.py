@@ -1366,6 +1366,11 @@ class Window(QtWidgets.QMainWindow):
             worksheet.write(row, 8, os.path.dirname(filename))
 
         workbook.close()
+        try:
+            subprocess.Popen(r'explorer /select,"'+xlxsName.replace('/', '\\')+'"')
+        except:
+            pass
+
 
 
     def load_img_stack(self, filepath=None):
