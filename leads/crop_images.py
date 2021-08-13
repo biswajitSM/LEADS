@@ -3,7 +3,6 @@ import glob
 import numpy as np
 from scipy import ndimage, misc, optimize, special
 import skimage as sk
-from skimage.filters import threshold_otsu
 from skimage.transform import rotate
 from tifffile import imread, imsave, imwrite
 from roifile import ImagejRoi
@@ -12,6 +11,9 @@ import yaml
 import re
 from tqdm import trange
 from . import io
+from scipy.spatial import distance as dist
+from matplotlib import pyplot as plt
+from PyQt5.QtWidgets import QMessageBox
 
 # ---------------------------------------------------------------------
 def get_rect_params(rect, printing=False):
@@ -72,26 +74,29 @@ def save_rectshape_as_imageJroi(shape_layer, folder_to_save=None, label=None, de
     # remove column with all 0 entries
     rect_shape = [rect_shape[i][:,(rect_shape[i]!=0).any(axis=0)] for i in range(len(rect_shape))]
     names = []
-    for i in range(numShapes):
-        rect_arr = rect_shape[i]
-        # if the ROI is at the default position, continue; we dont save it        
-        if (rect_shape[i]==defaultShape).all():
+    for iRect in range(numShapes):
+        if (rect_shape[iRect]==defaultShape).all():
             continue
-        rect_params = get_rect_params(rect_arr)
-        rect_0 = rect_arr[0].astype(int)
-        # sl_no = ''
-        # if numShapes>1:
-        #     if i < 10: sl_no = str(0) + str(i)
-        #     else: sl_no = str(i)
-        #     sl_no = sl_no + '_'
-        nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-              '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-              '-a' + str(rect_params['angle']) + label.lower()
+        rect = np.array(rect_shape[iRect])
+        rect = order_points(rect)
 
-        roi_coord = rect_shape_to_roi(rect_arr)
-        roi_ij = ImagejRoi.frompoints(roi_coord)
+        rect_0 = rect[0].astype(int)
+                            
+        dy = rect[3][1] - rect[0][1]
+        dx = rect[3][0] - rect[0][0]
+        if dx == 0 or dy == 0:
+            angle_roi = int(0)
+        else:
+            angle_roi = int(np.arctan(dy/dx) * 180 / np.pi)
+        width_x = int( np.ceil( np.sqrt(np.sum((rect[3,:]-rect[2,:])**2)) ) )
+        height_y = int( np.ceil( np.sqrt(np.sum((rect[2,:]-rect[1,:])**2)) ) )
+        nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
+            '-l' + str(height_y) + '-w' + str(width_x) +\
+            '-a' + str(angle_roi) + label.lower()
+        roi_ij = ImagejRoi.frompoints(rect_shape_to_roi(rect))
         roi_ij.tofile(os.path.join(folder_to_save, nam+'.roi'))
         names.append(nam)
+    
     return names
 
 # ---------------------------------------------------------------------
@@ -228,9 +233,251 @@ def ShiftROI(coord, dy, dx):
     return np.array( [[y[i]+dy, x[i]+dx] for i in range(len(coord))] )
 
 # ---------------------------------------------------------------------
+def order_points(pts):
+    # sorts points clockwise
+    # sort the points based on their x-coordinates
+    xSorted = pts[np.argsort(pts[:, 0]), :]
+    # grab the left-most and right-most points from the sorted
+    # x-roodinate points
+    leftMost = xSorted[:2, :]
+    rightMost = xSorted[2:, :]
+    # now, sort the left-most coordinates according to their
+    # y-coordinates so we can grab the top-left and bottom-left
+    # points, respectively
+    leftMost = leftMost[np.argsort(leftMost[:, 1]), :]
+    (tl, bl) = leftMost
+    # now that we have the top-left coordinate, use it as an
+    # anchor to calculate the Euclidean distance between the
+    # top-left and right-most points; by the Pythagorean
+    # theorem, the point with the largest distance will be
+    # our bottom-right point
+    D = dist.cdist(tl[np.newaxis], rightMost, "euclidean")[0]
+    (br, tr) = rightMost[np.argsort(D)[::-1], :]
+    # return the coordinates in top-left, top-right,
+    # bottom-right, and bottom-left order
+    return np.array([tl, tr, br, bl])
+
+# ---------------------------------------------------------------------
+def rotatePoint(point, centerPoint, angleDeg):
+    angleRad = angleDeg * np.pi/180
+    return np.array([(point[0]-centerPoint[0]) * np.cos(angleRad) - (point[1]-centerPoint[1]) * np.sin(angleRad),
+    (point[0]-centerPoint[0]) * np.sin(angleRad) + (point[1]-centerPoint[1]) * np.cos(angleRad)]) + centerPoint
+
+# ---------------------------------------------------------------------
+def rotateShiftROI(rect, img, imgSize, shift_x, shift_y, angle, fixedShape=None):
+    rect = order_points(rect) # toplleft, topright, bottomrrigt, bottomleft
+
+    # compute angle of the ROI which the user defined (not the angle by whcih the image is rotated)
+    # angle between rect and surrounding_rect. surrounding_rect is straight. 
+    # We measure COUNTERCLOCKWISE since skimage.transform.rotate rotates counter-clockwise
+    dy = rect[3][1] - rect[0][1]
+    dx = rect[3][0] - rect[0][0]
+    if dx == 0 or dy == 0:
+        angle_rect_surrounding_rect = 0
+    else:
+        angle_rect_surrounding_rect = np.arctan(dy/dx) * 180 / np.pi
+
+    # we first rotate the ROI according to the rotation of the image
+    if angle != 0:
+        centerPoint = np.array(imgSize)/2 
+        rect = np.array([
+            rotatePoint(rect[0], centerPoint, -angle), 
+            rotatePoint(rect[1], centerPoint, -angle), 
+            rotatePoint(rect[2], centerPoint, -angle), 
+            rotatePoint(rect[3], centerPoint, -angle)
+        ])
+        
+
+    # plt.figure()
+    # plt.imshow(img)
+    # # plt.plot(surrounding_rect[:,1], surrounding_rect[:,0])
+    # plt.plot(rect[:,1], rect[:,0])
+    # # plt.plot(rot_rect[:,1], rot_rect[:,0])                
+    # # plt.show()
+
+    # plt.figure()
+    # plt.imshow(rotate(img, angle=angle))
+    # # plt.plot(surrounding_rect[:,1], surrounding_rect[:,0])
+    # plt.plot(rect[:,1], rect[:,0])
+    # plt.plot(rot_rect[:,1], rot_rect[:,0])                
+    # plt.show()
+
+    
+    if (shift_y!=0 or shift_x!=0):
+        rect[:,0] = rect[:,0]-shift_y
+        rect[:,1] = rect[:,1]-shift_x
+    rect = np.round(rect)
+
+
+    # rect[rect<0] = 0
+    # rect[:,0][rect[:,0]>imgSize[0]] = imgSize[0]
+    # rect[:,1][rect[:,1]>imgSize[1]] = imgSize[1]
+    # if col==0 and i==0: # check again if dimensions are > 0. otherwise skip
+    #     if not (np.sqrt(np.sum((rect[3,:]-rect[2,:])**2))>0) and not (np.sqrt(np.sum((rect[2,:]-rect[1,:])**2))>0):
+    #         print('Skipping ROI ['+str(iRect+1)+'/'+str(len(rect_shape))+']')
+    #         continue
+
+    # obtain min and max values of the surrounding rectangle
+    minx = np.min(rect[:,0], axis=0)
+    maxx = np.max(rect[:,0], axis=0)
+    miny = np.min(rect[:,1], axis=0)
+    maxy = np.max(rect[:,1], axis=0)
+    surrounding_rect = np.array([  
+        [minx, miny], \
+        [maxx, miny], \
+        [maxx, maxy], \
+        [minx, maxy], \
+        ]) # topleft, topright, bottomrrigt, bottomleft
+        # the centers of the rectangle and surrounding rectangle are the same
+
+    # plt.figure()
+    # plt.imshow(img)
+    # plt.plot(surrounding_rect[:,1], surrounding_rect[:,0])
+    # plt.plot(rect[:,1], rect[:,0])
+    # plt.show()
+
+    # now we cropped the surrounding rectangle, let's take away this rotation from the ROI again to leave only with the rotation that the user defined on the ROI itself, not on the image
+    # if angle != 0:
+    #     centerPoint = np.mean(rect,axis=0) # we rotate the ROI around its center
+    #     rect = np.array([
+    #         rotatePoint(rect[0], centerPoint, angle), # note that we rotate by -angle above
+    #         rotatePoint(rect[1], centerPoint, angle), 
+    #         rotatePoint(rect[2], centerPoint, angle), 
+    #         rotatePoint(rect[3], centerPoint, angle)
+    #     ])
+
+    # plt.figure()
+    # plt.imshow(img)
+    # plt.plot(surrounding_rect[:,1], surrounding_rect[:,0])
+    # plt.plot(rect[:,1], rect[:,0])
+    # plt.show()
+
+    # angle between rect and surrounding_rect. surrounding_rect is straight. 
+    # We measure COUNTERCLOCKWISE since skimage.transform.rotate rotates counter-clockwise
+    dy = rect[3][1] - rect[0][1]
+    dx = rect[3][0] - rect[0][0]
+    if dx == 0 or dy == 0:
+        angle_rect_surrounding_rect = 0
+    else:
+        angle_rect_surrounding_rect = np.arctan(dy/dx) * 180 / np.pi    
+
+    minx_backup = minx
+    miny_backup = miny
+    minx_append = 0
+    miny_append = 0
+    maxx_append = 0
+    maxy_append = 0
+    if maxx>img.shape[0]:
+        if minx>img.shape[0]: # if the ROI is entirely out of the image
+            maxx_append = int( maxx-minx )
+        else:
+            maxx_append =int( maxx-img.shape[0] )
+            maxx = img.shape[0]
+    if maxy>img.shape[1]:
+        if miny>img.shape[1]: # if the ROI is entirely out of the image
+            maxy_append = int( maxy-miny )
+        else:
+            maxy_append = int( maxy-img.shape[1] )
+            maxy = img.shape[1]
+    if minx<0:
+        if maxx<0:
+            minx_append = int( maxx-minx )
+            minx = img.shape[0]+1
+            maxx = minx+minx_append
+        else:
+            minx_append = int( np.abs(minx) )
+            minx = 0
+    if miny<0:
+        if maxy<0:
+            miny_append = int( maxy-miny )
+            miny = img.shape[1]+1
+            maxy = miny+miny_append
+        else:
+            miny_append = int( np.abs(miny) )
+            miny = 0
+
+
+    img_surrounding = img[int(minx):int(maxx), int(miny):int(maxy)]
+    # rotationCenter  = ((int(maxy)-int(miny)) / 2 - 0.5, (int(maxx)-int(minx)) / 2 - 0.5)
+    dtype = np.dtype(img[0][0])
+    if minx_append>0:
+        img_surrounding = np.concatenate( (np.zeros((minx_append, img_surrounding.shape[1]), dtype=dtype), img_surrounding), axis=0)
+    if maxx_append>0:
+        img_surrounding = np.concatenate( (img_surrounding, np.zeros((maxx_append, img_surrounding.shape[1]), dtype=dtype)), axis=0)
+    if miny_append>0:
+        img_surrounding = np.concatenate( (np.zeros((img_surrounding.shape[0], miny_append), dtype=dtype), img_surrounding), axis=1)
+    if maxy_append>0:
+        img_surrounding = np.concatenate( (img_surrounding, np.zeros((img_surrounding.shape[0], maxy_append), dtype=dtype)), axis=1)
+
+    if angle_rect_surrounding_rect != 0 and angle_rect_surrounding_rect!=360:
+        img_surrounding_rot = rotate(img_surrounding, angle=360-angle_rect_surrounding_rect) # we have to rotate the other way as the ROI is                
+
+        rect_straight = rect
+        rect_straight[:,0] = rect_straight[:,0]-minx_backup
+        rect_straight[:,1] = rect_straight[:,1]-miny_backup
+        centerPoint = np.mean(rect_straight,axis=0) # we rotate the ROI around its center
+        rect_straight = np.array([
+            rotatePoint(rect_straight[0], centerPoint, -angle_rect_surrounding_rect), # now the rectangle is straight again
+            rotatePoint(rect_straight[1], centerPoint, -angle_rect_surrounding_rect), 
+            rotatePoint(rect_straight[2], centerPoint, -angle_rect_surrounding_rect), 
+            rotatePoint(rect_straight[3], centerPoint, -angle_rect_surrounding_rect)
+        ])
+
+
+        # plt.figure()
+        # plt.imshow(img_surrounding_rot)
+        # plt.plot(rect_straight[:,1], rect_straight[:,0])
+        # plt.show()
+        tranposeImage = False
+        minx = np.min(rect_straight[:,0], axis=0)
+        maxx = np.max(rect_straight[:,0], axis=0)
+        miny = np.min(rect_straight[:,1], axis=0)
+        maxy = np.max(rect_straight[:,1], axis=0)
+        if minx<0:
+            minx = 0
+        if miny<0:
+            miny = 0
+        if maxx>img_surrounding_rot.shape[0]:
+            maxx = img_surrounding_rot.shape[0]
+        if maxy>img_surrounding_rot.shape[1]:
+            maxy = img_surrounding_rot.shape[1]
+        if fixedShape is not None:
+            currentShape = np.array([int(maxx)-int(minx), int(maxy)-int(miny)])
+            if (currentShape != fixedShape).all():
+                if sum(np.abs(currentShape-fixedShape)) > sum(np.abs(currentShape[-1::-1]-fixedShape)):
+                    fixedShape = fixedShape[-1::-1]
+                    tranposeImage = True
+                
+                maxx = minx + fixedShape[0]
+                maxy = miny + fixedShape[1]
+                maxx = int(maxx)
+                maxy = int(maxy)
+                if img_surrounding_rot.shape[0]<maxx: # if the image is too small, extend it with zeros
+                    img_surrounding_rot = np.concatenate((img_surrounding_rot, \
+                        np.zeros((maxx-img_surrounding_rot.shape[0], img_surrounding_rot.shape[1]))), axis=0)
+                if img_surrounding_rot.shape[1]<maxy: # if the image is too small, extend it with zeros
+                    img_surrounding_rot = np.concatenate((img_surrounding_rot, \
+                        np.zeros((img_surrounding_rot.shape[0], maxy-img_surrounding_rot.shape[1]))), axis=1)
+        img_crop = img_surrounding_rot[int(minx):int(maxx), int(miny):int(maxy)]
+        if tranposeImage:
+            img_crop = np.transpose(img_crop)
+        
+        # plt.figure()
+        # plt.imshow(img_crop)
+        # plt.show()
+        # plt.close("all")
+    else:
+        img_crop = img_surrounding
+    if fixedShape is not None:
+        if (img_crop.shape != fixedShape):
+            a=1
+    if (img_crop.shape[0]==0) or (img_crop.shape[1]==0):
+        a=1
+    return sk.util.img_as_uint(img_crop)
+
+# ---------------------------------------------------------------------
 def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
                      frame_start=None, frame_end=None,
-                     geometric_transform=False,
                      shift_x=0, shift_y=0, angle=0, label=None, 
                      defaultShape=None, numColors=0):
     '''
@@ -265,8 +512,6 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
         # third (z) dimension which is all 0 for 2D images. We need to remove this
         # in order not to confuse ImagejRoi.frompoints
         # for layers and shapes we added ourselves, layer.data is empty. we need a special case for that
-        # if len(shape_layers[nLayer].data)==0: 
-            # print('if worked')
         if len(rect_shape_temp) == 1: # check if we have a rectangle
             if rect_shape_temp[0].shape[0] != 4:
                 print('The shape is not rectangular, please only give rectngular shapes')
@@ -286,28 +531,6 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
                         continue
                     rect_shape.append(rect_shape_temp[i])
                     labels.append(label[nLayer])
-        # else: # loaded ROI. nothing we can use shape_layers[nLayer].shape_type
-        #     shape_layers[nLayer].data = rect_shape_temp
-        #     if len(rect_shape_temp) == 1:
-        #         if shape_layers[nLayer].shape_type[0] != 'rectangle':
-        #             print('The shape is not rectangular, please only give rectngular shapes')
-        #         else:
-        #             # remove column with all 0 entries
-        #             rect_shape_temp = [rect_shape_temp[i][:,(rect_shape_temp[i]!=0).any(axis=0)] for i in range(len(rect_shape_temp))]
-        #             # check if the current shape is the default shape. if so, skip
-        #             if not (rect_shape_temp[0]==defaultShape).all():
-        #                 rect_shape.append(rect_shape_temp[0])
-        #                 labels.append(label[nLayer])
-        #     else:
-        #         # remove column with all 0 entries
-        #         rect_shape_temp = [rect_shape_temp[i][:,(rect_shape_temp[i]!=0).any(axis=0)] for i in range(len(rect_shape_temp))]
-        #         for i in range(len(rect_shape_temp)):
-        #             if shape_layers[nLayer].shape_type[i] == 'rectangle':
-        #                 # check if the current shape is the default shape. if so, skip
-        #                 if (rect_shape_temp[i]==defaultShape).all():
-        #                     continue
-        #                 rect_shape.append(rect_shape_temp[i])
-        #                 labels.append(label[nLayer])
 
     # now labels and rect_shape have the same length
     # if there are none to process => only shapes with the default position, return without doing anything
@@ -323,93 +546,92 @@ def crop_rect_shapes(image_meta, shape_layers, dir_to_save=None,
 
     names_roi_tosave = []
     img_array_all    = {}
-    imgseq = pims.ImageSequence(image_meta['filenames_color_'+str(0)])[0]        
-    img = np.array(imgseq, dtype=np.uint16)
-    imgSize = img.shape
-    for i in range(len(rect_shape)):
-        # first get the names, based on the real ROI as it was saved
-        rect = rect_shape[i]
-        rect_params = get_rect_params(rect)
-        rect_0 = rect[0].astype(int)
-        # shift_text = ''
-        # if geometric_transform:
-        #     shift_text = shift_text + '_shifted_' + str(int(shift_x[0])) + 'dx_' + str(int(shift_y[0])) + 'dy'
-        # nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-        #       '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-        #       '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
-        #       str(frame_end) + shift_text + labels[i].lower()
-        # names_tif_tosave.append(nam) # with the -f flags
-        nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-              '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-              '-a' + str(rect_params['angle']) + labels[i].lower()
-        names_roi_tosave.append(nam) # without the -f flags
-
-        # now after having the name, correct if the ROI is outside the image dimension
-        # first dimension is y, second is x. 
-        rect_shape[i] = ShiftROI(rect_shape[i], 
-                        -shift_y[0], -shift_x[0])
-        rect_shape[i] = [[np.max((x, 1)) for x in y] for y in rect_shape[i]]
-        rect_shape[i] = np.asarray(
-            [
-            np.array(
-                (
-                    np.min((y[0],imgSize[0])), 
-                    np.min((y[1],imgSize[1]))
-                )
-            ) 
-                for y in rect_shape[i]
-            ]
-        )
-        rect = rect_shape[i]
-        rect_params = get_rect_params(rect)
-        key = 'arr' + str(i)
-        img_array_all[key] = np.zeros((num_frames_update, image_meta['num_colors'],
-                                       rect_params['width'], rect_params['length']),
-                                       dtype=np.uint16)        
-
-
-    rect_keys = list(img_array_all.keys())   
     for col in range(image_meta['num_colors']):
         imgseq = pims.ImageSequence(image_meta['filenames_color_'+str(col)])[frame_start:frame_end]
         for i in trange(num_frames_update, desc='Cropping color: {} '.format(col)):
+            # load image
             img = np.array(imgseq[i], dtype=np.uint16)
-            # when the first image is loaded, determine if we better shift
-            # the crop only for speed (as long as no shift > 10% of image 
-            # dimension) or if we have to shift the whole image, which is slower
-            # but we dont lose half of the crop from shifting
-            # if i==0:
-            #     minWidth = float('inf')
-            #     minLength = float('inf')
-            #     for nRect in range(len(rect_shape)):
-            #         rect_params = get_rect_params(rect_shape[nRect])
-            #         minWidth = np.min([minWidth, rect_params['width']])
-            #         minLength = np.min([minLength, rect_params['length']])
-            #     percentage = 0.1 # 10% of the smallest crop
-            #     if (np.abs(shift_x[col])/minLength>percentage) or (np.abs(shift_y[col])/minWidth>percentage):
-            #         shift_wholeImage = True
-            #     else:
-            #         shift_wholeImage = False                
+            imgSize = img.shape
 
-            # shift whole image
-            # if shift_wholeImage and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
-            #     img = geometric_shift(img, angle=angle[col],
-            #                         shift_x=shift_x[col], shift_y=shift_y[col])
-            for j in range(len(rect_shape)):                
-                img_croped = crop_rect(img, rect_shape[j], angle=angle[col])
-                # shift crop if true
-                # if (not shift_wholeImage) and geometric_transform and ((angle[col]!=0) or (shift_x[col]!=0) or (shift_y[col]!=0)):
-                #     img_croped = geometric_shift(img_croped, angle=angle[col],
-                #                     shift_x=shift_x[col], shift_y=shift_y[col])
-                # append the image to the stack
-                img_array_all[rect_keys[j]][i, col, :, :] = img_croped
+            ## first determine if all crops are valid or if some lie outside the image region after applying all shifts/rotations
+            if i == 0:
+                numRectanglesOutside = 0
+                for col2 in range(image_meta['num_colors']):
+                    for iRect in range(len(rect_shape)):
+                        # rectangle shape
+                        rect = np.array(rect_shape[iRect])
+                        rect = order_points(rect) # toplleft, topright, bottomrrigt, bottomleft                        
+
+                        if angle[col] != 0:
+                            centerPoint = np.array(imgSize)/2 # np.array([0, 0])#
+                            rect = np.array([
+                                rotatePoint(rect[0], centerPoint, -angle[col]), 
+                                rotatePoint(rect[1], centerPoint, -angle[col]), 
+                                rotatePoint(rect[2], centerPoint, -angle[col]), 
+                                rotatePoint(rect[3], centerPoint, -angle[col])
+                            ])
+
+                        if (shift_y[col]!=0 or shift_x[col]!=0):
+                            rect[:,0] = rect[:,0]-shift_y[col]
+                            rect[:,1] = rect[:,1]-shift_x[col]
+                        rect = np.round(rect)
+            
+            ## all crops are valid, thus proceed
+            for iRect in range(len(rect_shape)):
+                # rectangle shape
+                rect = np.array(rect_shape[iRect])
+                # for the first image, we'll do it for all colors and see if the shapes for all colors are the same
+                # in order to add them all to the same array later
+                if i==0:
+                    for col2 in range(image_meta['num_colors']):
+                        if col2 == 0:                            
+                            img_crop = rotateShiftROI(rect, img, imgSize, shift_x[col2], shift_y[col2], angle[col2])
+                            img_crop_shape = img_crop.shape
+                        else:
+                            img_crop = rotateShiftROI(rect, img, imgSize, shift_x[col2], shift_y[col2], angle[col2], fixedShape=img_crop_shape)
+
+                    # construct names of ROIs to save
+                    rect = order_points(rect) # toplleft, topright, bottomrrigt, bottomleft
+                    rect_0 = rect[0].astype(int)
+                        
+                    dy = rect[3][1] - rect[0][1]
+                    dx = rect[3][0] - rect[0][0]
+                    if dx == 0 or dy == 0:
+                        angle_roi = int(0)
+                    else:
+                        angle_roi = int(np.arctan(dy/dx) * 180 / np.pi)
+                    width_x = int( np.ceil( np.sqrt(np.sum((rect[3,:]-rect[2,:])**2)) ) )
+                    height_y = int( np.ceil( np.sqrt(np.sum((rect[2,:]-rect[1,:])**2)) ) )
+                    nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
+                          '-l' + str(height_y) + '-w' + str(width_x) +\
+                          '-a' + str(angle_roi) + labels[i].lower()
+                    names_roi_tosave.append(nam) # without the -f flags
+                
+                key = 'arr' + str(iRect)
+                if col == 0:
+                    img_crop = rotateShiftROI(rect, img, imgSize, shift_x[col], shift_y[col], angle[col])
+                else:
+                    img_crop = rotateShiftROI(rect, img, imgSize, shift_x[col], shift_y[col], angle[col], fixedShape=img_array_all[key].shape[2:4])
+
+
+                # initialize the array holding all crops based on the size of the just cropped crop                
+                if col==0 and i==0:                    
+                    img_array_all[key] = np.zeros((num_frames_update, image_meta['num_colors'],
+                                                img_crop.shape[0], img_crop.shape[1]),
+                                                dtype=np.uint16) 
+
+                # write crop into img_array_all
+                img_array_all[key][i, col, :, :] = img_crop
 
     # save ROIs and associated yaml files
+    rect_keys = list(img_array_all.keys())   
     yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
     shift_yaml = LoadShiftYamlFile(yamlFileName, shift_x, shift_y, angle, image_meta['num_colors'])
     shift_yaml["numColors"] = image_meta['num_colors']
     for nColor in range(image_meta['num_colors']):
         shift_yaml["x"]["col"+str(int(nColor))] = shift_x[nColor]
-        shift_yaml["y"]["col"+str(int(nColor))] = shift_y[nColor]            
+        shift_yaml["y"]["col"+str(int(nColor))] = shift_y[nColor]
+        shift_yaml["angle"]["col"+str(int(nColor))] = angle[nColor]
     # save the yaml file
     shift_yaml = io.to_dict_walk(shift_yaml)
     for i in range(len(rect_shape)):
@@ -486,11 +708,6 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, mean_subtraction=False
     # read the first file to get the shape and dtype
     # ASSUMES THAT ALL FILES SHARE THE SAME SHAPE/TYPE
     sample = imread(filenames[0])
-    # if bkg_subtraction:
-    #     sample = bkgSubtraction(sample)
-    # if mean_subtraction:
-    #     sample = meanSubtraction(sample)
-    # print('minimum intensity: {}, maximum intensity: {}'.format(sample.min(), sample.max()))
 
     lazy_imread = delayed(imread)  # lazy reader
     lazy_arrays = [lazy_imread(fn) for fn in filenames] # read delayed images for all filenames
@@ -516,7 +733,22 @@ def daskread_img_seq(num_colors=1, bkg_subtraction=False, mean_subtraction=False
     #     stack = stack - stackMean
         # stack.map_blocks(meanSubtraction)
    
-    # apply rotation
+    # apply rotation. For that, see if we can load an already existing yaml file from which we read the previously applied rotation angle
+    if len(folderpath)==0:
+        yamlFileName = ''
+    else:
+        yamlFileName = os.path.join(folderpath, 'shift.yaml')
+    shift_yaml = LoadShiftYamlFile(yamlFileName, 0, 0, 0, num_colors)
+    RotationAngle = [0] * shift_yaml["numColors"]
+    for nColor in range(shift_yaml["numColors"]):
+        try:
+            RotationAngle[nColor] = shift_yaml["angle"]["col"+str(int(nColor))]
+        except:
+            RotationAngle[nColor] = 0
+    if (RotationAngle[:-1] != RotationAngle[1:]):
+        print('Not all read rotation angles are equal. Not applying any rotation.')
+        RotationAngle = None
+
     if RotationAngle is not None:
         if any([x != 0 for x in RotationAngle]):
             stack = stack.map_blocks(applyRotation, RotationAngle=RotationAngle, num_colors=num_colors)

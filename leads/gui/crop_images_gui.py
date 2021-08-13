@@ -1,4 +1,4 @@
-import ptvsd # only for debugging
+# import ptvsd # only for debugging
 import napari
 import platform
 import subprocess
@@ -6,7 +6,6 @@ import numpy as np
 import dask.array as da
 import matplotlib.path as mpltPath
 import os, sys, glob, itertools, yaml, re, shutil, pims
-
 
 from . import crop_images_ui
 from .. import io
@@ -48,11 +47,8 @@ class Worker(QObject):
         for nSeries in range(numSeries):
             print('Cropping image series '+str(int(nSeries+1))+' / '+str(int(numSeries))+' ...')
             if numColors is None:
-                numColors = 2 # by default int( self.ui.numColorsCbox.currentText() )doShift = False
-            doShift = False
+                numColors = 2 # by default int( self.ui.numColorsCbox.currentText() )
             if xShift is not None:                
-                if np.any(xShift[nSeries]) or np.any(yShift[nSeries]) or np.any(RotationAngle[nSeries]):
-                    doShift       = True
                 xShift_in        = xShift[nSeries]
                 yShift_in        = yShift[nSeries]
                 RotationAngle_in = RotationAngle[nSeries]
@@ -66,7 +62,6 @@ class Worker(QObject):
             crop_images.crop_rect_shapes(image_meta[nSeries], shape_layers,
                             frame_start=frame_start, 
                             frame_end=frame_end,
-                            geometric_transform=doShift,
                             shift_x=xShift_in, 
                             shift_y=yShift_in, 
                             angle=RotationAngle_in,
@@ -104,7 +99,7 @@ class Worker(QObject):
         for i in range(len(sub_dirs)):
             roi_file_list = glob.glob(sub_dirs[i] + "/*.roi", recursive = False)
             ROIdescriptions = self.BatchgetROIDescrption(roi_file_list)
-            roi_coord_list, roi_original_names = self.BatchLoadROIs(roi_file_list)
+            rect_shape, roi_original_names = self.BatchLoadROIs(roi_file_list)
 
             # for the dir where the ROI is located, we might look for .tif files to which the roi is applied
             # - in the same folder
@@ -164,7 +159,7 @@ class Worker(QObject):
                 except:
                     numColors = 2 # 2 colors by default
                     print('Could not read the number of colors (setting to default 2 colors) in '+os.path.join(sub_dirs[i], subfolders[sf]))
-                self.Batchcrop(sub_dirs[i], subfolders[sf], roi_coord_list, roi_file_list, 
+                self.Batchcrop(sub_dirs[i], subfolders[sf], rect_shape, roi_file_list, 
                 roi_original_names, ROIdescriptions, save_directory, numColors, 
                 saveCollectively, sf, len(subfolders), medianProcessing=self.medianProcessing)
             print()
@@ -173,7 +168,7 @@ class Worker(QObject):
         self.finished.emit()
 
 # ---------------------------------------------------------------
-    def Batchcrop(self, dir, sub_dir, roi_coord_list, roi_file_list, roi_original_names, 
+    def Batchcrop(self, dir, sub_dir, rect_shape, roi_file_list, roi_original_names, 
         ROIdescriptions, sort_directory, num_colors, sort_FOVs, nDir, numDirs, medianProcessing=False):
         # dir is the directory where ROIs are stored
         # sub_dir is where the crops go
@@ -181,14 +176,14 @@ class Worker(QObject):
         folderpath = sub_dir
 
         # see if we can find the yaml file which is associated to each ROI
-        numROIs   = len(roi_coord_list)
+        numROIs   = len(rect_shape)
         angle     = [0] * numROIs
         shift_x   = [0] * numROIs
         shift_y   = [0] * numROIs
         numColors = [0] * numROIs
         for j in range(numROIs):
             angle[j], shift_x[j], shift_y[j], numColors[j] = \
-                crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)       
+                crop_images.readROIassociatedYamlFile(roi_file_list[j], num_colors)  
         num_colors = int( mode(numColors).mode ) # take what most files say
         
         # default. can be changed in the future (20200918)
@@ -203,191 +198,199 @@ class Worker(QObject):
         if not os.path.isdir(dir_to_save):
             os.makedirs(dir_to_save)
 
-        names_roi_tosave_no_frames = []
+        names_roi_tosave = []
         img_array_all = {}
         img = np.array(imgseq[0], dtype=np.uint16) 
         imgSize = img.shape
-        for i in range(len(roi_coord_list)):
-            rect = roi_coord_list[i]
-            rect_params = crop_images.get_rect_params(rect)       
-            rect_0 = rect[0].astype(int)
-            # nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-            #     '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-            #     '-a' + str(rect_params['angle']) + '-f' + str(frame_start) + '-f' +\
-            #     str(frame_end) + '_' + ROIdescriptions[i]
-            # names_roi_tosave.append(nam)
-            nam_no_frames = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
-                '-l' + str(rect_params['length']) + '-w' + str(rect_params['width']) +\
-                '-a' + str(rect_params['angle']) + '_' + ROIdescriptions[i]
-            names_roi_tosave_no_frames.append(nam_no_frames)
-
-            # now after having the name, correct if the ROI is outside the image dimension
-            # a = roi_coord_list[i]
-            # first dimension is y, second is x.
-            roi_coord_list[i] = crop_images.ShiftROI(roi_coord_list[i], 
-                            -shift_y[i][0], -shift_x[i][0])
-            roi_coord_list[i] = [[np.max((x, 1)) for x in y] for y in roi_coord_list[i]]
-            roi_coord_list[i] = np.asarray(
-                [
-                np.array(
-                    (
-                        np.min((y[0],imgSize[0])), 
-                        np.min((y[1],imgSize[1]))
-                    )
-                ) 
-                    for y in roi_coord_list[i]
-                ]
-            )
-            rect_params = crop_images.get_rect_params(roi_coord_list[i])
-            key = 'arr' + str(i)
-            img_array_all[key] = np.zeros((round(num_frames_update/num_colors), num_colors,
-                                        rect_params['width'], rect_params['length']),
-                                        dtype=np.uint16)  
-        rect_keys = list(img_array_all.keys())
-
-        # if we sort, figure out the name of each file in the sorted directory:
-        # we first need the file's superior dir, the current dir, and sub_dir
-        name_sorted = []
-        CropPath = os.path.normpath(self.BatchCropPath)
-        if sort_FOVs:
-            sorted_dir = []
-            for i in range(len(roi_coord_list)):
-                # find out how many levels are in between the folder we're cropping from
-                # and the folder in which we found the ROI
-                foundParent = False
-                children = []
-                currentPath = os.path.dirname(roi_file_list[i])
-                while foundParent == False:
-                    if os.path.normpath(currentPath) == CropPath:
-                        foundParent = True
-                    children.append(os.path.basename(currentPath))
-                    currentPath = os.path.dirname(currentPath)
-                children.reverse()
-                children = '__'.join(children)
-
-                # create a dir to save the FOV to if it doesnt exist yet
-                sorted_dir.append( os.path.join(sort_directory, ROIdescriptions[i]) )
-                if not os.path.isdir(sorted_dir[-1]):
-                    os.makedirs(sorted_dir[-1])
-                name_sorted.append( 
-                    os.path.join(sorted_dir[-1],\
-                    children + '__' +\
-                    names_roi_tosave_no_frames[i]) )
-
-        # go through each roi name and see if it already exists. If yes, skip it
-        skipROI  = []
-        skipIMG  = []
-        skipSORT = []
-        for i in range(len(roi_coord_list)):
-            ROIpath = os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')
-            IMGpath = os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif')
-            if os.path.isfile(ROIpath): # check if ROIs exist
-                skipROI.append(True)
-            else:
-                skipROI.append(False)
-            if os.path.isfile(IMGpath): # check if images exist
-                skipIMG.append(True)
-            else:
-                skipIMG.append(False)
-            if sort_FOVs:
-                if os.path.isfile(name_sorted[i]+'.tif') and os.path.isfile(name_sorted[i]+'.roi'): # check if images and roi exist
-                    skipSORT.append(True)
-                else:
-                    skipSORT.append(False)
-            else:
-                skipSORT.append(True)
-
-        if all(skipIMG):
-            print('All crops already exist in subfolder '+str(nDir+1)+'/'+str(numDirs)+'.')
-            for i in trange(len(roi_coord_list), desc='Copying crops to collective directory'):
-                if (not skipROI[i]):
-                    roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
-                    roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
-                    roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
-                    # os.remove(os.path.join(dir, roi_original_names[i])) # remove the original file
-                if (not skipSORT[i]):
-                    roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
-                    roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
-                    # copying the images from the dir to the sorted one
-                    shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
-                        name_sorted[i]+'.tif') # copy the file to the sorted dir
-                    if not os.path.isfile(name_sorted[i]+'_processed.tif') and medianProcessing:
-                        if os.path.isfile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif')):
-                            # copy the preccesed version as well
-                            shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif'),\
-                        name_sorted[i]+'_processed.tif') 
-                        else:
-                            self.medianProcess(name_sorted[i]+'.tif')
-                    
-            return
         
         # loop through colors, then time, finally ROIs and crop
+        # from matplotlib import pyplot as plt
+        CropPath = os.path.normpath(self.BatchCropPath)
+        name_sorted = []
         for col in range(num_colors):
             # select the correct frames
             imgseq_col = imgseq[col:num_frames_update:num_colors]
             for i in trange(len(imgseq_col), desc='Batch cropping color '+str(col+1)+'/'+str(num_colors)+' in subfolder '+str(nDir+1)+'/'+str(numDirs)+'...'):
                 # load image
                 img = np.array(imgseq_col[i], dtype=np.uint16) 
+                imgSize = img.shape
 
-                # decide if the whole image has to be shifted or only the crop
-                # if i==0:
-                #     minWidth  = float('inf')
-                #     minLength = float('inf')
-                #     for nRect in range(len(roi_coord_list)):
-                #         rect_params = crop_images.get_rect_params(roi_coord_list[nRect]) 
-                #         minWidth = np.min([minWidth, rect_params['width']])
-                #         minLength = np.min([minLength, rect_params['length']])
-                #     percentage = 0.1 # 10% of the smallest crop                    
-                #     shift_wholeImage = False
-                #     j = 0
-                #     while not shift_wholeImage and j<len(shift_x): # as soon as we find a ROI which requires to shift to complete image, we can stop
-                #         if col < numColors[j]:
-                #             if (np.abs(shift_x[j][col])/minLength>percentage) or (np.abs(shift_y[j][col])/minWidth>percentage):
-                #                 shift_wholeImage = True
-                #             else:
-                #                 shift_wholeImage = False
-                #         j += 1
-               
-                for j in range(numROIs):
-                    if col >= numColors[j]:
-                        continue
-                    if (not skipIMG[j]):
-                        img_cropped = crop_images.crop_rect(img, roi_coord_list[j], angle=angle[j][col])
+                ## first determine if all crops are valid or if some lie outside the image region after applying all shifts/rotations
+                if i == 0:
+                    for col2 in range(num_colors):
+                        skipROI = []
+                        for iRect in range(len(rect_shape)):
+                            # rectangle shape
+                            rect = np.array(rect_shape[iRect])
+                            rect = crop_images.order_points(rect) # toplleft, topright, bottomrrigt, bottomleft                        
 
-                        try:
-                            img_array_all[rect_keys[j]][i, col, :, :] = img_cropped
-                        except:
-                            if i == 0:
-                                print('Failed cropping in '+roi_file_list[j])
-                            pass
+                            if angle[iRect][col] != 0:
+                                centerPoint = np.array(imgSize)/2 # np.array([0, 0])#
+                                rect = np.array([
+                                    crop_images.rotatePoint(rect[0], centerPoint, -angle[iRect][col]), 
+                                    crop_images.rotatePoint(rect[1], centerPoint, -angle[iRect][col]), 
+                                    crop_images.rotatePoint(rect[2], centerPoint, -angle[iRect][col]), 
+                                    crop_images.rotatePoint(rect[3], centerPoint, -angle[iRect][col])
+                                ])
+
+                            if (shift_y[iRect][col]!=0 or shift_x[iRect][col]!=0):
+                                rect[:,0] = rect[:,0]-shift_y[iRect][col]
+                                rect[:,1] = rect[:,1]-shift_x[iRect][col]
+                            rect = np.round(rect)                            
+                            skipROI.append(False)
+
+                    ## all crops are valid, thus proceed by generating the ROI names
+                    for iRect in range(len(rect_shape)):
+                        if skipROI[iRect]: 
+                            names_roi_tosave.append('')
+                            continue
+                        # rectangle shape
+                        rect = np.array(rect_shape[iRect])
+                        rect = crop_images.order_points(rect) # toplleft, topright, bottomrrigt, bottomleft
+                        # for the first image, we'll do it for all colors and see if the shapes for all colors are the same
+                        # in order to add them all to the same array later
+                        for col2 in range(num_colors):
+                            if col2 == 0:
+                                img_crop = crop_images.rotateShiftROI(\
+                                    rect, img, imgSize, shift_x[iRect][col2], shift_y[iRect][col2], angle[iRect][col2])
+                                img_crop_shape = img_crop.shape
+                            else:
+                                img_crop = crop_images.rotateShiftROI(\
+                                    rect, img, imgSize, shift_x[iRect][col2], shift_y[iRect][col2], angle[iRect][col2], fixedShape=img_crop_shape)                                
+                            # plt.figure()
+                            # plt.imshow(img_crop)
+                            # plt.show()
+
+                        # construct names of ROIs to save                        
+                        rect_0 = rect[0].astype(int)
+                            
+                        dy = rect[3][1] - rect[0][1]
+                        dx = rect[3][0] - rect[0][0]
+                        if dx == 0 or dy == 0:
+                            angle_roi = int(0)
+                        else:
+                            angle_roi = int(np.arctan(dy/dx) * 180 / np.pi)
+                        width_x = int( np.ceil( np.sqrt(np.sum((rect[3,:]-rect[2,:])**2)) ) )
+                        height_y = int( np.ceil( np.sqrt(np.sum((rect[2,:]-rect[1,:])**2)) ) )
+                        nam = 'x' + str(rect_0[0]) + '-y' + str(rect_0[1]) +\
+                            '-l' + str(height_y) + '-w' + str(width_x) +\
+                            '-a' + str(angle_roi) + '_' + ROIdescriptions[iRect].lower()
+                        names_roi_tosave.append(nam) # without the -f flags
+                            
+                    # if we sort, figure out the name of each file in the sorted directory:
+                    # we first need the file's superior dir, the current dir, and sub_dir
+                    if sort_FOVs and col == 0:
+                        sorted_dir = []
+                        for iRect in range(len(rect_shape)):
+                            if skipROI[iRect]: 
+                                name_sorted.append('')
+                                continue
+                            # find out how many levels are in between the folder we're cropping from
+                            # and the folder in which we found the ROI
+                            foundParent = False
+                            children = []
+                            currentPath = os.path.dirname(roi_file_list[iRect])
+                            while foundParent == False:
+                                if os.path.normpath(currentPath) == CropPath:
+                                    foundParent = True
+                                children.append(os.path.basename(currentPath))
+                                currentPath = os.path.dirname(currentPath)
+                            children.reverse()
+                            children = '__'.join(children)
+
+                            # create a dir to save the FOV to if it doesnt exist yet
+                            sorted_dir.append( os.path.join(sort_directory, ROIdescriptions[iRect]) )
+                            if not os.path.isdir(sorted_dir[-1]):
+                                os.makedirs(sorted_dir[-1])
+                            name_sorted.append( 
+                                os.path.join(sorted_dir[-1],\
+                                children + '__' +\
+                                names_roi_tosave[iRect]) )
+
+                    # go through each roi name and see if it already exists. If yes, skip it
+                    for iRect in range(len(rect_shape)):
+                        if skipROI[iRect]: continue
+                        IMGpath = os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif')
+                        if os.path.isfile(IMGpath): # check if images exist
+                            skipROI[iRect] = True
+                        else:
+                            skipROI[iRect] = False
+
+                    if all(skipROI) and col == 0:
+                        print('All crops already exist in subfolder '+str(nDir+1)+'/'+str(numDirs)+'.')
+                        if sort_FOVs:
+                            for iRect in trange(len(rect_shape), desc='Copying crops to collective directory'):
+                                # if skipROI[iRect]: continue
+                                # if (not skipROI[i]):
+                                roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(rect_shape[iRect]))
+                                roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.roi')) # saving the ROI in the subfolder
+                                roi_ij.tofile(os.path.join(dir, names_roi_tosave[iRect]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
+                                    # os.remove(os.path.join(dir, roi_original_names[iRect])) # remove the original file
+                                # if (not skipSORT[i]):
+                                roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(rect_shape[iRect]))
+                                roi_ij.tofile(name_sorted[iRect]+'.roi') # saving the ROI in the sorted dir
+                                # copying the images from the dir to the sorted one
+                                shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'),\
+                                    name_sorted[iRect]+'.tif') # copy the file to the sorted dir
+                                if not os.path.isfile(name_sorted[iRect]+'_processed.tif') and medianProcessing:
+                                    if os.path.isfile(os.path.join(dir_to_save, names_roi_tosave[iRect]+'_processed.tif')):
+                                        # copy the preccesed version as well
+                                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[iRect]+'_processed.tif'),\
+                                    name_sorted[iRect]+'_processed.tif') 
+                                    else:
+                                        self.medianProcess(name_sorted[iRect]+'.tif')                                
+                        return
+
+
+                # crop every ROI
+                rect_keys = []
+                for iRect in range(len(rect_shape)):
+                    key = 'arr' + str(iRect)
+                    rect_keys.append(key)
+                    if skipROI[iRect]: continue
+                    rect = np.array(rect_shape[iRect])
+                    rect = crop_images.order_points(rect) # toplleft, topright, bottomrrigt, bottomleft
+
+                    if col == 0:
+                        img_crop = crop_images.rotateShiftROI(\
+                            rect, img, imgSize, shift_x[iRect][col], shift_y[iRect][col], angle[iRect][col])
+                    else:
+                        img_crop = crop_images.rotateShiftROI(\
+                            rect, img, imgSize, shift_x[iRect][col], shift_y[iRect][col], angle[iRect][col], fixedShape=img_array_all[key].shape[2:4])
+
+                    # initialize the array holding all crops based on the size of the just cropped crop                    
+                    if col==0 and i==0:                    
+                        img_array_all[key] = np.zeros((len(imgseq_col), num_colors,
+                                                    img_crop.shape[0], img_crop.shape[1]),
+                                                    dtype=np.uint16) 
+
+                    # write crop into img_array_all
+                    img_array_all[key][i, col, :, :] = img_crop
+
         
-        for i in trange(len(roi_coord_list), desc='Saving and evtl. processing crops'):
-            # try:
-            roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(roi_coord_list[i]))
-            if (not skipROI[i]):                    
-                roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the subfolder
-                roi_ij.tofile(os.path.join(dir, names_roi_tosave_no_frames[i]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name
-                # os.remove(os.path.join(dir,roi_original_names[i])) # remove the original file        
-            if (not skipIMG[i]):
-                imwrite(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),
-                        img_array_all[rect_keys[i]], imagej=True,
+        # rect_keys = list(img_array_all.keys()) 
+        for iRect in trange(len(rect_shape), desc='Saving and evtl. processing crops'):
+            roi_ij = ImagejRoi.frompoints(crop_images.rect_shape_to_roi(rect_shape[iRect]))             
+            roi_ij.tofile(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.roi')) # saving the ROI in the subfolder
+            roi_ij.tofile(os.path.join(dir, names_roi_tosave[iRect]+'.roi')) # saving the ROI in the folder where the ROI was found but with new name   
+            if (not skipROI[iRect]):
+                imwrite(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'),
+                        img_array_all[rect_keys[iRect]], imagej=True,
                         metadata={'axis': 'TCYX', 'channels': num_colors,
                         'mode': 'composite',})
                 if medianProcessing:
-                    self.medianProcess(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'))
-            if (not skipSORT[i]):
-                roi_ij.tofile(name_sorted[i]+'.roi') # saving the ROI in the sorted dir
-                shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'.tif'),\
-                    name_sorted[i]+'.tif') # copy the file to the sorted dir
-                if not os.path.isfile(name_sorted[i]+'_processed.tif') and medianProcessing:
-                    if os.path.isfile(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif')):
+                    self.medianProcess(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'))
+            if sort_FOVs:
+                roi_ij.tofile(name_sorted[iRect]+'.roi') # saving the ROI in the sorted dir
+                shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'),\
+                    name_sorted[iRect]+'.tif') # copy the file to the sorted dir
+                if not os.path.isfile(name_sorted[iRect]+'_processed.tif') and medianProcessing:
+                    if os.path.isfile(os.path.join(dir_to_save, names_roi_tosave[iRect]+'_processed.tif')):
                         # copy the preccesed version as well
-                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave_no_frames[i]+'_processed.tif'),\
-                    name_sorted[i]+'_processed.tif') 
+                        shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[iRect]+'_processed.tif'),\
+                    name_sorted[iRect]+'_processed.tif') 
                     else:
-                        self.medianProcess(name_sorted[i]+'.tif')
-            # except:
-            #     print(names_roi_tosave_no_frames[i]+" not found anymore. Skipping.")
+                        self.medianProcess(name_sorted[iRect]+'.tif')
 
 # ---------------------------------------------------------------
     def medianProcess(self, tif_stack_path):
@@ -427,14 +430,13 @@ class Worker(QObject):
         roi_file_list = roi_file_list_updated
         roi_original_names = roi_original_names_updated
         
-        roi_coord_list = []
+        rect_shape = []
         for roi_file in roi_file_list:
             roi = ImagejRoi.fromfile(roi_file)
             roi_coord = np.flip(roi.coordinates())
             roi_coord = np.array([roi_coord[2], roi_coord[1], roi_coord[0], roi_coord[3]], dtype=np.float32)
-            roi_coord[roi_coord<0] = 1
-            roi_coord_list.append(roi_coord)
-        return roi_coord_list, roi_original_names
+            rect_shape.append(roi_coord)
+        return rect_shape, roi_original_names
 
 # ---------------------------------------------------------------
     def BatchgetROIDescrption(self, roi_file_list):
@@ -983,7 +985,7 @@ class NapariTabs(QtWidgets.QWidget):
         this_directory = os.path.dirname(os.path.realpath(__file__))
         icon_path = os.path.join(this_directory, "assets", "kymograph_window_bar_crop.png")
         icon = QtGui.QIcon(icon_path)
-        self.setWindowIcon(icon)
+        self.setWindowIcon(icon)        
 
         # set defaults
         self.use_current_image_path = False
@@ -1058,6 +1060,8 @@ class NapariTabs(QtWidgets.QWidget):
         # when changing layers, update the x-y and angle boxes
         @viewer.layers.selection.events.active.connect
         def UpdateXYShiftRotationAngleUponSwitchingLayerWrapper(event):
+            self.ui.StatusBarLabel.setText('Idle') # set back to default since this is a function which is frequently executed
+            QtGui.QGuiApplication.processEvents() # update gui for pyqt
             self.UpdateXYShiftRotationAngleUponSwitchingLayer()
 
         @viewer.mouse_drag_callbacks.append
@@ -1205,7 +1209,7 @@ class NapariTabs(QtWidgets.QWidget):
             self.ui.angleSpinBox.blockSignals(True)
             self.ui.xShiftSpinBox.setValue(self.xShift[self.series2treat][index])
             self.ui.yShiftSpinBox.setValue(self.yShift[self.series2treat][index])
-            self.ui.angleSpinBox.setValue(self.RotationAngle[self.series2treat][index]) # when updating the angle, we can cal self.ShiftRotateImage
+            self.ui.angleSpinBox.setValue(self.RotationAngle[self.series2treat][index]) # when updating the angle, we can call self.ShiftRotateImage
             self.ui.xShiftSpinBox.blockSignals(False) # unblock the signals
             self.ui.yShiftSpinBox.blockSignals(False)
             self.ui.angleSpinBox.blockSignals(False)
@@ -1299,6 +1303,7 @@ class NapariTabs(QtWidgets.QWidget):
             # call the waitbar class
             if numLayers2align > 1:
                 self.ConstructStatusBar(pair, numLayers2align-1, 'Estimating shift')
+                QtGui.QGuiApplication.processEvents() # update gui for pyqt
             C = self.fftXCorr2(image[0]/np.max(image[0].ravel()), image[pair]/np.max(image[pair].ravel()))
             index  = np.unravel_index(C.argmax(), C.shape)
             index  = [x for x in index]
@@ -1542,8 +1547,8 @@ class NapariTabs(QtWidgets.QWidget):
             shift_supplied = True
         else:
             shift_supplied = False
-        ## use the built-in translate/rotate method of napari viewer                
-        # get which sereis to treat based on the selected layers
+        ## best would be to use the built-in translate/rotate method of napari viewer                
+        # get which sereis to treat based on the selected layers    
         if self.CorrectChromaticShift: # if we want to correct for chromatic shift
             self.getRelatedSelectedLayer()
             self.series2treat = int(self.series2treat)
@@ -1603,6 +1608,13 @@ class NapariTabs(QtWidgets.QWidget):
                             self.yShift[self.series2treat][nColor] = self.ui.yShiftSpinBox.value()
                         self.RotationAngle[self.series2treat][nColor] = self.ui.angleSpinBox.value()
             
+        # if there is only one iamge series, we cannot currently rotate the colors individually because 
+        # the whole image stack is loaded into one dask array. Thus set the rotation angle for every 
+        # color (=layer) to the same
+        if self.numSeries == 1:
+            for nColor in range(self.numColors):
+                self.RotationAngle[0][nColor] = self.ui.angleSpinBox.value()
+
         # save the current x-y shift into a yaml file
         folderpath = self.image_meta[self.series2treat]['folderpath']
         self.yamlFileName = os.path.join(folderpath, 'shift.yaml')                           
@@ -1639,6 +1651,9 @@ class NapariTabs(QtWidgets.QWidget):
             angleDiff = np.asarray(self.RotationAngle[self.series2treat]) - np.asarray(self.angle_old[self.series2treat])
         self.angle_old = [[n for n in m] for m in self.RotationAngle]            
         if sum(abs(angleDiff))!=0:
+            if self.numSeries == 1 and self.CorrectChromaticShift:
+                self.ui.StatusBarLabel.setText("<font color=red>ONLY ONE TIME SERIES DETECTED. CANNOT YET ROTATE IMAGES WITHIN ONE SERIES AGAINST EACH OTHER.</font>")
+                QtGui.QGuiApplication.processEvents() # update gui for pyqt
             self.GetCurrentDisplaySettings()
             self.use_current_image_path = True
             save_series2treat = self.series2treat
@@ -1646,6 +1661,8 @@ class NapariTabs(QtWidgets.QWidget):
             self.series2treat = save_series2treat
             # apply settings as before
             self.applyDisplaySettings()  
+            if self.numSeries == 1 and self.CorrectChromaticShift:
+                self.ui.StatusBarLabel.setText("<font color=red>ONLY ONE TIME SERIES DETECTED. CANNOT YET ROTATE IMAGES WITHIN ONE SERIES AGAINST EACH OTHER.</font>")
 
         # shift
         for nColor in range(self.numColors):
@@ -1958,6 +1975,7 @@ class NapariTabs(QtWidgets.QWidget):
             cmap_numer = 0
             for nSeries in range(self.numSeries):
                 self.ConstructStatusBar(nSeries+1, self.numSeries, labelStr='Loading image series')
+                QtGui.QGuiApplication.processEvents() # update gui for pyqt
                 # see if there's a yaml file found in this folder. If yes, load it                
                 self.yamlFileName = os.path.join(paths[nSeries], 'shift.yaml')                           
                 self.series2treat = nSeries
@@ -2039,6 +2057,7 @@ class NapariTabs(QtWidgets.QWidget):
 
         else: # if we load a single image series
             self.numSeries = 1
+            self.series2treat = 0 # there's only one
             nSeries = 0
 
             if len(path_in) > 0:
@@ -2246,7 +2265,7 @@ class NapariTabs(QtWidgets.QWidget):
         if not hasattr(self, 'xShift'):
             numColors = None
         else:
-            numColors = self.numColors
+            numColors = int( self.ui.numColorsCbox.currentText() )
         self.thread.started.connect(
             lambda: 
             self.worker.runCrop(shape_layers, ROIlabels, self.numSeries, 
@@ -2256,7 +2275,6 @@ class NapariTabs(QtWidgets.QWidget):
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
-        # self.worker.progress.connect(self.reportProgress)
         # Step 6: Start the thread
         self.thread.start()
 
@@ -2488,7 +2506,7 @@ class NapariTabs(QtWidgets.QWidget):
 def main():       
     viewer = napari.Viewer(title="LEADS: Cropping routine")
     ui = NapariTabs(viewer)
-    viewer.window.add_dock_widget(ui, area='bottom')
+    viewer.window.add_dock_widget(ui, area='bottom')    
     napari.run()
 
 if __name__ == "__main__":
