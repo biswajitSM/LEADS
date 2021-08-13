@@ -18,6 +18,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 plt.rcParams.update(figure_params.params_dict)
 from scipy.signal import savgol_filter
+from skimage.io.collection import alphanumeric_key
 import h5py
 import tqdm
 from . import crop_images_gui
@@ -49,6 +50,74 @@ grads['jet'] = {'ticks': [[0.0, [0, 0, 127]], [0.11, [0, 0, 255]], [0.125, [0, 0
 grads['seismic'] = {'ticks': [[0.0, [0, 0, 76]], [0.25, [0, 0, 255]], [0.5, [255, 255, 255]], [0.75, [255, 0, 0]], [1.0, [127, 0, 0]]], 'mode': 'rgb'}
 grads['gnuplot'] = {'ticks': [(0.0, (0, 0, 0)), (0.25, (127, 4, 255)), (0.5, (180, 32, 0)), (0.75, (221, 107, 0)), (1.0, (255, 255, 0))], 'mode': 'rgb'}
 
+class FileDialog(QtWidgets.QDialog):
+    """ The dialog letting the user choose ROIs """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Open folder and filter ROIs")
+        self.resize(500, 0)
+        self.setModal(False)
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        general_groupbox = QtWidgets.QGroupBox("Open a folder with .tif/.tiff files and filter")
+        vbox.addWidget(general_groupbox)
+        general_grid = QtWidgets.QGridLayout(general_groupbox)
+
+        # qlineEdit for browsing the right directory
+        self.PathQLabel = QtWidgets.QLabel()
+        self.PathQLabel.setObjectName("PathQLabel")
+        general_grid.addWidget(self.PathQLabel, 0, 1)  
+
+        self.BrowseButton = QtWidgets.QPushButton()
+        self.BrowseButton.setObjectName("BrowseButton")
+        self.BrowseButton.setText("Browse")
+        self.BrowseButton.clicked.connect(self.window.load_folder)
+        general_grid.addWidget(self.BrowseButton, 0, 0)          
+
+        # key
+        general_grid.addWidget(QtWidgets.QLabel("key:"), 1, 0)
+        self.ROI_key_lineedit = QtWidgets.QLineEdit()
+        self.ROI_key_lineedit.textChanged.connect(self.window.searchROIs)
+        general_grid.addWidget(self.ROI_key_lineedit, 1, 1)  
+
+        # let user input a ROI number
+        self.fileNumberSpinBox = QtWidgets.QDoubleSpinBox()
+        self.fileNumberSpinBox.setDecimals(0)
+        self.fileNumberSpinBox.setMinimum(1)
+        self.fileNumberSpinBox.setMaximum(99)
+        self.fileNumberSpinBox.valueChanged.connect(self.window.any_file)
+        general_grid.addWidget(self.fileNumberSpinBox, 2, 0)
+        
+        self.fileNumberLabel = QtWidgets.QLabel()
+        self.fileNumberLabel.setText("/?")
+        general_grid.addWidget(self.fileNumberLabel, 2, 1)
+
+        # print filenames and filtered filenames
+        self.PrintAllFilenamesButton = QtWidgets.QPushButton()
+        self.PrintAllFilenamesButton.setObjectName("PrintAllFilenamesButton")
+        self.PrintAllFilenamesButton.setText("Print all filenames")
+        self.PrintAllFilenamesButton.clicked.connect(self.window.print_all_filenames)
+        general_grid.addWidget(self.PrintAllFilenamesButton, 3, 0)          
+
+        self.PrintFilteredFilenamesButton = QtWidgets.QPushButton()
+        self.PrintFilteredFilenamesButton.setObjectName("PrintFilteredFilenamesButton")
+        self.PrintFilteredFilenamesButton.setText("Print filtered filenames")
+        self.PrintFilteredFilenamesButton.clicked.connect(self.window.print_filtered_filenames)
+        general_grid.addWidget(self.PrintFilteredFilenamesButton, 3, 1)          
+
+        # self.pix_spinbox.setRange(0, int(1e3))
+        # self.pix_spinbox.setSuffix(" nm")
+        # self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
+        # self.pix_spinbox.setKeyboardTracking(False)
+
+        # self.pix_spinbox = QtWidgets.QSpinBox()
+        # self.pix_spinbox.setRange(0, int(1e3))
+        # self.pix_spinbox.setSuffix(" nm")
+        # self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
+        # self.pix_spinbox.setKeyboardTracking(False)
+        
 class ParametersDialog(QtWidgets.QDialog):
     """ The dialog showing parameters """
 
@@ -801,6 +870,7 @@ class Window(QtWidgets.QMainWindow):
         self.dockarea = self.ui.dockarea
         self.parameters_dialog = ParametersDialog(self)
         self.multipeak_dialog = MultiPeakDialog(self)
+        self.file_dialog = FileDialog(self)
         self.roi_dialog = ROIDialog(self)
         self.supergauss_dialog = SuperGaussFittingDialog(self)
         # self.supergauss_dialog.exec_() # this ensures that SuperGaussFittingDialog generates its own loop
@@ -828,6 +898,15 @@ class Window(QtWidgets.QMainWindow):
         open_action = file_menu.addAction("Open image stack (.tif/.tiff)")
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.load_img_stack)
+        openFolder_action = file_menu.addAction("Open folder containing .tif/.tiff")
+        openFolder_action.setShortcut("Ctrl+F")
+        openFolder_action.triggered.connect(self.file_dialog.show)        
+        previousFile_action = file_menu.addAction("Previous file")
+        previousFile_action.setShortcut("F1")
+        previousFile_action.triggered.connect(self.previous_file)
+        nextFile_action = file_menu.addAction("Next file")
+        nextFile_action.setShortcut("F2")
+        nextFile_action.triggered.connect(self.next_file)
         save_action = file_menu.addAction("Save (yaml and hdf5)")
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save)
@@ -1157,12 +1236,118 @@ class Window(QtWidgets.QMainWindow):
                 self.scalebar_kymoloop_right.setParentItem(self.imv23.view)
                 self.scalebar_kymoloop_right.anchor((1, 1), (1, 1), offset=(-40, -40))
 
-    def load_img_stack(self):
-        filepath = io.FileDialog(self.folderpath, "open a tif file stack",
-                                 "Tif File (*.tif)").openFileNameDialog()
-        # set paths anfile names
+
+    def load_folder(self):
+        self.folderpath = io.FileDialog(os.path.dirname(self.folderpath), "Select a folder",).openFolderNameDialog()
+        filenames = sorted(glob.glob(self.folderpath + "/*.tif"), key=alphanumeric_key)
+        if len(filenames)==0:
+            filenames = sorted(glob.glob(self.folderpath + "/*.tiff"), key=alphanumeric_key)
+        if len(filenames)==0:
+            print('No .tif/.tiff files found in directory. Returning.')
+            return
+
+        # find all files which carry a 'processed.tif' tag and omit those
+        filenames_clean = []
+        for filename in filenames:
+            if filename[-5::] == '.tiff':
+                filenames_clean.append(filename.replace('_processed.tiff', '.tiff'))
+            else:
+                filenames_clean.append(filename.replace('_processed.tif', '.tif'))
+        filenames_clean = sorted(list(set(filenames_clean)))
+        self.filenames_all = filenames_clean
+        self.numFiles = len(filenames_clean)
+        self.searchROIs()        
+        self.currentFile = 0
+        settings = io.load_user_settings()
+        settings["kymograph"]["PWD"] = self.folderpath
+        settings["kymograph"]["Acquisiton Time"] = self.parameters_dialog.aqt_spinbox.value()
+        settings["kymograph"]["Pixel Size"] = self.parameters_dialog.pix_spinbox.value()
+        settings["kymograph"]['ROI width'] = self.LineROIwidth
+        io.save_user_settings(settings)
+        self.file_dialog.PathQLabel.setText(self.folderpath)
+        self.updateFileDialog()
+        self.display_file()
+
+    def display_file(self):
+        if self.currentFile<(len(self.filenames)):
+            self.load_img_stack(filepath=self.filenames[self.currentFile])
+
+    def next_file(self):
+        if not hasattr(self, 'filenames'):
+            return
+        if self.currentFile == self.numFiles-1:
+            print('Last .tif file in folder already displayed.')  
+            return      
+        self.currentFile += 1
+        self.display_file()
+
+    def previous_file(self):
+        if not hasattr(self, 'filenames'):
+            return
+        if self.currentFile == 0:
+            print('First .tif file in folder already displayed.')
+            return
+        self.currentFile -= 1
+        self.display_file()
+
+    def any_file(self):
+        if not hasattr(self, 'filenames'):
+            return        
+        self.currentFile = int( self.file_dialog.fileNumberSpinBox.value()-1 )
+        self.display_file()
+
+    def searchROIs(self):
+        if not hasattr(self, 'filenames_all'):
+            return
+        if len(self.file_dialog.ROI_key_lineedit.text())==0:
+            self.numFiles = len(self.filenames_all)
+            self.filenames = self.filenames_all
+        else:
+            filenames_filtered = []
+            for filename in self.filenames_all:
+                if self.file_dialog.ROI_key_lineedit.text() in filename:
+                    filenames_filtered.append(filename)
+            filenames_filtered = list(set(filenames_filtered))
+            self.numFiles = len(filenames_filtered)
+            self.filenames = filenames_filtered
+        self.updateFileDialog()
+
+    def print_all_filenames(self):
+        if not hasattr(self, 'filenames_all'):
+            return
+        print('All files in folder '+os.path.dirname(self.filenames_all[0]))
+        numFiles = len(self.filenames_all)
+        numDigits = len(str(numFiles))
+        for i in range(numFiles):
+            print('['+str(i+1).zfill(numDigits)+'/'+str(numFiles)+'] '+os.path.basename(self.filenames_all[i]))
+        print('\n')
+
+    def print_filtered_filenames(self):
+        if not hasattr(self, 'filenames'):
+            return
+        print('Filtered files in folder '+os.path.dirname(self.filenames[0]))
+        numFiles = len(self.filenames)
+        numDigits = len(str(numFiles))
+        for i in range(numFiles):
+            print('['+str(i+1).zfill(numDigits)+'/'+str(numFiles)+'] '+os.path.basename(self.filenames[i]))
+        print('\n')
+
+    def updateFileDialog(self):
+        self.file_dialog.PathQLabel.setText(self.folderpath)
+        self.file_dialog.fileNumberLabel.setText("/"+str(self.numFiles))
+        self.file_dialog.fileNumberSpinBox.setMaximum(self.numFiles)
+
+    def load_img_stack(self, filepath=None):
+        folder_open = False
+        if filepath is None:
+            filepath = io.FileDialog(self.folderpath, "open a tif file stack",
+                                    "Tif File (*.tif)").openFileNameDialog()
+            self.setWindowTitle(self.title_string + '-' + filepath)
+        else:
+            self.setWindowTitle(self.title_string + '-' + ' [' + str(self.currentFile+1) + '/' + str(self.numFiles) + '] '+ filepath)
+                                
+        # set paths and file names
         self.filepath = filepath
-        self.setWindowTitle(self.title_string + '-' + self.filepath)
         self.folderpath = os.path.dirname(self.filepath)
         filename = os.path.basename(self.filepath)
         (self.filename_base, ext) = os.path.splitext(filename)
@@ -1186,7 +1371,7 @@ class Window(QtWidgets.QMainWindow):
         self.multipeak_dialog.connect_signals()
 
     def set_img_stack(self):
-        print("Loading and processing the image ...")
+        print("\nLoading and processing the image ...")
         start_time = time.time()
         if self.image_meta["num_colors"] == 1 and self.numColors == "2":
             print("Only one channel exists in the tif stack!\n \
@@ -1234,8 +1419,8 @@ class Window(QtWidgets.QMainWindow):
         self.region_Loop_changed()
         self.region_noLoop_changed()
         self.set_scalebar()
-        print("took %s seconds!" % (time.time() - start_time))
-        print("the loading is DONE!")
+        # print("took %s seconds!" % (time.time() - start_time))
+        print("Loading done. Displaying file "+self.filepath)
 
     def load_img_seq(self):
         return
