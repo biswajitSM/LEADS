@@ -11,13 +11,14 @@ from ..kymograph import (read_img_seq, read_img_stack,
 from .. import kymograph
 from .. import io
 from ..utils import hdf5dict, makevideo, figure_params
-import os, sys, glob, time, subprocess, webbrowser
+import os, sys, glob, time, subprocess, webbrowser, shutil
 import yaml
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 plt.rcParams.update(figure_params.params_dict)
 from scipy.signal import savgol_filter
+import xlsxwriter
 from skimage.io.collection import alphanumeric_key
 import h5py
 import tqdm
@@ -68,7 +69,7 @@ class FileDialog(QtWidgets.QDialog):
         # qlineEdit for browsing the right directory
         self.PathQLabel = QtWidgets.QLabel()
         self.PathQLabel.setObjectName("PathQLabel")
-        general_grid.addWidget(self.PathQLabel, 0, 1)  
+        general_grid.addWidget(self.PathQLabel, 0, 1, 1, 2)  #row,col,rowspan,colspan
 
         self.BrowseButton = QtWidgets.QPushButton()
         self.BrowseButton.setObjectName("BrowseButton")
@@ -80,7 +81,7 @@ class FileDialog(QtWidgets.QDialog):
         general_grid.addWidget(QtWidgets.QLabel("key:"), 1, 0)
         self.ROI_key_lineedit = QtWidgets.QLineEdit()
         self.ROI_key_lineedit.textChanged.connect(self.window.searchROIs)
-        general_grid.addWidget(self.ROI_key_lineedit, 1, 1)  
+        general_grid.addWidget(self.ROI_key_lineedit, 1, 1, 1, 2)  #row,col,rowspan,colspan
 
         # let user input a ROI number
         self.fileNumberSpinBox = QtWidgets.QDoubleSpinBox()
@@ -105,7 +106,13 @@ class FileDialog(QtWidgets.QDialog):
         self.PrintFilteredFilenamesButton.setObjectName("PrintFilteredFilenamesButton")
         self.PrintFilteredFilenamesButton.setText("Print filtered filenames")
         self.PrintFilteredFilenamesButton.clicked.connect(self.window.print_filtered_filenames)
-        general_grid.addWidget(self.PrintFilteredFilenamesButton, 3, 1)          
+        general_grid.addWidget(self.PrintFilteredFilenamesButton, 3, 1)
+        
+        self.GenerateRoadblockExcelButton = QtWidgets.QPushButton()
+        self.GenerateRoadblockExcelButton.setObjectName("GenerateRoadblockExcelButton")
+        self.GenerateRoadblockExcelButton.setText("Generate overview excel (roadblocks)")
+        self.GenerateRoadblockExcelButton.clicked.connect(self.window.generate_roadblock_excel)
+        general_grid.addWidget(self.GenerateRoadblockExcelButton, 3, 2)   
 
         # self.pix_spinbox.setRange(0, int(1e3))
         # self.pix_spinbox.setSuffix(" nm")
@@ -1336,6 +1343,30 @@ class Window(QtWidgets.QMainWindow):
         self.file_dialog.PathQLabel.setText(self.folderpath)
         self.file_dialog.fileNumberLabel.setText("/"+str(self.numFiles))
         self.file_dialog.fileNumberSpinBox.setMaximum(self.numFiles)
+
+    def generate_roadblock_excel(self):
+        if not hasattr(self, 'filenames'):
+            return
+        xlxsName = os.path.join(self.folderpath, str(int(time.time()*1e7))+'_'+os.path.basename(os.path.dirname(self.folderpath))+'_overview.xlsx')
+        workbook = xlsxwriter.Workbook(xlxsName)
+        worksheet = workbook.add_worksheet()
+        keywords = ['#', 'Name', 'PASSED', 'Confidence/%', 'StallingForce/pN', 'end-to-end distance/px', 'time range', 'comments', 'folderpath']
+        bold = workbook.add_format({'bold': True})
+        row = 0
+        for col in range(len(keywords)):
+            # get_col_widths(dataframe)
+            worksheet.write(row, col, keywords[col], bold)
+            worksheet.set_column(col, col, 2*int(col==0 or col==1 or col==2 or col==7 )+len(keywords[col]))
+        count = 0
+        for filename in self.filenames:
+            row += 2
+            count += 1
+            worksheet.write(row, 0, count)
+            worksheet.write(row, 1, os.path.basename(filename))
+            worksheet.write(row, 8, os.path.dirname(filename))
+
+        workbook.close()
+
 
     def load_img_stack(self, filepath=None):
         folder_open = False
