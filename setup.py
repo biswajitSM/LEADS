@@ -39,7 +39,8 @@ setuptools.setup(
         "h5py",
         "tables",
         "qdarkstyle",
-        "colorharmonies"
+        "colorharmonies",
+        "xlsxwriter"
     ],
     dependency_links = ["git+https://github.com/pyqtgraph/pyqtgraph@master"]
 )
