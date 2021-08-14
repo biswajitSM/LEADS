@@ -1314,10 +1314,12 @@ class Window(QtWidgets.QMainWindow):
             for filename in self.filenames_all:
                 if self.file_dialog.ROI_key_lineedit.text() in filename:
                     filenames_filtered.append(filename)
-            filenames_filtered = list(set(filenames_filtered))
+            filenames_filtered = sorted(list(set(filenames_filtered)))
             self.numFiles = len(filenames_filtered)
             self.filenames = filenames_filtered
         self.updateFileDialog()
+        self.currentFile = 0
+        self.display_file()
 
     def print_all_filenames(self):
         if not hasattr(self, 'filenames_all'):
