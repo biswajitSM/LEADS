@@ -19,4 +19,4 @@ h5py
 tables
 qdarkstyle
 colorharmonies
-xlsxwriter
+XlsxWriter
