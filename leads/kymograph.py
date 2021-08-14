@@ -364,7 +364,7 @@ def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory
             gp_sel = peaks_linked_gb.get_group(name)
             axis.plot(gp_sel["frame"]*acqTime, gp_sel["x"], label=str(name), alpha=0.8)
             axis.text(gp_sel["frame"].values[0]*acqTime, np.average(gp_sel["x"].values[:10]), str(name))
-        plt.show()
+        plt.gcf().show()
     peaks_linked = peaks_linked.reset_index(drop=True)
     return peaks_linked
 
@@ -433,7 +433,7 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
     ax2.text(0.55, 0.9, 'Single molecules')
     ax3.text(0.55, 0.9, 'DNA punctas and SM')
     # fig.tight_layout()
-    plt.show()
+    plt.gcf().show()
     result = {
         'df_peaks_linked' : df_peaks_linked,
         'df_peaks_linked_sm' : df_peaks_linked_sm,
@@ -540,7 +540,7 @@ def link_multipeaks_2colrs(
     if plotting:
         ax.plot(coord_col1[:, 1], coord_col1[:, 0], '.b', alpha=0.1)
         ax.plot(coord_col2[:, 1], coord_col2[:, 0], '.r', alpha=0.1)
-        plt.show()
+        plt.gcf().show()
     return df_cols_linked
 
 

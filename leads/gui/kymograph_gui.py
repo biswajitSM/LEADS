@@ -58,7 +58,7 @@ class FileDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.window = parent
         self.setWindowTitle("Open folder and filter ROIs")
-        self.resize(500, 0)
+        self.resize(650, 0)
         self.setModal(False)
 
         vbox = QtWidgets.QVBoxLayout(self)
@@ -1375,9 +1375,9 @@ class Window(QtWidgets.QMainWindow):
 
     def load_img_stack(self, filepath=None):
         folder_open = False
-        if filepath is None:
-            filepath = io.FileDialog(self.folderpath, "open a tif file stack",
-                                    "Tif File (*.tif)").openFileNameDialog()
+        if filepath is None or (not filepath):
+            filepath = io.FileDialog(self.folderpath, "Open a tif file stack",
+                                    "Tif file (*.tif)").openFileNameDialog()
             self.setWindowTitle(self.title_string + '-' + filepath)
         else:
             self.setWindowTitle(self.title_string + '-' + ' [' + str(self.currentFile+1) + '/' + str(self.numFiles) + '] '+ filepath)
@@ -2274,7 +2274,7 @@ class Window(QtWidgets.QMainWindow):
     #     self.dna_infline_right.setPos(self.dna_ends[1])
     #     self.infline_loopkymo_top.setPos(self.dna_ends[0])
     #     self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
-    #     plt.show()
+    #     plt.gcf().show()
 
     def detect_loops(self):
         if self.plot_loop_errbar is None:
@@ -2420,7 +2420,7 @@ class Window(QtWidgets.QMainWindow):
             axis.axhline(self.dna_ends[0], 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
             axis.axhline(self.dna_ends[1], 0, self.all_peaks_dict["shape_kymo"][1], color='g', alpha=0.5)
             axis.set_ylim(0, self.all_peaks_dict["shape_kymo"][0])
-            plt.show()
+            plt.gcf().show()
 
     def matplot_loop_kinetics(self, ax=None):
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
@@ -2493,7 +2493,7 @@ class Window(QtWidgets.QMainWindow):
         ax.set_xlabel('time/s')
         ax.set_ylabel('DNA/kb')
         ax.legend()
-        plt.show()
+        plt.gcf().show()
 
     def fit_loop_kinetics(self):
         # from .kinetics_fitting import KineticsFitting
@@ -2519,7 +2519,7 @@ class Window(QtWidgets.QMainWindow):
         ax.set_xlabel('Frame Number')
         ax.set_ylabel('pixels')
         ax.legend()
-        plt.show()
+        plt.gcf().show()
 
     def plottype_multipeak(self):
         plt.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
@@ -2581,7 +2581,7 @@ class Window(QtWidgets.QMainWindow):
             ax.spines["left"].set_color("m")
             ax.set_ylabel("Moving MSD(" + str(n) + " points)")
             ax.legend()
-            plt.show()
+            plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDsavgol":
             print("plot MSD savgol")
             _, ax = plt.subplots()
@@ -2638,7 +2638,7 @@ class Window(QtWidgets.QMainWindow):
             ax.spines["left"].set_color("darkslategrey")
             ax.set_ylabel(r"MSD(${\mu} m^2$)", color='darkslategrey')
             ax.legend(labelcolor='linecolor')
-            plt.show()
+            plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
             print("plot MSD")
             _, ax = plt.subplots()
@@ -2651,7 +2651,7 @@ class Window(QtWidgets.QMainWindow):
             ax.set_ylabel("MSD")
             ax.set_yscale('log')
             ax.legend()
-            plt.show()
+            plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime-AllPeaks":
             if self.numColors == "1":
                 fig,(ax1) = plt.subplots(nrows=1, ncols=1)
@@ -2672,7 +2672,7 @@ class Window(QtWidgets.QMainWindow):
                                 max_lagtime=100, axis=ax2)
                 ax1.set_title("Color 1")
                 ax2.set_title("Color 2")
-            plt.show()
+            plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol1":
             print("plot TimeTrace")
             _, ax = plt.subplots()
@@ -2683,7 +2683,7 @@ class Window(QtWidgets.QMainWindow):
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
-            plt.show()
+            plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol2" and self.numColors == "2":
             print("plot TimeTrace")
             _, ax = plt.subplots()
@@ -2694,7 +2694,7 @@ class Window(QtWidgets.QMainWindow):
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
-            plt.show()
+            plt.gcf().show()
 
 
     def save_hdf5(self, filepath_hdf5):
