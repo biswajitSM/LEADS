@@ -7,6 +7,7 @@ from scipy.optimize import curve_fit
 from scipy.ndimage import median_filter, white_tophat, black_tophat
 from scipy.signal import find_peaks, savgol_filter, peak_prominences
 from scipy.spatial import cKDTree
+from scipy import interpolate
 import tifffile
 from skimage.io.collection import alphanumeric_key
 import pims
@@ -110,10 +111,14 @@ def find_ends_canny(dna_kym, sigma=2, threshold_min=0.1, threshold_max=None, plo
     return left_ends, right_ends
 
 
-def find_ends_supergauss(line_data, gauss_length=10, gauss_order=6, threshold_Imax=0.5, plotting=True):
+def find_ends_supergauss(line_data, gauss_length=10, gauss_order=6, fraction_of_max=1, threshold_Imax=0.5, plotting=True):
+    
     xdata = np.arange(len(line_data))
     line_data_temp = line_data
     line_data = np.array([float(value)/max(line_data_temp) for value in line_data_temp])
+    
+    plt.plot(xdata, line_data)
+    
     initial_guess = [.2,1.,np.median(xdata),gauss_length, gauss_order]
     constraints =([0, 0, 0, gauss_length, gauss_order],[np.inf, np.inf, np.inf, np.inf, np.inf])
     popt, pcov = curve_fit(super_gauss_function, xdata, line_data,
@@ -121,20 +126,25 @@ def find_ends_supergauss(line_data, gauss_length=10, gauss_order=6, threshold_Im
     fine_scale_x = np.linspace(xdata[0],xdata[-1],len(xdata)*1000)
     maximum = max(super_gauss_function(xdata, *popt))
     #--- this is the threshold
-    intersection_value = maximum-(maximum - popt[0])*threshold_Imax
+    # intersection_value = maximum-(maximum - popt[0])*threshold_Imax
+    # linedata = [intersection_value for x in fine_scale_x]
+    # index = np.argwhere(np.diff(np.sign(linedata - super_gauss_function(fine_scale_x, *popt)))).flatten()
+    
+    # just take where the supergauss is fraction_of_max*popt[0]
+    intersection_value = maximum-(maximum - popt[0])*(1-fraction_of_max)
     linedata = [intersection_value for x in fine_scale_x]
     index = np.argwhere(np.diff(np.sign(linedata - super_gauss_function(fine_scale_x, *popt)))).flatten()
     if len(index) != 2:
         print('WARNING: no sensible fit found which intersects with data.')    
     # index_intersection = [int(fine_scale_x[index[0]]), int(fine_scale_x[index[1]])]
     #-- Here is where we ensure two crossings and select for length
-     
-    plt.plot(xdata, line_data)
-    plt.plot(fine_scale_x, super_gauss_function(fine_scale_x, *popt), 'g--')
+    plt.plot(fine_scale_x, super_gauss_function(fine_scale_x, *popt), 'r') 
     if len(index)==2 and plotting:
         index_intersection = [fine_scale_x[index[0]], fine_scale_x[index[1]]]
         plt.plot(index_intersection,
             super_gauss_function([fine_scale_x[index[0]],fine_scale_x[index[1]]], *popt), 'ro')
+        plt.plot([index_intersection[0], index_intersection[0]], [0, 1], 'r')
+        plt.plot([index_intersection[1], index_intersection[1]], [0, 1], 'r')
         formula = '$'\
             +str(np.round(popt[1], decimals=1))\
             +'\cdot e^{-(\\frac{(x-'\
@@ -154,6 +164,70 @@ def find_ends_supergauss(line_data, gauss_length=10, gauss_order=6, threshold_Im
 def super_gauss_function(x, floor, amplitude, mean, sigma, power):
     '''https://en.wikipedia.org/wiki/Gaussian_function'''
     return floor + amplitude*np.exp((-((x-mean)**2/(2*sigma**2))**power))
+
+def OneGaussian(x,mu,sigma):
+    # This is the equation for a normalized1D gaussian peak value one
+    return np.exp(-((x-mu)**2)/(2*sigma**2))
+
+def find_ends_peakPeeling(line_data, noPeaks=10, PSF=4, amplitude=0.9, residue=0.1, plotting=True):
+    # PSF is given in pixel of the original supplied data
+    
+    xdata = np.arange(len(line_data))
+    line_data_temp = line_data
+    line_data = np.array([float(value)/max(line_data_temp) for value in line_data_temp])
+    splineParameters = interpolate.splrep(xdata, line_data)
+    numInterpolationPoints = len(xdata)*100
+    xdata_interpolated = np.linspace(xdata[0], xdata[-1], numInterpolationPoints, endpoint=True)
+    line_data = interpolate.splev(xdata_interpolated, splineParameters, der=0)
+
+    
+    plt.plot(xdata_interpolated, line_data)
+    
+
+    stopit = False
+    PeelCurve = line_data
+    buildcurve = np.zeros(len(line_data))
+    peakcount = 0
+    CoveredFraction = []
+    Xpos = []
+    singleGaussians = []
+
+
+    while ~stopit:
+        PeakVal = np.max(PeelCurve)
+        Xpos.append( xdata_interpolated[np.argmax(PeelCurve)] )
+        OneGaussianCurve = amplitude * PeakVal * OneGaussian(xdata_interpolated, Xpos[-1], PSF)    
+        PeelCurve  = PeelCurve  - OneGaussianCurve
+        buildcurve = buildcurve + OneGaussianCurve
+        singleGaussians.append( OneGaussianCurve )
+        CoveredFraction.append( np.sum(buildcurve)/np.sum(line_data) )
+        if peakcount > 0:               
+            RelChange = (CoveredFraction[-1]-CoveredFraction[-2]) / CoveredFraction[-1]
+            stopit = ( (RelChange<residue) or (peakcount>noPeaks) and (peakcount>=1) )
+        
+        peakcount += 1
+    ResidualCurve = line_data - buildcurve    
+
+
+    if len(Xpos)>1:
+        dna_ends_xdata_interpolated_px = np.array([\
+            np.min(Xpos), \
+            np.max(Xpos)]) 
+        if plotting:
+            plt.plot(xdata_interpolated, buildcurve, 'g')
+            plt.plot(xdata_interpolated, ResidualCurve, 'k--', alpha=0.5)
+            for singleGaussian in singleGaussians:
+                plt.plot(xdata_interpolated, singleGaussian, 'k', alpha=0.5)
+            plt.plot([dna_ends_xdata_interpolated_px[0], dna_ends_xdata_interpolated_px[0]], [0, 1], 'g')
+            plt.plot([dna_ends_xdata_interpolated_px[1], dna_ends_xdata_interpolated_px[1]], [0, 1], 'g')
+            lower_end = np.where(xdata_interpolated==dna_ends_xdata_interpolated_px[0])
+            upper_end = np.where(xdata_interpolated==dna_ends_xdata_interpolated_px[1])
+            plt.plot(dna_ends_xdata_interpolated_px, [line_data[lower_end], line_data[upper_end]], 'go')
+        
+        return dna_ends_xdata_interpolated_px
+
+    else:
+        return None
 
 
 def peakfinder_savgol(kym_arr, skip_left=None, skip_right=None,

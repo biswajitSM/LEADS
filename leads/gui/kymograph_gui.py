@@ -542,67 +542,179 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
         # it takes the Canvas widget and a parent
         self.toolbar = NavigationToolbar(self.canvas, self)
 
-        statusGroupBox = QtWidgets.QGroupBox("Formula")
-        hLayoutFormula = QtWidgets.QHBoxLayout(statusGroupBox)
+        statusSuperGaussGroupBox = QtWidgets.QGroupBox("Supergauss fit output")
+        hLayoutSuperGaussOutput = QtWidgets.QHBoxLayout(statusSuperGaussGroupBox)
         self.superGaussianStatusLabel = QtWidgets.QLabel("Idle")
-        hLayoutFormula.addWidget(self.superGaussianStatusLabel)
+        hLayoutSuperGaussOutput.addWidget(self.superGaussianStatusLabel)
 
         # spin boxes and labels for supergauss parameters        
-        constraintGroupBox = QtWidgets.QGroupBox("Constraints")
-        hLayout = QtWidgets.QHBoxLayout(constraintGroupBox)
+        superGaussGroupBox = QtWidgets.QGroupBox("Supergauss parameters")
+        hLayoutSuperGauss = QtWidgets.QHBoxLayout(superGaussGroupBox)
+
+        self.doSuperGaussFitCheckBox = QtWidgets.QCheckBox("Fit supergauss?")
+        self.doSuperGaussFitCheckBox.setStyleSheet("color: red")
+        hLayoutSuperGauss.addWidget(self.doSuperGaussFitCheckBox)
 
         self.superGaussianWidthLabel = QtWidgets.QLabel("Width:")
-        hLayout.addWidget(self.superGaussianWidthLabel)
+        hLayoutSuperGauss.addWidget(self.superGaussianWidthLabel)
 
         self.superGaussianWidthSpinBox = QtWidgets.QSpinBox()        
         self.superGaussianWidthSpinBox.setRange(1, int(1e5))
         self.superGaussianWidthSpinBox.setValue(20)
         self.superGaussianWidthSpinBox.setKeyboardTracking(False)
-        hLayout.addWidget(self.superGaussianWidthSpinBox)
+        hLayoutSuperGauss.addWidget(self.superGaussianWidthSpinBox)
 
         self.superGaussianOrderLabel = QtWidgets.QLabel("Order:")
-        hLayout.addWidget(self.superGaussianOrderLabel)
+        hLayoutSuperGauss.addWidget(self.superGaussianOrderLabel)
 
         self.superGaussianOrderSpinBox = QtWidgets.QSpinBox()        
         self.superGaussianOrderSpinBox.setRange(1, int(99))
         self.superGaussianOrderSpinBox.setValue(6)
         self.superGaussianOrderSpinBox.setKeyboardTracking(False)
-        hLayout.addWidget(self.superGaussianOrderSpinBox)
+        hLayoutSuperGauss.addWidget(self.superGaussianOrderSpinBox)
 
-        self.superGaussianWidthSpinBox.valueChanged.connect(self.find_dna_ends)
-        self.superGaussianOrderSpinBox.valueChanged.connect(self.find_dna_ends)
+        self.PeakPeelingAmplitudeLabel = QtWidgets.QLabel("Fracion of max.:")
+        hLayoutSuperGauss.addWidget(self.PeakPeelingAmplitudeLabel)
+
+        self.PeakPeelingAmplitudeSpinBox = QtWidgets.QDoubleSpinBox()        
+        self.PeakPeelingAmplitudeSpinBox.setRange(0.001, 1)
+        self.PeakPeelingAmplitudeSpinBox.setValue(0.999)
+        self.PeakPeelingAmplitudeSpinBox.setSingleStep(0.001)
+        self.PeakPeelingAmplitudeSpinBox.setDecimals(3)
+        self.PeakPeelingAmplitudeSpinBox.setKeyboardTracking(False)
+        hLayoutSuperGauss.addWidget(self.PeakPeelingAmplitudeSpinBox)
+
+        self.superGaussianWidthSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
+        self.superGaussianOrderSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
+        self.PeakPeelingAmplitudeSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
+
+        # spin boxes and labels for peak peeling parameters        
+        peakPeelingGroupBox = QtWidgets.QGroupBox("Peak peeling parameters")
+        hLayoutPeakPeeling = QtWidgets.QHBoxLayout(peakPeelingGroupBox)
+
+        self.doPeakPeelingCheckBox = QtWidgets.QCheckBox("Peak peeling?")
+        self.doPeakPeelingCheckBox.setStyleSheet("color: green")
+        hLayoutPeakPeeling.addWidget(self.doPeakPeelingCheckBox)
+
+        self.PeakPeelingNoPeaksLabel = QtWidgets.QLabel("Max Peak No.:")
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingNoPeaksLabel)
+
+        self.PeakPeelingNoPeaksSpinBox = QtWidgets.QSpinBox()        
+        self.PeakPeelingNoPeaksSpinBox.setRange(1, int(100))
+        self.PeakPeelingNoPeaksSpinBox.setValue(10)
+        self.PeakPeelingNoPeaksSpinBox.setKeyboardTracking(False)
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingNoPeaksSpinBox)
+
+        self.PeakPeelingPSFLabel = QtWidgets.QLabel("PSF/nm:")
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingPSFLabel)
+
+        self.PeakPeelingPSFSpinBox = QtWidgets.QSpinBox()        
+        self.PeakPeelingPSFSpinBox.setRange(1, 10000)
+        self.PeakPeelingPSFSpinBox.setValue(400)
+        self.PeakPeelingAmplitudeSpinBox.setSingleStep(10)
+        self.PeakPeelingPSFSpinBox.setKeyboardTracking(False)
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingPSFSpinBox)
+
+        self.PeakPeelingAmplitudeLabel = QtWidgets.QLabel("amplitude:")
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingAmplitudeLabel)
+
+        self.PeakPeelingAmplitudeSpinBox = QtWidgets.QDoubleSpinBox()        
+        self.PeakPeelingAmplitudeSpinBox.setRange(0, 1)
+        self.PeakPeelingAmplitudeSpinBox.setValue(0.9)
+        self.PeakPeelingAmplitudeSpinBox.setSingleStep(0.05)
+        self.PeakPeelingAmplitudeSpinBox.setDecimals(2)
+        self.PeakPeelingAmplitudeSpinBox.setKeyboardTracking(False)
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingAmplitudeSpinBox)
+
+        self.PeakPeelingResidueLabel = QtWidgets.QLabel("residual:")
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingResidueLabel)
+
+        self.PeakPeelingResidueSpinBox = QtWidgets.QDoubleSpinBox()        
+        self.PeakPeelingResidueSpinBox.setRange(0.001, 1)
+        self.PeakPeelingResidueSpinBox.setValue(0.1)
+        self.PeakPeelingResidueSpinBox.setSingleStep(0.05)
+        self.PeakPeelingResidueSpinBox.setDecimals(2)
+        self.PeakPeelingResidueSpinBox.setKeyboardTracking(False)
+        hLayoutPeakPeeling.addWidget(self.PeakPeelingResidueSpinBox)
+
+        self.PeakPeelingNoPeaksSpinBox.valueChanged.connect(self.find_dna_ends_peakPeeling)
+        self.PeakPeelingPSFSpinBox.valueChanged.connect(self.find_dna_ends_peakPeeling)
+        self.PeakPeelingAmplitudeSpinBox.valueChanged.connect(self.find_dna_ends_peakPeeling)
+        self.PeakPeelingResidueSpinBox.valueChanged.connect(self.find_dna_ends_peakPeeling)
+
+        # status for peak peeling
+        statusPeakPeelingGroupBox = QtWidgets.QGroupBox("Peak peeling output")
+        hLayoutPeakPeelingOutput = QtWidgets.QHBoxLayout(statusPeakPeelingGroupBox)
+        self.peakPeelingStatusLabel = QtWidgets.QLabel("Peak peeling: Idle")
+        hLayoutPeakPeelingOutput.addWidget(self.peakPeelingStatusLabel)
 
         # set the layout
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)        
-        layout.addWidget(constraintGroupBox)
-        layout.addWidget(statusGroupBox)
+        layout.addWidget(superGaussGroupBox)
+        layout.addWidget(peakPeelingGroupBox)
+        layout.addWidget(statusSuperGaussGroupBox)
+        layout.addWidget(statusPeakPeelingGroupBox)
         self.setLayout(layout)
-        self.find_dna_ends() # do it the first time with default parameters
+        self.find_dna_ends_supergauss() # do it the first time with default parameters
+        self.find_dna_ends_peakPeeling() # do it the first time with default parameters
 
-    def find_dna_ends(self):
+    def find_dna_ends_supergauss(self):
+        if not self.doSuperGaussFitCheckBox.isChecked():
+            return
         try:
             self.figure.clear()
             self.canvas.draw()        
-            non_loop_dna_avg = self.window.kymo_left_noLoop.mean(axis=0)
-            self.gauss_length = self.superGaussianWidthSpinBox.value()
-            self.gauss_order  = self.superGaussianOrderSpinBox.value()
+            non_loop_dna_avg       = self.window.kymo_left_noLoop.mean(axis=0)
+            self.gauss_length      = self.superGaussianWidthSpinBox.value()
+            self.gauss_order       = self.superGaussianOrderSpinBox.value()
+            self.fraction_of_max   = self.PeakPeelingAmplitudeSpinBox.value()
             self.dna_ends, formula = kymograph.find_ends_supergauss(non_loop_dna_avg, gauss_length=self.gauss_length, \
-                gauss_order=self.gauss_order, threshold_Imax=0.5, plotting=True)
+                gauss_order=self.gauss_order, fraction_of_max=self.fraction_of_max, threshold_Imax=0.5, plotting=True)
             self.canvas.draw()
             if self.dna_ends is not None:
                 self.window.dna_ends_changed()
-                self.superGaussianStatusLabel.setText(formula)
 
                 self.figure.suptitle(formula)
-                self.superGaussianStatusLabel.setText("Fit found.")
+                dna_length = np.abs(np.diff(self.dna_ends)) * self.window.pixelSize
+                self.superGaussianStatusLabel.setText("Supergauss fit found. DNA length: "+"{:.2f}".format(dna_length)+"\mum")
                 self.superGaussianStatusLabel.setStyleSheet("color: green")
                 self.canvas.draw()
             
         except:
-            self.superGaussianStatusLabel.setText("No suitable fit found.")
+            self.superGaussianStatusLabel.setText("No suitable supergauss fit found.")
             self.superGaussianStatusLabel.setStyleSheet("color: red")
+            pass
+        self.canvas.draw()
+
+
+    def find_dna_ends_peakPeeling(self):
+        if not self.doPeakPeelingCheckBox.isChecked():
+            return
+        try:
+            self.figure.clear()
+            self.canvas.draw()        
+            non_loop_dna_avg           = self.window.kymo_left_noLoop.mean(axis=0)
+            self.peakPeeling_NoPeaks   = self.PeakPeelingNoPeaksSpinBox.value()
+            self.peakPeeling_PSF       = self.PeakPeelingPSFSpinBox.value()
+            self.peakPeeling_amplitude = self.PeakPeelingAmplitudeSpinBox.value()
+            self.peakPeeling_residue   = self.PeakPeelingResidueSpinBox.value()
+            self.dna_ends = kymograph.find_ends_peakPeeling(non_loop_dna_avg, noPeaks=self.peakPeeling_NoPeaks, \
+                PSF=self.peakPeeling_PSF/(self.window.pixelSize*1e3), amplitude=self.peakPeeling_amplitude, \
+                    residue=self.peakPeeling_residue, plotting=True)
+            self.canvas.draw()
+            if self.dna_ends is not None:
+                self.window.dna_ends_changed()
+
+                dna_length = np.abs(np.diff(self.dna_ends)) * self.window.pixelSize
+                self.peakPeelingStatusLabel.setText("Peak peeling result found. DNA length: "+"{:.2f}".format(dna_length)+"\mum")
+                self.peakPeelingStatusLabel.setStyleSheet("color: green")
+                self.canvas.draw()
+            
+        except:
+            self.peakPeelingStatusLabel.setText("No suitable peak peeling result found.")
+            self.peakPeelingStatusLabel.setStyleSheet("color: red")
             pass
         self.canvas.draw()
 
@@ -775,18 +887,6 @@ class MainWidget(QtWidgets.QWidget):
         grid_btn1.addWidget(self.detectLoopsBtn, 0, 0, 1, 1)
         self.findDNAendsBtn = QtWidgets.QPushButton("Find DNA Ends")
         grid_btn1.addWidget(self.findDNAendsBtn, 0, 1, 1, 1)
-
-        # self.superGaussianWidthSpinBox = QtWidgets.QSpinBox()        
-        # self.superGaussianWidthSpinBox.setRange(1, int(1e5))
-        # self.superGaussianWidthSpinBox.setValue(20)
-        # self.superGaussianWidthSpinBox.setKeyboardTracking(False)
-        # grid_btn1.addWidget(self.superGaussianWidthSpinBox, 0, 2, 1, 1)
-
-        # self.superGaussianOrderSpinBox = QtWidgets.QSpinBox()        
-        # self.superGaussianOrderSpinBox.setRange(1, int(99))
-        # self.superGaussianOrderSpinBox.setValue(6)
-        # self.superGaussianOrderSpinBox.setKeyboardTracking(False)
-        # grid_btn1.addWidget(self.superGaussianOrderSpinBox, 0, 3, 1, 1)
 
         self.processImageCheckBox = QtWidgets.QCheckBox("Process Image")
         self.processImageCheckBox.setChecked(True)
@@ -984,7 +1084,6 @@ class Window(QtWidgets.QMainWindow):
         self.ui.frameEndSpinBox.valueChanged.connect(self.frames_changed)
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
-        # self.ui.findDNAendsBtn.clicked.connect(self.find_dna_ends)
         self.ui.findDNAendsBtn.clicked.connect(self.supergauss_dialog.show)
 
     def connect_signals(self):
@@ -2266,17 +2365,6 @@ class Window(QtWidgets.QMainWindow):
         self.dna_infline_right.setPos(self.dna_ends[1])
         self.infline_loopkymo_top.setPos(self.dna_ends[0])
         self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
-    # def find_dna_ends(self):
-    #     non_loop_dna_avg = self.kymo_left_noLoop.mean(axis=0)
-    #     self.gauss_length = self.ui.superGaussianWidthSpinBox.value()
-    #     self.gauss_order  = self.ui.superGaussianOrderSpinBox.value()
-    #     self.dna_ends = kymograph.find_ends_supergauss(non_loop_dna_avg, gauss_length=self.gauss_length, \
-    #         gauss_order=self.gauss_order, threshold_Imax=0.5, plotting=True)
-    #     self.dna_infline_left.setPos(self.dna_ends[0])
-    #     self.dna_infline_right.setPos(self.dna_ends[1])
-    #     self.infline_loopkymo_top.setPos(self.dna_ends[0])
-    #     self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
-    #     plt.gcf().show()
 
     def detect_loops(self):
         if self.plot_loop_errbar is None:
