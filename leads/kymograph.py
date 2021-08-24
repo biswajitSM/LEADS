@@ -179,7 +179,12 @@ def find_ends_peakPeeling(line_data, noPeaks=10, PSF=4, amplitude=0.9, residue=0
     numInterpolationPoints = len(xdata)*100
     xdata_interpolated = np.linspace(xdata[0], xdata[-1], numInterpolationPoints, endpoint=True)
     line_data = interpolate.splev(xdata_interpolated, splineParameters, der=0)
-
+    if residue < 1e-6:
+        residue = 0.005
+        print("WARNING PEAK PEELING: Residue has been set to low value. Danger of an infinite loop. Setting it to 0.005.")
+    if noPeaks > 50:
+        noPeaks = 50
+        print("WARNING PEAK PEELING: Max number of peaks has been set to a large value. Danger of an infinite loop. Setting it to 50.")
     
     plt.plot(xdata_interpolated, line_data)
     
@@ -193,7 +198,7 @@ def find_ends_peakPeeling(line_data, noPeaks=10, PSF=4, amplitude=0.9, residue=0
     singleGaussians = []
 
 
-    while ~stopit:
+    while not stopit:
         PeakVal = np.max(PeelCurve)
         Xpos.append( xdata_interpolated[np.argmax(PeelCurve)] )
         OneGaussianCurve = amplitude * PeakVal * OneGaussian(xdata_interpolated, Xpos[-1], PSF)    
@@ -206,10 +211,12 @@ def find_ends_peakPeeling(line_data, noPeaks=10, PSF=4, amplitude=0.9, residue=0
             stopit = ( (RelChange<residue) or (peakcount>noPeaks) and (peakcount>=1) )
         
         peakcount += 1
+        if (peakcount >= noPeaks):
+            stopit = True
     ResidualCurve = line_data - buildcurve    
 
 
-    if len(Xpos)>1:
+    if len(Xpos) > 1:
         dna_ends_xdata_interpolated_px = np.array([\
             np.min(Xpos), \
             np.max(Xpos)]) 
@@ -225,7 +232,6 @@ def find_ends_peakPeeling(line_data, noPeaks=10, PSF=4, amplitude=0.9, residue=0
             plt.plot(dna_ends_xdata_interpolated_px, [line_data[lower_end], line_data[upper_end]], 'go')
         
         return dna_ends_xdata_interpolated_px
-
     else:
         return None
 

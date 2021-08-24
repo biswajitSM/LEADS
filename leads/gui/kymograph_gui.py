@@ -544,49 +544,51 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
 
         statusSuperGaussGroupBox = QtWidgets.QGroupBox("Supergauss fit output")
         hLayoutSuperGaussOutput = QtWidgets.QHBoxLayout(statusSuperGaussGroupBox)
-        self.superGaussianStatusLabel = QtWidgets.QLabel("Idle")
-        hLayoutSuperGaussOutput.addWidget(self.superGaussianStatusLabel)
+        self.superGaussStatusLabel = QtWidgets.QLabel("Idle")
+        hLayoutSuperGaussOutput.addWidget(self.superGaussStatusLabel)
 
         # spin boxes and labels for supergauss parameters        
         superGaussGroupBox = QtWidgets.QGroupBox("Supergauss parameters")
         hLayoutSuperGauss = QtWidgets.QHBoxLayout(superGaussGroupBox)
 
         self.doSuperGaussFitCheckBox = QtWidgets.QCheckBox("Fit supergauss?")
+        self.doSuperGaussFitCheckBox.setChecked(True)
         self.doSuperGaussFitCheckBox.setStyleSheet("color: red")
         hLayoutSuperGauss.addWidget(self.doSuperGaussFitCheckBox)
 
-        self.superGaussianWidthLabel = QtWidgets.QLabel("Width:")
-        hLayoutSuperGauss.addWidget(self.superGaussianWidthLabel)
+        self.superGaussWidthLabel = QtWidgets.QLabel("Width:")
+        hLayoutSuperGauss.addWidget(self.superGaussWidthLabel)
 
-        self.superGaussianWidthSpinBox = QtWidgets.QSpinBox()        
-        self.superGaussianWidthSpinBox.setRange(1, int(1e5))
-        self.superGaussianWidthSpinBox.setValue(20)
-        self.superGaussianWidthSpinBox.setKeyboardTracking(False)
-        hLayoutSuperGauss.addWidget(self.superGaussianWidthSpinBox)
+        self.superGaussWidthSpinBox = QtWidgets.QSpinBox()        
+        self.superGaussWidthSpinBox.setRange(1, int(1e5))
+        self.superGaussWidthSpinBox.setValue(20)
+        self.superGaussWidthSpinBox.setKeyboardTracking(False)
+        hLayoutSuperGauss.addWidget(self.superGaussWidthSpinBox)
 
-        self.superGaussianOrderLabel = QtWidgets.QLabel("Order:")
-        hLayoutSuperGauss.addWidget(self.superGaussianOrderLabel)
+        self.superGaussOrderLabel = QtWidgets.QLabel("Order:")
+        hLayoutSuperGauss.addWidget(self.superGaussOrderLabel)
 
-        self.superGaussianOrderSpinBox = QtWidgets.QSpinBox()        
-        self.superGaussianOrderSpinBox.setRange(1, int(99))
-        self.superGaussianOrderSpinBox.setValue(6)
-        self.superGaussianOrderSpinBox.setKeyboardTracking(False)
-        hLayoutSuperGauss.addWidget(self.superGaussianOrderSpinBox)
+        self.superGaussOrderSpinBox = QtWidgets.QSpinBox()        
+        self.superGaussOrderSpinBox.setRange(1, int(99))
+        self.superGaussOrderSpinBox.setValue(6)
+        self.superGaussOrderSpinBox.setKeyboardTracking(False)
+        hLayoutSuperGauss.addWidget(self.superGaussOrderSpinBox)
 
         self.PeakPeelingAmplitudeLabel = QtWidgets.QLabel("Fracion of max.:")
         hLayoutSuperGauss.addWidget(self.PeakPeelingAmplitudeLabel)
 
-        self.PeakPeelingAmplitudeSpinBox = QtWidgets.QDoubleSpinBox()        
-        self.PeakPeelingAmplitudeSpinBox.setRange(0.001, 1)
-        self.PeakPeelingAmplitudeSpinBox.setValue(0.999)
-        self.PeakPeelingAmplitudeSpinBox.setSingleStep(0.001)
-        self.PeakPeelingAmplitudeSpinBox.setDecimals(3)
-        self.PeakPeelingAmplitudeSpinBox.setKeyboardTracking(False)
-        hLayoutSuperGauss.addWidget(self.PeakPeelingAmplitudeSpinBox)
+        self.superGaussFractionMaxSpinBox = QtWidgets.QDoubleSpinBox()        
+        self.superGaussFractionMaxSpinBox.setRange(0.001, 1)
+        self.superGaussFractionMaxSpinBox.setValue(0.999)
+        self.superGaussFractionMaxSpinBox.setSingleStep(0.001)
+        self.superGaussFractionMaxSpinBox.setDecimals(3)
+        self.superGaussFractionMaxSpinBox.setKeyboardTracking(False)
+        hLayoutSuperGauss.addWidget(self.superGaussFractionMaxSpinBox)
 
-        self.superGaussianWidthSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
-        self.superGaussianOrderSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
-        self.PeakPeelingAmplitudeSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
+        self.superGaussWidthSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
+        self.superGaussOrderSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
+        self.superGaussFractionMaxSpinBox.valueChanged.connect(self.find_dna_ends_supergauss)
+        self.doSuperGaussFitCheckBox.stateChanged.connect(self.find_dna_ends_supergauss)
 
         # spin boxes and labels for peak peeling parameters        
         peakPeelingGroupBox = QtWidgets.QGroupBox("Peak peeling parameters")
@@ -611,7 +613,7 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
         self.PeakPeelingPSFSpinBox = QtWidgets.QSpinBox()        
         self.PeakPeelingPSFSpinBox.setRange(1, 10000)
         self.PeakPeelingPSFSpinBox.setValue(400)
-        self.PeakPeelingAmplitudeSpinBox.setSingleStep(10)
+        self.PeakPeelingPSFSpinBox.setSingleStep(10)
         self.PeakPeelingPSFSpinBox.setKeyboardTracking(False)
         hLayoutPeakPeeling.addWidget(self.PeakPeelingPSFSpinBox)
 
@@ -641,6 +643,7 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
         self.PeakPeelingPSFSpinBox.valueChanged.connect(self.find_dna_ends_peakPeeling)
         self.PeakPeelingAmplitudeSpinBox.valueChanged.connect(self.find_dna_ends_peakPeeling)
         self.PeakPeelingResidueSpinBox.valueChanged.connect(self.find_dna_ends_peakPeeling)
+        self.doPeakPeelingCheckBox.stateChanged.connect(self.find_dna_ends_peakPeeling)
 
         # status for peak peeling
         statusPeakPeelingGroupBox = QtWidgets.QGroupBox("Peak peeling output")
@@ -657,8 +660,18 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
         layout.addWidget(statusSuperGaussGroupBox)
         layout.addWidget(statusPeakPeelingGroupBox)
         self.setLayout(layout)
+
+    def init(self):
+        try:
+            non_loop_dna_avg = self.window.kymo_left_noLoop.mean(axis=0)
+            plt.plot(non_loop_dna_avg)
+            self.canvas.draw()
+        except:
+            pass
         self.find_dna_ends_supergauss() # do it the first time with default parameters
-        self.find_dna_ends_peakPeeling() # do it the first time with default parameters
+        # self.find_dna_ends_peakPeeling() # do it the first time with default parameters
+        self.show()
+
 
     def find_dna_ends_supergauss(self):
         if not self.doSuperGaussFitCheckBox.isChecked():
@@ -667,9 +680,9 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
             self.figure.clear()
             self.canvas.draw()        
             non_loop_dna_avg       = self.window.kymo_left_noLoop.mean(axis=0)
-            self.gauss_length      = self.superGaussianWidthSpinBox.value()
-            self.gauss_order       = self.superGaussianOrderSpinBox.value()
-            self.fraction_of_max   = self.PeakPeelingAmplitudeSpinBox.value()
+            self.gauss_length      = self.superGaussWidthSpinBox.value()
+            self.gauss_order       = self.superGaussOrderSpinBox.value()
+            self.fraction_of_max   = self.superGaussFractionMaxSpinBox.value()
             self.dna_ends, formula = kymograph.find_ends_supergauss(non_loop_dna_avg, gauss_length=self.gauss_length, \
                 gauss_order=self.gauss_order, fraction_of_max=self.fraction_of_max, threshold_Imax=0.5, plotting=True)
             self.canvas.draw()
@@ -677,14 +690,15 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
                 self.window.dna_ends_changed()
 
                 self.figure.suptitle(formula)
-                dna_length = np.abs(np.diff(self.dna_ends)) * self.window.pixelSize
-                self.superGaussianStatusLabel.setText("Supergauss fit found. DNA length: "+"{:.2f}".format(dna_length)+"\mum")
-                self.superGaussianStatusLabel.setStyleSheet("color: green")
+                dna_length = np.abs(np.diff(self.dna_ends))
+                self.superGaussStatusLabel.setText("Supergauss fit found. DNA length: "+"{:.2f}".format(dna_length[0] * self.window.pixelSize)+" microns ("\
+                    +"{:.2f}".format(dna_length[0])+" pixels)")
+                self.superGaussStatusLabel.setStyleSheet("color: green")
                 self.canvas.draw()
             
         except:
-            self.superGaussianStatusLabel.setText("No suitable supergauss fit found.")
-            self.superGaussianStatusLabel.setStyleSheet("color: red")
+            self.superGaussStatusLabel.setText("No suitable supergauss fit found.")
+            self.superGaussStatusLabel.setStyleSheet("color: red")
             pass
         self.canvas.draw()
 
@@ -707,8 +721,9 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
             if self.dna_ends is not None:
                 self.window.dna_ends_changed()
 
-                dna_length = np.abs(np.diff(self.dna_ends)) * self.window.pixelSize
-                self.peakPeelingStatusLabel.setText("Peak peeling result found. DNA length: "+"{:.2f}".format(dna_length)+"\mum")
+                dna_length = np.abs(np.diff(self.dna_ends))
+                self.peakPeelingStatusLabel.setText("Peak peeling result found. DNA length: "+"{:.2f}".format(dna_length[0] * self.window.pixelSize)+" microns ("\
+                    +"{:.2f}".format(dna_length[0])+" pixels)")
                 self.peakPeelingStatusLabel.setStyleSheet("color: green")
                 self.canvas.draw()
             
@@ -980,7 +995,6 @@ class Window(QtWidgets.QMainWindow):
         self.file_dialog = FileDialog(self)
         self.roi_dialog = ROIDialog(self)
         self.supergauss_dialog = SuperGaussFittingDialog(self)
-        # self.supergauss_dialog.exec_() # this ensures that SuperGaussFittingDialog generates its own loop
         self.init_menu_bar()
         # load params
         self.load_parameters()
@@ -1084,7 +1098,7 @@ class Window(QtWidgets.QMainWindow):
         self.ui.frameEndSpinBox.valueChanged.connect(self.frames_changed)
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
-        self.ui.findDNAendsBtn.clicked.connect(self.supergauss_dialog.show)
+        self.ui.findDNAendsBtn.clicked.connect(self.supergauss_dialog.init)
 
     def connect_signals(self):
         # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
