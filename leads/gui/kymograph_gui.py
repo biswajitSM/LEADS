@@ -1358,7 +1358,10 @@ class Window(QtWidgets.QMainWindow):
 
 
     def load_folder(self):
-        self.folderpath = io.FileDialog(os.path.dirname(self.folderpath), "Select a folder",).openFolderNameDialog()
+        if self.folderpath is None:
+            self.folderpath = io.FileDialog('', "Select a folder",).openFolderNameDialog()
+        else:
+            self.folderpath = io.FileDialog(os.path.dirname(self.folderpath), "Select a folder",).openFolderNameDialog()
         filenames = sorted(glob.glob(self.folderpath + "/*.tif"), key=alphanumeric_key)
         if len(filenames)==0:
             filenames = sorted(glob.glob(self.folderpath + "/*.tiff"), key=alphanumeric_key)
