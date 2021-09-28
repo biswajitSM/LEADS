@@ -338,7 +338,10 @@ class Worker(QObject):
                                         shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[iRect]+'_processed.tif'),\
                                     name_sorted[iRect]+'_processed.tif') 
                                     else:
-                                        self.medianProcess(name_sorted[iRect]+'.tif')                                
+                                        try:
+                                            self.medianProcess(name_sorted[iRect]+'.tif')                                
+                                        except:
+                                            print('Couldnt median-process '+name_sorted[iRect]+'.tif')
                         return
 
 
@@ -379,7 +382,10 @@ class Worker(QObject):
                         metadata={'axis': 'TCYX', 'channels': num_colors,
                         'mode': 'composite',})
                 if medianProcessing:
-                    self.medianProcess(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'))
+                    try:
+                        self.medianProcess(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'))
+                    except:
+                            print('Couldnt median-process '+os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'))
             if sort_FOVs:
                 roi_ij.tofile(name_sorted[iRect]+'.roi') # saving the ROI in the sorted dir
                 shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[iRect]+'.tif'),\
@@ -390,7 +396,10 @@ class Worker(QObject):
                         shutil.copy2(os.path.join(dir_to_save, names_roi_tosave[iRect]+'_processed.tif'),\
                     name_sorted[iRect]+'_processed.tif') 
                     else:
-                        self.medianProcess(name_sorted[iRect]+'.tif')
+                        try:
+                            self.medianProcess(name_sorted[iRect]+'.tif')
+                        except:
+                            print('Couldnt median-process '+name_sorted[iRect]+'.tif')
 
 # ---------------------------------------------------------------
     def medianProcess(self, tif_stack_path):
