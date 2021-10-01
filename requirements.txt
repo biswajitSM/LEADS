@@ -20,3 +20,4 @@ tables
 qdarkstyle
 colorharmonies
 XlsxWriter
+re

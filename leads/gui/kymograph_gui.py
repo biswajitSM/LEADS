@@ -24,6 +24,7 @@ import h5py
 import tqdm
 from . import crop_images_gui
 import pandas as pd
+import re
 
 DEFAULTS = {
     "Number of colors" : "3",
@@ -74,13 +75,14 @@ class FileDialog(QtWidgets.QDialog):
         self.BrowseButton = QtWidgets.QPushButton()
         self.BrowseButton.setObjectName("BrowseButton")
         self.BrowseButton.setText("Browse")
+        self.BrowseButton.setAutoDefault(False) # prevent the button from executing upon pressing enter
         self.BrowseButton.clicked.connect(self.window.load_folder)
         general_grid.addWidget(self.BrowseButton, 0, 0)          
 
         # key
         general_grid.addWidget(QtWidgets.QLabel("key:"), 1, 0)
         self.ROI_key_lineedit = QtWidgets.QLineEdit()
-        self.ROI_key_lineedit.textChanged.connect(self.window.searchROIs)
+        self.ROI_key_lineedit.returnPressed.connect(self.window.searchROIs)
         general_grid.addWidget(self.ROI_key_lineedit, 1, 1, 1, 2)  #row,col,rowspan,colspan
 
         # let user input a ROI number
@@ -99,18 +101,21 @@ class FileDialog(QtWidgets.QDialog):
         self.PrintAllFilenamesButton = QtWidgets.QPushButton()
         self.PrintAllFilenamesButton.setObjectName("PrintAllFilenamesButton")
         self.PrintAllFilenamesButton.setText("Print all filenames")
+        self.PrintAllFilenamesButton.setAutoDefault(False)
         self.PrintAllFilenamesButton.clicked.connect(self.window.print_all_filenames)
         general_grid.addWidget(self.PrintAllFilenamesButton, 3, 0)          
 
         self.PrintFilteredFilenamesButton = QtWidgets.QPushButton()
         self.PrintFilteredFilenamesButton.setObjectName("PrintFilteredFilenamesButton")
         self.PrintFilteredFilenamesButton.setText("Print filtered filenames")
+        self.PrintFilteredFilenamesButton.setAutoDefault(False)
         self.PrintFilteredFilenamesButton.clicked.connect(self.window.print_filtered_filenames)
         general_grid.addWidget(self.PrintFilteredFilenamesButton, 3, 1)
         
         self.GenerateRoadblockExcelButton = QtWidgets.QPushButton()
         self.GenerateRoadblockExcelButton.setObjectName("GenerateRoadblockExcelButton")
-        self.GenerateRoadblockExcelButton.setText("Generate overview excel (roadblocks)")
+        self.GenerateRoadblockExcelButton.setText("Generate excel overview")
+        self.GenerateRoadblockExcelButton.setAutoDefault(False)
         self.GenerateRoadblockExcelButton.clicked.connect(self.window.generate_roadblock_excel)
         general_grid.addWidget(self.GenerateRoadblockExcelButton, 3, 2)   
 
@@ -1389,11 +1394,14 @@ class Window(QtWidgets.QMainWindow):
         io.save_user_settings(settings)
         self.file_dialog.PathQLabel.setText(self.folderpath)
         self.updateFileDialog()
-        self.display_file()
+        # self.display_file()
 
     def display_file(self):
         if self.currentFile<(len(self.filenames)):
-            self.load_img_stack(filepath=self.filenames[self.currentFile])
+            try:
+                self.load_img_stack(filepath=self.filenames[self.currentFile])
+            except:
+                self.load_img_stack(filepath=self.filenames[self.currentFile].replace('.tif', '_processed.tif'))
 
     def next_file(self):
         if not hasattr(self, 'filenames'):
@@ -1428,8 +1436,16 @@ class Window(QtWidgets.QMainWindow):
         else:
             filenames_filtered = []
             for filename in self.filenames_all:
-                if self.file_dialog.ROI_key_lineedit.text() in filename:
-                    filenames_filtered.append(filename)
+                searchpattern = '.' + self.file_dialog.ROI_key_lineedit.text().replace('*', '.') + '.' # we allow both . and * for any character in the GUI, re only accepts . though
+                if searchpattern[0:1] == '..':
+                    searchpattern = searchpattern[1:]
+                if searchpattern[-2:] == '..':
+                    searchpattern = searchpattern[:-1]
+                searchpattern = searchpattern.replace('.', '.*') # the star looks for one or more repetitions of the dot
+                filename = filename.replace('.tif', '') # remove .tif since the . confuses re
+                reResult = re.search(searchpattern, filename)
+                if hasattr(reResult, 'span'): # then we found something
+                    filenames_filtered.append(filename+'.tif')
             filenames_filtered = sorted(list(set(filenames_filtered)))
             self.numFiles = len(filenames_filtered)
             self.filenames = filenames_filtered
@@ -1468,21 +1484,21 @@ class Window(QtWidgets.QMainWindow):
         xlxsName = os.path.join(self.folderpath, str(int(time.time()*1e7))+'_'+os.path.basename(os.path.dirname(self.folderpath))+'_overview.xlsx')
         workbook = xlsxwriter.Workbook(xlxsName)
         worksheet = workbook.add_worksheet()
-        keywords = ['#', 'Name', 'PASSED', 'Confidence/%', 'StallingForce/pN', 'end-to-end distance/px', 'time range', 'comments', 'folderpath']
+        keywords = ['#', 'Folderpath', 'Name', 'Comments']
         bold = workbook.add_format({'bold': True})
         row = 0
         for col in range(len(keywords)):
             # get_col_widths(dataframe)
             worksheet.write(row, col, keywords[col], bold)
-            worksheet.set_column(col, col, 2*int(col==0 or col==1 or col==2 or col==7 )+len(keywords[col]))
+            # worksheet.set_column(col, col, 2*int(col==0 or col==1 or col==2 or col==7 )+len(keywords[col]))
         count = 0
         for filename in self.filenames:
-            row += 2
+            row += 1
             count += 1
             worksheet.write(row, 0, count)
-            worksheet.write(row, 1, os.path.basename(filename))
-            worksheet.write(row, 8, os.path.dirname(filename))
-
+            worksheet.write(row, 2, os.path.basename(filename))
+            worksheet.write(row, 1, os.path.dirname(filename))
+        worksheet.freeze_panes(1, 0) # fix the first row
         workbook.close()
         try:
             subprocess.Popen(r'explorer /select,"'+xlxsName.replace('/', '\\')+'"')
@@ -1511,7 +1527,7 @@ class Window(QtWidgets.QMainWindow):
         self.frame_end = -1
         self.set_img_stack()
         self.load_yaml_params()
-        if self.ui.processImageCheckBox.isChecked():
+        if self.ui.processImageCheckBox.isChecked() and ('_processed' != self.filename_base[-len('_processed'):]):
             self.image_meta = self.get_processed_image()
             self.set_img_stack()
         # disconnect the dependent signals

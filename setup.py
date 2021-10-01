@@ -40,7 +40,8 @@ setuptools.setup(
         "tables",
         "qdarkstyle",
         "colorharmonies",
-        "XlsxWriter"
+        "XlsxWriter",
+        "re"
     ],
     dependency_links = ["git+https://github.com/pyqtgraph/pyqtgraph@master"]
 )
