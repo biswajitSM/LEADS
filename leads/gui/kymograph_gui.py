@@ -10,14 +10,14 @@ from ..kymograph import (read_img_seq, read_img_stack,
                 analyze_maxpeak, loop_sm_dist)
 from .. import kymograph
 from .. import io
-from ..utils import hdf5dict, makevideo, figure_params
+from ..utils import hdf5dict, makevideo, figure_params, step_detect
 import os, sys, glob, time, subprocess, webbrowser, shutil
 import yaml
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 plt.rcParams.update(figure_params.params_dict)
-from scipy.signal import savgol_filter
+from scipy.signal import savgol_filter, find_peaks
 import xlsxwriter
 from skimage.io.collection import alphanumeric_key
 import h5py
@@ -27,7 +27,7 @@ import pandas as pd
 import re
 
 DEFAULTS = {
-    "Number of colors" : "3",
+    "Number of colors" : "2",
     "ColorMap" : 'plasma',
     }
 DEFAULT_PARAMETERS = {
@@ -116,7 +116,7 @@ class FileDialog(QtWidgets.QDialog):
         self.GenerateRoadblockExcelButton.setObjectName("GenerateRoadblockExcelButton")
         self.GenerateRoadblockExcelButton.setText("Generate excel overview")
         self.GenerateRoadblockExcelButton.setAutoDefault(False)
-        self.GenerateRoadblockExcelButton.clicked.connect(self.window.generate_roadblock_excel)
+        self.GenerateRoadblockExcelButton.clicked.connect(self.window.generate_overview_excel)
         general_grid.addWidget(self.GenerateRoadblockExcelButton, 3, 2)   
 
         # self.pix_spinbox.setRange(0, int(1e3))
@@ -352,6 +352,27 @@ class MultiPeakDialog(QtWidgets.QDialog):
         linking_grid.addWidget(self.max_frame_diff_spinbox, 2, 1)
         linking_grid.addWidget(self.max_pix_diff_spinbox, 2, 2)
         linking_grid.addWidget(self.min_coloc_diff_spinbox, 2, 3)
+
+        ## Track merging ##
+        merging_groupbox = QtWidgets.QGroupBox("Merge tracks")
+        vbox.addWidget(merging_groupbox)
+        merging_grid = QtWidgets.QGridLayout(merging_groupbox)
+        # left tracks
+        merging_grid.addWidget(QtWidgets.QLabel("Left tracks:"), 0, 0)
+        self.merge_left_lineedit = QtWidgets.QLineEdit()
+        self.merge_left_lineedit.setText('1,2,3')
+        self.searchrange_spinbox.setKeyboardTracking(False)
+        merging_grid.addWidget(self.merge_left_lineedit, 0, 1)
+        # right tracks
+        merging_grid.addWidget(QtWidgets.QLabel("Right tracks:"), 0, 2)
+        self.merge_right_lineedit = QtWidgets.QLineEdit()
+        self.merge_right_lineedit.setText('1,2,3')
+        self.searchrange_spinbox.setKeyboardTracking(False)
+        merging_grid.addWidget(self.merge_right_lineedit, 0, 3)
+        # merge button
+        self.merge_tracks_button = QtWidgets.QPushButton("Merge tracks")
+        merging_grid.addWidget(self.merge_tracks_button, 0, 4)
+
         ## Kinetics ##
         plot_groupbox = QtWidgets.QGroupBox("Plotting Kinetics")
         vbox.addWidget(plot_groupbox)
@@ -389,6 +410,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.plottype_combobox.addItems(["MSDmoving", "MSDsavgol", "MSDlagtime",
                                          "MSDlagtime-AllPeaks",
                                          "TimeTraceCol1", "TimeTraceCol2",
+                                         "AvTimeTraceCol1", "AvTimeTraceCol2",
                                          "FitKinetics"
                                          ])
         plot_grid.addWidget(self.plottype_pushbutton, 2, 2)
@@ -410,6 +432,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
         self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
         self.linkplot_pushbutton.clicked.connect(self.on_clicking_linkplot_pushbutton)
+        self.merge_tracks_button.clicked.connect(self.window.merge_tracks)
         self.loopVsmol_pushbutton.clicked.connect(self.on_clicking_loopVsmol_pushbutton)
         self.loopkinetics_pushbutton.clicked.connect(self.on_clicking_loopkinetics_pushbutton)
         self.plottype_pushbutton.clicked.connect(self.window.plottype_multipeak)
@@ -428,6 +451,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.smol_prominence_slider.sliderReleased.disconnect()
         self.smol_preview_checkbox.stateChanged.disconnect()
         self.linkplot_pushbutton.clicked.disconnect()
+        self.merge_tracks_button.clicked.disconnect()
         self.loopVsmol_pushbutton.clicked.disconnect()
         self.loopkinetics_pushbutton.clicked.disconnect()
         self.plottype_pushbutton.clicked.disconnect()
@@ -1374,13 +1398,15 @@ class Window(QtWidgets.QMainWindow):
             print('No .tif/.tiff files found in directory. Returning.')
             return
 
+        # list containing extensions that leads itself produces - we usually dont want to find those here
+        exclude = ['_left_kymo.tif', '_right_kymo.tif', '_left_selected_kymo.tif', '_right_selected_kymo.tif', '_ROI.tif', '_right_frame', '_right.tif', '_left_frame', '_left.tif']
         # find all files which carry a 'processed.tif' tag and omit those
         filenames_clean = []
         for filename in filenames:
-            if filename[-5::] == '.tiff':
-                filenames_clean.append(filename.replace('_processed.tiff', '.tiff'))
-            else:
-                filenames_clean.append(filename.replace('_processed.tif', '.tif'))
+            filename = filename.replace('_processed.tif', '.tif')
+            if any([(exclusion in filename) for exclusion in exclude]):
+                continue
+            filenames_clean.append( filename )
         filenames_clean = sorted(list(set(filenames_clean)))
         self.filenames_all = filenames_clean
         self.numFiles = len(filenames_clean)
@@ -1478,7 +1504,7 @@ class Window(QtWidgets.QMainWindow):
         self.file_dialog.fileNumberLabel.setText("/"+str(self.numFiles))
         self.file_dialog.fileNumberSpinBox.setMaximum(self.numFiles)
 
-    def generate_roadblock_excel(self):
+    def generate_overview_excel(self):
         if not hasattr(self, 'filenames'):
             return
         xlxsName = os.path.join(self.folderpath, str(int(time.time()*1e7))+'_'+os.path.basename(os.path.dirname(self.folderpath))+'_overview.xlsx')
@@ -2460,7 +2486,15 @@ class Window(QtWidgets.QMainWindow):
             self.plot_loop_vs_sm_linetop.setValue(self.loop_region_left)
             self.plot_loop_vs_sm_linebottom.setValue(self.loop_region_right)
 
-    def matplot_all_peaks(self):
+    def matplot_all_peaks(self, usePrecomputed=None, usePrecomputedsm=None):
+        plt.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
+        if len(self.filename_base)==0 and hasattr(self, 'filename_base_clipboard'):
+            df=pd.DataFrame([self.filename_base_clipboard + '_'])            
+        else:
+            df=pd.DataFrame([self.filename_base + '_'])            
+            self.filename_base_clipboard = self.filename_base
+        df.to_clipboard(index=False,header=False) # copy file name to clipboard for easy figure saving
+
         self.preview_maxpeak_on_params_change()
         self.search_range_link = self.multipeak_dialog.searchrange_spinbox.value()
         self.memory_link = self.multipeak_dialog.memory_spinbox.value()
@@ -2469,7 +2503,8 @@ class Window(QtWidgets.QMainWindow):
             result = kymograph.link_and_plot_two_color(
                     self.all_peaks_dict["All Peaks"], self.all_smpeaks_dict["All Peaks"],
                     acqTime=self.acquisitionTime, search_range=self.search_range_link, memory=self.memory_link,
-                    filter_length=self.filter_length_link, plotting=True,)
+                    filter_length=self.filter_length_link, plotting=True, 
+                    usePrecomputed=usePrecomputed, usePrecomputedsm=usePrecomputedsm)
             self.df_peaks_linked = result['df_peaks_linked']
             self.df_peaks_linked_sm = result['df_peaks_linked_sm']
             df_gb = self.df_peaks_linked.groupby("particle")
@@ -2519,7 +2554,7 @@ class Window(QtWidgets.QMainWindow):
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
-                    filter_length=self.filter_length_link, plotting=False,)
+                    filter_length=self.filter_length_link, plotting=False, usePrecomputed=usePrecomputed)
             fig = plt.figure(figsize=(10, 4))
             gs = fig.add_gridspec(1, 4)
             axis = fig.add_subplot(gs[0, :-1])
@@ -2644,20 +2679,61 @@ class Window(QtWidgets.QMainWindow):
         ax.legend()
         plt.gcf().show()
 
+    def merge_tracks(self):
+        left_tracks = self.multipeak_dialog.merge_left_lineedit.text()
+        left_tracks = left_tracks.replace(' ', '')
+        left_tracks = sorted( list( set( [int(track) for track in left_tracks.split(',')] ) ) )
+        minTrackNo = left_tracks[0]
+        maxTrackNo = left_tracks[-1]
+        selected_columns = self.df_peaks_linked['particle']
+        particles = selected_columns.copy()
+        particles = particles.values
+        for left_track in left_tracks:
+            particles[particles==left_track] = minTrackNo
+        particles[particles!=minTrackNo] -= maxTrackNo-1
+        self.df_peaks_linked['particle'] = particles
+
+        if hasattr(self, 'df_peaks_linked_sm'):
+            right_tracks = self.multipeak_dialog.merge_right_lineedit.text()
+            right_tracks = right_tracks.replace(' ', '')
+            right_tracks = sorted( list( set( [int(track) for track in right_tracks.split(',')] ) ) )
+            minTrackNo = right_tracks[0]
+            maxTrackNo = right_tracks[-1]
+            selected_columns = self.df_peaks_linked_sm['particle']
+            particles = selected_columns.copy()
+            particles = particles.values
+            for right_track in right_tracks:
+                particles[particles==right_track] = minTrackNo
+            particles[particles!=minTrackNo] -= maxTrackNo-1
+            self.df_peaks_linked_sm['particle'] = particles
+
+        if hasattr(self, 'df_peaks_linked_sm'):
+            self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked, usePrecomputedsm=self.df_peaks_linked_sm)
+        else:
+            self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked)
+
     def plottype_multipeak(self):
         plt.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
-        df=pd.DataFrame([self.filename_base + '_'])
+        if len(self.filename_base)==0 and hasattr(self, 'filename_base_clipboard'):
+            df=pd.DataFrame([self.filename_base_clipboard + '_'])            
+        else:
+            df=pd.DataFrame([self.filename_base + '_'])            
+            self.filename_base_clipboard = self.filename_base
         df.to_clipboard(index=False,header=False) # copy file name to clipboard for easy figure saving
 
         left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
         right_peak_no = int(self.multipeak_dialog.rightpeak_num_combobox.currentText())
-        df_gb = self.df_peaks_linked.groupby("particle")
-        group_sel_col1 = df_gb.get_group(left_peak_no)
-        group_sel_col1 = group_sel_col1.reset_index(drop=True)
-        if self.numColors == "2" or self.numColors == "3":
-            df_gb = self.df_peaks_linked_sm.groupby("particle")
-            group_sel_col2 = df_gb.get_group(right_peak_no)
-            group_sel_col2 = group_sel_col2.reset_index(drop=True)
+        if not ("AvTimeTraceCol" in self.multipeak_dialog.plottype_combobox.currentText()):
+            if self.df_peaks_linked is None:
+                print('No tracked particles yet.')
+                return
+            df_gb = self.df_peaks_linked.groupby("particle")
+            group_sel_col1 = df_gb.get_group(left_peak_no)
+            group_sel_col1 = group_sel_col1.reset_index(drop=True)
+            if self.numColors == "2" or self.numColors == "3":
+                df_gb = self.df_peaks_linked_sm.groupby("particle")
+                group_sel_col2 = df_gb.get_group(right_peak_no)
+                group_sel_col2 = group_sel_col2.reset_index(drop=True)
         if self.multipeak_dialog.plottype_combobox.currentText() == "MSDmoving":
             print("plot MSD")
             _, ax = plt.subplots()
@@ -2716,10 +2792,6 @@ class Window(QtWidgets.QMainWindow):
                 n = n+1
             n_order = 1
             n_savgol = 11
-            # n_order = 1
-            # n=12
-            # if n%2 != 0:
-            #     n = n+1
             ind = int(n/2)
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
@@ -2799,10 +2871,40 @@ class Window(QtWidgets.QMainWindow):
         elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol1":
             print("plot TimeTrace")
             _, ax = plt.subplots()
-            trace_col1 = 7 * np.average(self.kymo_left_loop, axis=1)
-            trace_col1_bg = trace_col1# - np.average(group_sel_col1["PeakIntensity"].values)
-            ax.plot(group_sel_col1["FrameNumber"], group_sel_col1["PeakIntensity"], label="Peak")
-            ax.plot(trace_col1_bg, label="Background")
+            x = group_sel_col1['x'].values
+            peakIndex = np.vstack((x-2, x-1, x, x+1, x+2))
+            peakIndex[peakIndex>self.kymo_left_loop.shape[1]] = self.kymo_left_loop.shape[1]
+            peakIndex[peakIndex<0] = 0
+            peakIndexArray = np.zeros(self.kymo_left_loop.shape)
+            peakIndexArray[group_sel_col1["FrameNumber"].values.astype(int), peakIndex.astype(int)] = 1
+            peakIndexArray[peakIndexArray==0] = np.nan
+            trace_col1 = np.nanmean( self.kymo_left_loop*peakIndexArray, axis=1)            
+            trace_col1_bg = np.nanmean( self.kymo_left_loop*~np.isnan(peakIndexArray), axis=1)
+            trace_col1_bg = trace_col1_bg[~np.isnan(trace_col1)]
+            trace_col1 = trace_col1[~np.isnan(trace_col1)]
+            ax.plot(group_sel_col1["FrameNumber"], trace_col1, '-', color=(0.8, 0.8, 0.8), label="Peak")
+            ax.plot(group_sel_col1["FrameNumber"], trace_col1_bg, '--', color=(0.8, 0.8, 0.8), label="Background")
+            ax.plot(group_sel_col1["FrameNumber"], trace_col1-trace_col1_bg, 'k-', label="Subtracted")
+            # savgol filtering
+            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol%2 == 0:
+                n_savgol += 1
+            subtracted_smooth = savgol_filter(trace_col1-trace_col1_bg, window_length=n_savgol, polyorder=1)
+            ax.plot(group_sel_col1["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
+            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            step_detect_data = trace_col1-trace_col1_bg
+            p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            p2 /= np.abs(p2).max()
+            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            minVal = min(step_detect_data)
+            maxVal = max(step_detect_data)
+            minFrame = np.min( group_sel_col1["FrameNumber"].values )
+            for ii in range(len(stepPositions)):
+                plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
+            # trace_col1 = 7 * np.average(self.kymo_left_loop, axis=1)
+            # trace_col1_bg = trace_col1# - np.average(group_sel_col1["PeakIntensity"].values)
+            # ax.plot(group_sel_col1["FrameNumber"], group_sel_col1["PeakIntensity"], label="Peak")
+            # ax.plot(trace_col1_bg, label="Background")
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
@@ -2810,15 +2912,106 @@ class Window(QtWidgets.QMainWindow):
         elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol2" and self.numColors == "2":
             print("plot TimeTrace")
             _, ax = plt.subplots()
-            trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
-            trace_col2_bg = trace_col2# - np.average(group_sel_col2["PeakIntensity"].values)
-            ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
-            ax.plot(trace_col2_bg, label="Background")
+            x = group_sel_col2['x'].values
+            peakIndex = np.vstack((x-2, x-1, x, x+1, x+2))
+            peakIndex[peakIndex>self.kymo_right_loop.shape[1]] = self.kymo_right_loop.shape[1]
+            peakIndex[peakIndex<0] = 0
+            peakIndexArray = np.zeros(self.kymo_right_loop.shape)
+            peakIndexArray[group_sel_col2["FrameNumber"].values.astype(int), peakIndex.astype(int)] = 1
+            peakIndexArray[peakIndexArray==0] = np.nan
+            trace_col2 = np.nanmean( self.kymo_right_loop*peakIndexArray, axis=1)            
+            trace_col2_bg = np.nanmean( self.kymo_right_loop*~np.isnan(peakIndexArray), axis=1)
+            trace_col2_bg = trace_col2_bg[~np.isnan(trace_col2)]
+            trace_col2 = trace_col2[~np.isnan(trace_col2)]
+            ax.plot(group_sel_col2["FrameNumber"], trace_col2, '-', color=(0.8, 0.8, 0.8), label="Peak")
+            ax.plot(group_sel_col2["FrameNumber"], trace_col2_bg, '--', color=(0.8, 0.8, 0.8), label="Background")
+            ax.plot(group_sel_col2["FrameNumber"], trace_col2-trace_col2_bg, 'k-', label="Subtracted")
+            # savgol filtering
+            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol%2 == 0:
+                n_savgol += 1
+            subtracted_smooth = savgol_filter(trace_col2-trace_col2_bg, window_length=n_savgol, polyorder=1)
+            ax.plot(group_sel_col2["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
+            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            step_detect_data = trace_col2-trace_col2_bg
+            p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            p2 /= np.abs(p2).max()
+            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            minVal = min(step_detect_data)
+            maxVal = max(step_detect_data)
+            minFrame = np.min( group_sel_col2["FrameNumber"].values )
+            for ii in range(len(stepPositions)):
+                plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
+            # trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
+            # trace_col2_bg = trace_col1# - np.average(group_sel_col2["PeakIntensity"].values)
+            # ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
+            # ax.plot(trace_col2_bg, label="Background")
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
             plt.gcf().show()
 
+
+            # _, ax = plt.subplots()
+            # trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
+            # trace_col2_bg = trace_col2# - np.average(group_sel_col2["PeakIntensity"].values)
+            # ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
+            # ax.plot(trace_col2_bg, label="Background")
+            # ax.set_xlabel("Frame Number")
+            # ax.set_ylabel("Intensity")
+            # ax.legend()
+            # plt.gcf().show()
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "AvTimeTraceCol1":
+            print("plot average TimeTrace")
+            _, ax = plt.subplots()
+            trace_col1 = np.mean( self.kymo_left_loop, axis=1)    
+            FrameNumber = np.arange(1, len(trace_col1)+1)      
+            ax.plot(FrameNumber, trace_col1, 'k-', label="Intensity")
+            # savgol filtering
+            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol%2 == 0:
+                n_savgol += 1
+            trace_col1_smooth = savgol_filter(trace_col1, window_length=n_savgol, polyorder=1)
+            ax.plot(FrameNumber, trace_col1_smooth, 'r-', label="Intensity smooth")
+            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            step_detect_data = trace_col1
+            p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            p2 /= np.abs(p2).max()
+            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            minVal = min(step_detect_data)
+            maxVal = max(step_detect_data)
+            for ii in range(len(stepPositions)):
+                plt.plot((stepPositions[ii], stepPositions[ii]), (minVal, maxVal), 'r')
+            ax.set_xlabel("Frame Number")
+            ax.set_ylabel("Intensity")
+            ax.legend()
+            plt.gcf().show()
+
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "AvTimeTraceCol2" and self.numColors == "2":
+            print("plot average TimeTrace")
+            _, ax = plt.subplots()
+            trace_col2 = np.mean( self.kymo_right_loop, axis=1)    
+            FrameNumber = np.arange(1, len(trace_col2)+1)      
+            ax.plot(FrameNumber, trace_col2, 'k-', label="Intensity")
+            # savgol filtering
+            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol%2 == 0:
+                n_savgol += 1
+            subtracted_smooth = savgol_filter(trace_col2, window_length=n_savgol, polyorder=1)
+            ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
+            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            step_detect_data = trace_col2
+            p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            p2 /= np.abs(p2).max()
+            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            minVal = min(step_detect_data)
+            maxVal = max(step_detect_data)
+            for ii in range(len(stepPositions)):
+                plt.plot((stepPositions[ii], stepPositions[ii]), (minVal, maxVal), 'r')
+            ax.set_xlabel("Frame Number")
+            ax.set_ylabel("Intensity")
+            ax.legend()
+            plt.gcf().show()
 
     def save_hdf5(self, filepath_hdf5):
         with h5py.File(filepath_hdf5, 'w') as h5_analysis:

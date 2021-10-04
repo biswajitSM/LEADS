@@ -402,7 +402,7 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     return loop_sm_dict
 
 def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
-               plotting=True, axis=None,):
+               plotting=True, axis=None, usePrecomputed=None):
     xLabelIsFrames = False
     if acqTime is None:
         acqTime = 1
@@ -413,9 +413,12 @@ def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory
     else:
         df_peaks["y"] = df_peaks_sm["PeakPosition"]
     df_peaks["frame"] = df_peaks["FrameNumber"]
-    t = trackpy.link(df_peaks, search_range=search_range,
-                memory=memory, pos_columns=['y', 'x'])
-    t_filt = trackpy.filter_stubs(t, filter_length)
+    if usePrecomputed is None:
+        t = trackpy.link(df_peaks, search_range=search_range,
+                    memory=memory, pos_columns=['y', 'x'])
+        t_filt = trackpy.filter_stubs(t, filter_length)
+    else:
+        t_filt = usePrecomputed
     t_filt_gb = t_filt.groupby("particle")
     gb_names = list(t_filt_gb.groups.keys())
     peaks_linked = t_filt.copy(deep=True)
@@ -451,7 +454,7 @@ def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory
 
 def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
             search_range=10, memory=5, filter_length=10,
-            plotting=True):
+            plotting=True, usePrecomputed=None, usePrecomputedsm=None):
     # set axes and figsize
     fig = plt.figure(figsize=(10, 10))
     gs = fig.add_gridspec(4, 4)
@@ -478,11 +481,11 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
     # link and plot data to it
     df_peaks_linked = link_peaks(df_peaks, acqTime=acqTime, search_range=search_range,
                           memory=memory, filter_length=filter_length,
-                          plotting=plotting, axis=ax1)
+                          plotting=plotting, axis=ax1, usePrecomputed=usePrecomputed)
     ax1_r.hist(df_peaks["PeakPosition"], orientation='horizontal')
     df_peaks_linked_sm = link_peaks(df_peaks_sm, acqTime=acqTime, search_range=search_range,
                           memory=memory, filter_length=filter_length,
-                          plotting=plotting, axis=ax2)
+                          plotting=plotting, axis=ax2, usePrecomputed=usePrecomputedsm)
     ax2_r.hist(df_peaks_sm["PeakPosition"], orientation='horizontal')
     ax3_r.hist(df_peaks["PeakPosition"], histtype='step', orientation='horizontal')
     ax3_r.hist(df_peaks_sm["PeakPosition"], histtype='step', orientation='horizontal')
