@@ -409,6 +409,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.plottype_combobox = QtWidgets.QComboBox()
         self.plottype_combobox.addItems(["MSDmoving", "MSDsavgol", "MSDlagtime",
                                          "MSDlagtime-AllPeaks",
+                                         "LoopSizeVsPosition",
                                          "TimeTraceCol1", "TimeTraceCol2",
                                          "AvTimeTraceCol1", "AvTimeTraceCol2",
                                          "FitKinetics"
@@ -2680,37 +2681,45 @@ class Window(QtWidgets.QMainWindow):
         plt.gcf().show()
 
     def merge_tracks(self):
+        replot = False
         left_tracks = self.multipeak_dialog.merge_left_lineedit.text()
-        left_tracks = left_tracks.replace(' ', '')
-        left_tracks = sorted( list( set( [int(track) for track in left_tracks.split(',')] ) ) )
-        minTrackNo = left_tracks[0]
-        maxTrackNo = left_tracks[-1]
-        selected_columns = self.df_peaks_linked['particle']
-        particles = selected_columns.copy()
-        particles = particles.values
-        for left_track in left_tracks:
-            particles[particles==left_track] = minTrackNo
-        particles[particles!=minTrackNo] -= maxTrackNo-1
-        self.df_peaks_linked['particle'] = particles
+        if len(left_tracks)>0:
+            left_tracks = left_tracks.replace(' ', '')
+            left_tracks = sorted( list( set( [int(track) for track in left_tracks.split(',')] ) ) )
+            if len(left_tracks)>1:
+                replot = True
+                minTrackNo = left_tracks[0]
+                maxTrackNo = left_tracks[-1]
+                selected_columns = self.df_peaks_linked['particle']
+                particles = selected_columns.copy()
+                particles = particles.values
+                for left_track in left_tracks:
+                    particles[particles==left_track] = minTrackNo
+                particles[particles!=minTrackNo] -= maxTrackNo-1
+                self.df_peaks_linked['particle'] = particles
 
         if hasattr(self, 'df_peaks_linked_sm'):
             right_tracks = self.multipeak_dialog.merge_right_lineedit.text()
-            right_tracks = right_tracks.replace(' ', '')
-            right_tracks = sorted( list( set( [int(track) for track in right_tracks.split(',')] ) ) )
-            minTrackNo = right_tracks[0]
-            maxTrackNo = right_tracks[-1]
-            selected_columns = self.df_peaks_linked_sm['particle']
-            particles = selected_columns.copy()
-            particles = particles.values
-            for right_track in right_tracks:
-                particles[particles==right_track] = minTrackNo
-            particles[particles!=minTrackNo] -= maxTrackNo-1
-            self.df_peaks_linked_sm['particle'] = particles
+            if len(right_tracks)>0:
+                right_tracks = right_tracks.replace(' ', '')
+                right_tracks = sorted( list( set( [int(track) for track in right_tracks.split(',')] ) ) )
+                if len(right_tracks)>1:
+                    replot = True
+                    minTrackNo = right_tracks[0]
+                    maxTrackNo = right_tracks[-1]
+                    selected_columns = self.df_peaks_linked_sm['particle']
+                    particles = selected_columns.copy()
+                    particles = particles.values
+                    for right_track in right_tracks:
+                        particles[particles==right_track] = minTrackNo
+                    particles[particles!=minTrackNo] -= maxTrackNo-1
+                    self.df_peaks_linked_sm['particle'] = particles
 
-        if hasattr(self, 'df_peaks_linked_sm'):
-            self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked, usePrecomputedsm=self.df_peaks_linked_sm)
-        else:
-            self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked)
+        if replot:
+            if hasattr(self, 'df_peaks_linked_sm'):
+                self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked, usePrecomputedsm=self.df_peaks_linked_sm)
+            else:
+                self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked)
 
     def plottype_multipeak(self):
         plt.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
@@ -2759,6 +2768,10 @@ class Window(QtWidgets.QMainWindow):
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
                 sel_loop_sm_dict = kymograph.loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=7)
                 pos_diff_kb = sel_loop_sm_dict['PositionDiff_kb']
+                if n_savgol>=len(pos_diff_kb):
+                    n_savgol = len(pos_diff_kb)-2
+                if n_savgol%2 == 0:
+                    n_savgol += 1
                 pos_diff_kb_smooth = savgol_filter(pos_diff_kb, window_length=n_savgol, polyorder=1)
                 if pos_diff_kb_smooth.min() < 0:
                     pos_diff_kb = pos_diff_kb - pos_diff_kb_smooth.min()
@@ -2868,6 +2881,42 @@ class Window(QtWidgets.QMainWindow):
                 ax1.set_title("Color 1")
                 ax2.set_title("Color 2")
             plt.gcf().show()
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "LoopSizeVsPosition":
+            print("plot LoopSizeVsPosition")
+            _, ax = plt.subplots()
+            x = group_sel_col1['x'].values
+            peakIndex = np.vstack((x-2, x-1, x, x+1, x+2))
+            peakIndex[peakIndex>self.kymo_left_loop.shape[1]] = self.kymo_left_loop.shape[1]
+            peakIndex[peakIndex<0] = 0
+            peakIndexArray = np.zeros(self.kymo_left_loop.shape)
+            peakIndexArray[group_sel_col1["FrameNumber"].values.astype(int), peakIndex.astype(int)] = 1
+            peakIndexArray[peakIndexArray==0] = np.nan
+            trace_col1 = np.nanmean( self.kymo_left_loop*peakIndexArray, axis=1)            
+            trace_col1_bg = np.nanmean( self.kymo_left_loop*~np.isnan(peakIndexArray), axis=1)
+            trace_col1_bg = trace_col1_bg[~np.isnan(trace_col1)]
+            trace_col1 = trace_col1[~np.isnan(trace_col1)]
+            loopSize = trace_col1 - trace_col1_bg
+
+            loopPosition = x
+
+            # savgol filtering
+            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol>=len(loopSize):
+                n_savgol = len(loopSize)-2
+            if n_savgol%2 == 0:
+                n_savgol += 1            
+
+            loopSize_smooth = savgol_filter(loopSize, window_length=n_savgol, polyorder=1)
+            loopPosition_smooth = savgol_filter(loopPosition, window_length=n_savgol, polyorder=1)
+            jetColormap = plt.get_cmap('jet')
+            ax.scatter(loopPosition, loopSize, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+            kymograph.colorline(loopPosition_smooth, loopSize_smooth, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+            ax.set_xlabel('Position [px]')
+            ax.set_ylabel('Loop size [a.u.]')
+            ax.set_xlim([min(loopPosition_smooth), max(loopPosition_smooth)])
+            ax.set_ylim([min(loopSize_smooth), max(loopSize_smooth)])
+            plt.gcf().show()
+
         elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol1":
             print("plot TimeTrace")
             _, ax = plt.subplots()
@@ -2887,6 +2936,8 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(group_sel_col1["FrameNumber"], trace_col1-trace_col1_bg, 'k-', label="Subtracted")
             # savgol filtering
             n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol>=len(trace_col1):
+                n_savgol = len(trace_col1)-2
             if n_savgol%2 == 0:
                 n_savgol += 1
             subtracted_smooth = savgol_filter(trace_col1-trace_col1_bg, window_length=n_savgol, polyorder=1)
@@ -2928,6 +2979,8 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(group_sel_col2["FrameNumber"], trace_col2-trace_col2_bg, 'k-', label="Subtracted")
             # savgol filtering
             n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol>=len(trace_col2):
+                n_savgol = len(trace_col2)-2
             if n_savgol%2 == 0:
                 n_savgol += 1
             subtracted_smooth = savgol_filter(trace_col2-trace_col2_bg, window_length=n_savgol, polyorder=1)
@@ -2969,6 +3022,8 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(FrameNumber, trace_col1, 'k-', label="Intensity")
             # savgol filtering
             n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol>=len(trace_col1):
+                n_savgol = len(trace_col1)-2
             if n_savgol%2 == 0:
                 n_savgol += 1
             trace_col1_smooth = savgol_filter(trace_col1, window_length=n_savgol, polyorder=1)
@@ -2995,6 +3050,8 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(FrameNumber, trace_col2, 'k-', label="Intensity")
             # savgol filtering
             n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
+            if n_savgol>=len(trace_col2):
+                n_savgol = len(trace_col2)-2
             if n_savgol%2 == 0:
                 n_savgol += 1
             subtracted_smooth = savgol_filter(trace_col2, window_length=n_savgol, polyorder=1)
