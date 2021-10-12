@@ -5,19 +5,19 @@ import pyqtgraph as pg
 import pyqtgraph.dockarea as pg_da
 import pyqtgraph.exporters
 from tifffile import imwrite
-from ..kymograph import (read_img_seq, read_img_stack,
+from ..kymograph import (read_img_stack,
                 median_bkg_substration, peakfinder_savgol,
                 analyze_maxpeak, loop_sm_dist)
 from .. import kymograph
 from .. import io
 from ..utils import hdf5dict, makevideo, figure_params, step_detect
-import os, sys, glob, time, subprocess, webbrowser, shutil
+import os, sys, glob, time, subprocess, webbrowser
 import yaml
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 plt.rcParams.update(figure_params.params_dict)
-from scipy.signal import savgol_filter, find_peaks
+from scipy.signal import savgol_filter
 import xlsxwriter
 from skimage.io.collection import alphanumeric_key
 import h5py
@@ -409,10 +409,11 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.plottype_combobox = QtWidgets.QComboBox()
         self.plottype_combobox.addItems(["MSDmoving", "MSDsavgol", "MSDlagtime",
                                          "MSDlagtime-AllPeaks",
-                                         "LoopSizeVsPosition",
+                                         "LoopSizeVsPosition",                                         
                                          "TimeTraceCol1", "TimeTraceCol2",
                                          "AvTimeTraceCol1", "AvTimeTraceCol2",
-                                         "FitKinetics"
+                                         "FitKinetics",
+                                         "LoopSizeVsPositionDetailed"
                                          ])
         plot_grid.addWidget(self.plottype_pushbutton, 2, 2)
         plot_grid.addWidget(self.plottype_combobox, 2, 3)
@@ -2275,7 +2276,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.region_errbar = pg.LinearRegionItem(self.params_yaml['Region Errbar'])
         self.plot_loop_errbar.addItem(self.region_errbar, ignoreBounds=True)
-        self.dna_ends = [2, 20]
+        self.dna_ends = [2, 60]
         self.dna_infline_left = pg.InfiniteLine(movable=True, pos=self.dna_ends[0], angle=90, pen=(3, 9), label='dna left end ={value:0.0f}',
             labelOpts={'position':0.15, 'angle':90, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
         self.plot_loop_errbar.addItem(self.dna_infline_left, ignoreBounds=True)
@@ -2680,53 +2681,65 @@ class Window(QtWidgets.QMainWindow):
         ax.legend()
         plt.gcf().show()
 
+
+    def merge_tracks_fun(self, tracks, df):
+        tracks = tracks.replace(' ', '')
+        tracks = sorted( list( set( [int(track) for track in tracks.split(',')] ) ) )
+        if len(tracks)>1:
+            replot = True
+            minTrackNo = tracks[0]
+            maxTrackNo = tracks[-1]
+            selected_columns = df['particle']
+            particles = selected_columns.copy()
+            particles = particles.values
+            selected_columns = df['frame']
+            frame = selected_columns.copy()
+            frame = frame.values
+            changedParticleID = np.zeros(particles.shape)
+            for track in tracks:
+                changedParticleID[particles==track] = 1
+                particles[particles==track] = minTrackNo                
+            
+            remove = []
+            u, c = np.unique(frame[changedParticleID.astype(bool)], return_counts=True)
+            if any(c>1):
+                duplicateIndices = np.where(c>1)
+                for duplicateIndex in duplicateIndices[0]:
+                    # see where frame assumes the duplicate value
+                    remove_tmp = np.where( np.logical_and(frame==u[duplicateIndex], particles==minTrackNo) )
+                    remove.append( remove_tmp[0][0:-1] )
+            remove = np.array(remove).flatten()
+            particles[particles!=minTrackNo] -= maxTrackNo-1
+            df['particle'] = particles
+            df = df.drop(remove) # drop these rows
+        return df, replot
+
+
     def merge_tracks(self):
         replot = False
         left_tracks = self.multipeak_dialog.merge_left_lineedit.text()
         if len(left_tracks)>0:
-            left_tracks = left_tracks.replace(' ', '')
-            left_tracks = sorted( list( set( [int(track) for track in left_tracks.split(',')] ) ) )
-            if len(left_tracks)>1:
-                replot = True
-                minTrackNo = left_tracks[0]
-                maxTrackNo = left_tracks[-1]
-                selected_columns = self.df_peaks_linked['particle']
-                particles = selected_columns.copy()
-                particles = particles.values
-                for left_track in left_tracks:
-                    particles[particles==left_track] = minTrackNo
-                particles[particles!=minTrackNo] -= maxTrackNo-1
-                self.df_peaks_linked['particle'] = particles
+            self.df_peaks_linked, replot = self.merge_tracks_fun(left_tracks, self.df_peaks_linked)
 
         if hasattr(self, 'df_peaks_linked_sm'):
             right_tracks = self.multipeak_dialog.merge_right_lineedit.text()
             if len(right_tracks)>0:
-                right_tracks = right_tracks.replace(' ', '')
-                right_tracks = sorted( list( set( [int(track) for track in right_tracks.split(',')] ) ) )
-                if len(right_tracks)>1:
-                    replot = True
-                    minTrackNo = right_tracks[0]
-                    maxTrackNo = right_tracks[-1]
-                    selected_columns = self.df_peaks_linked_sm['particle']
-                    particles = selected_columns.copy()
-                    particles = particles.values
-                    for right_track in right_tracks:
-                        particles[particles==right_track] = minTrackNo
-                    particles[particles!=minTrackNo] -= maxTrackNo-1
-                    self.df_peaks_linked_sm['particle'] = particles
-
+                self.df_peaks_linked_sm, replot = self.merge_tracks_fun(right_tracks, self.df_peaks_linked_sm)
+               
         if replot:
             if hasattr(self, 'df_peaks_linked_sm'):
                 self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked, usePrecomputedsm=self.df_peaks_linked_sm)
             else:
                 self.matplot_all_peaks(usePrecomputed=self.df_peaks_linked)
 
+
+
     def plottype_multipeak(self):
         plt.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
         if len(self.filename_base)==0 and hasattr(self, 'filename_base_clipboard'):
-            df=pd.DataFrame([self.filename_base_clipboard + '_'])            
+            df=pd.DataFrame([self.filename_base_clipboard + '_' + self.multipeak_dialog.plottype_combobox.currentText()])            
         else:
-            df=pd.DataFrame([self.filename_base + '_'])            
+            df=pd.DataFrame([self.filename_base + '_' + self.multipeak_dialog.plottype_combobox.currentText()])            
             self.filename_base_clipboard = self.filename_base
         df.to_clipboard(index=False,header=False) # copy file name to clipboard for easy figure saving
 
@@ -2881,41 +2894,210 @@ class Window(QtWidgets.QMainWindow):
                 ax1.set_title("Color 1")
                 ax2.set_title("Color 2")
             plt.gcf().show()
-        elif self.multipeak_dialog.plottype_combobox.currentText() == "LoopSizeVsPosition":
+        elif self.multipeak_dialog.plottype_combobox.currentText() == "LoopSizeVsPosition" or self.multipeak_dialog.plottype_combobox.currentText() == "LoopSizeVsPositionDetailed":
             print("plot LoopSizeVsPosition")
             _, ax = plt.subplots()
             x = group_sel_col1['x'].values
-            peakIndex = np.vstack((x-2, x-1, x, x+1, x+2))
+            frames = group_sel_col1["FrameNumber"].values.astype(int)
+            peakIndex = np.vstack((x-3, x-2, x-1, x, x+1, x+2, x+3))
             peakIndex[peakIndex>self.kymo_left_loop.shape[1]] = self.kymo_left_loop.shape[1]
             peakIndex[peakIndex<0] = 0
             peakIndexArray = np.zeros(self.kymo_left_loop.shape)
-            peakIndexArray[group_sel_col1["FrameNumber"].values.astype(int), peakIndex.astype(int)] = 1
+            peakIndexArray[frames, peakIndex.astype(int)] = 1
             peakIndexArray[peakIndexArray==0] = np.nan
             trace_col1 = np.nanmean( self.kymo_left_loop*peakIndexArray, axis=1)            
             trace_col1_bg = np.nanmean( self.kymo_left_loop*~np.isnan(peakIndexArray), axis=1)
             trace_col1_bg = trace_col1_bg[~np.isnan(trace_col1)]
             trace_col1 = trace_col1[~np.isnan(trace_col1)]
-            loopSize = trace_col1 - trace_col1_bg
+            
+            loopSize = trace_col1/(trace_col1+trace_col1_bg) * self.multipeak_dialog.DNAlength_spinbox.value() #trace_col1 - trace_col1_bg
+            loopPosition = (x-self.dna_ends[0])/self.dna_ends[1] * self.multipeak_dialog.DNAlength_spinbox.value()#x
 
-            loopPosition = x
 
             # savgol filtering
             n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
             if n_savgol>=len(loopSize):
                 n_savgol = len(loopSize)-2
             if n_savgol%2 == 0:
-                n_savgol += 1            
+                n_savgol += 1  
+            n_savgol_lo = np.floor( n_savgol/5 )
+            if n_savgol_lo>=len(loopSize):
+                n_savgol_lo = len(loopSize)-2
+            if n_savgol_lo%2 == 0:
+                n_savgol_lo += 1 
+            n_savgol_hi = np.ceil( n_savgol*2.5 )
+            if n_savgol_hi>=len(loopSize):
+                n_savgol_hi = len(loopSize)-2
+            if n_savgol_hi%2 == 0:
+                n_savgol_hi += 1 
+            n_savgol    = int(n_savgol)
+            n_savgol_lo = int(n_savgol_lo)
+            n_savgol_hi = int(n_savgol_hi)
 
-            loopSize_smooth = savgol_filter(loopSize, window_length=n_savgol, polyorder=1)
-            loopPosition_smooth = savgol_filter(loopPosition, window_length=n_savgol, polyorder=1)
+            fig = plt.figure(figsize=(10, 6))
             jetColormap = plt.get_cmap('jet')
-            ax.scatter(loopPosition, loopSize, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
-            kymograph.colorline(loopPosition_smooth, loopSize_smooth, z=None, cmap=jetColormap, linewidth=2, ax=ax)
-            ax.set_xlabel('Position [px]')
-            ax.set_ylabel('Loop size [a.u.]')
-            ax.set_xlim([min(loopPosition_smooth), max(loopPosition_smooth)])
-            ax.set_ylim([min(loopSize_smooth), max(loopSize_smooth)])
+            grid = plt.GridSpec(1,3, wspace=0.0, hspace=0.0)
+            ax = fig.add_subplot(grid[0,0])            
+            
+            ax.scatter(loopSize, loopPosition, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+            loopPosition_savgol = savgol_filter(loopPosition, window_length=n_savgol_lo, polyorder=1)
+            loopSize_savgol = savgol_filter(loopSize, window_length=n_savgol_lo, polyorder=1)
+            kymograph.colorline(loopSize_savgol, loopPosition_savgol, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+            ax.set_ylabel('Position [kb]')
+            ax.set_xlim([min(loopSize), max(loopSize)])
+            ax.set_ylim([min(loopPosition), max(loopPosition)])
+            x_text = min(loopSize) + (max(loopSize)-min(loopSize))/2
+            y_text = max(loopPosition) + (max(loopPosition)-min(loopPosition))*0.05
+            s = 'window length '+str(n_savgol_lo)+' frames'
+            ax.text(x_text, y_text, s, ha='center')
+            
+            ax = fig.add_subplot(grid[0,1], yticklabels=[])            
+            ax.scatter(loopSize, loopPosition, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+            loopPosition_savgol = savgol_filter(loopPosition, window_length=n_savgol, polyorder=1)
+            loopSize_savgol = savgol_filter(loopSize, window_length=n_savgol, polyorder=1)
+            kymograph.colorline(loopSize_savgol, loopPosition_savgol, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+            ax.set_xlabel('Loop size [kb]')
+            ax.set_xlim([min(loopSize), max(loopSize)])
+            ax.set_ylim([min(loopPosition), max(loopPosition)])
+            s = 'window length '+str(n_savgol)+' frames'
+            ax.text(x_text, y_text, s, ha='center')
+                      
+            ax = fig.add_subplot(grid[0,2], yticklabels=[])            
+            ax.scatter(loopSize, loopPosition, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+            loopPosition_savgol = savgol_filter(loopPosition, window_length=n_savgol_hi, polyorder=1)
+            loopSize_savgol = savgol_filter(loopSize, window_length=n_savgol_hi, polyorder=1)
+            kymograph.colorline(loopSize_savgol, loopPosition_savgol, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+            ax.set_xlim([min(loopSize), max(loopSize)])
+            ax.set_ylim([min(loopPosition), max(loopPosition)])
+            s = 'window length '+str(n_savgol_hi)+' frames'
+            ax.text(x_text, y_text, s, ha='center')
+
             plt.gcf().show()
+
+            if self.multipeak_dialog.plottype_combobox.currentText() == "LoopSizeVsPositionDetailed":
+                # 3-point interpolation
+                x_3pt = np.zeros(x.shape)
+                y_3pt = np.zeros(x.shape)
+                x_3pt_smooth = np.zeros(x.shape)
+                y_3pt_smooth = np.zeros(x.shape)
+                smooth_length = self.multipeak_dialog.smoothlength_spinbox.value()
+                for ind in range(len(x)):
+                    peakIndex_x = peakIndex[1:-1,ind].astype(int)
+                    peakIndex_x = peakIndex[:,ind].astype(int)
+                    y_3pt[ind], x_3pt[ind] = kymograph.qinterp_max(self.kymo_left_loop[frames[ind], peakIndex_x], x=peakIndex_x)
+                    
+                    line1d = self.kymo_left_loop[frames[ind], :]
+                    if smooth_length > 2:
+                        line1d_smth = savgol_filter(line1d, window_length=smooth_length, polyorder=1)
+                    else:
+                        line1d_smth = line1d
+
+                    y_3pt_smooth[ind], x_3pt_smooth[ind] = kymograph.qinterp_max(line1d_smth[peakIndex_x], x=peakIndex_x)
+
+
+
+                from scipy.signal import butter,filtfilt
+                fs = 5       # sample rate, Hz
+                cutoff = 0.5      # desired cutoff frequency of the filter, Hz
+                nyq = 0.5 * fs  # Nyquist Frequency
+                order = 4       # sin wave can be approx represented as quadratic
+                def butter_lowpass_filter(data, cutoff, fs, order):
+                    normal_cutoff = cutoff / nyq
+                    # Get the filter coefficients 
+                    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+                    y = filtfilt(b, a, data)
+                    return y
+
+                # plot original smoothing of integer pixel values
+                loopPosition_savgol = savgol_filter(loopPosition, window_length=n_savgol, polyorder=1)
+                loopSize_savgol = savgol_filter(loopSize, window_length=n_savgol, polyorder=1)
+                fig = plt.figure(figsize=(10, 6))
+                grid = plt.GridSpec(2, 4, wspace=0.0, hspace=0.0)
+                ax = fig.add_subplot(grid[0,0:1], xticklabels=[])
+                ax.plot(frames, loopPosition)
+                ax.plot(frames, loopPosition_savgol)
+                ax.set_ylabel('Loop position [kb]')
+                ax = fig.add_subplot(grid[1,0:1])
+                ax.plot(frames, loopSize)
+                ax.plot(frames, loopSize_savgol)
+                ax.set_xlabel('Frames')
+                ax.set_ylabel('Loop size [kb]')
+                ax = fig.add_subplot(grid[:,2:])
+                ax.scatter(loopSize, loopPosition, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+                kymograph.colorline(loopSize_savgol, loopPosition_savgol, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+                ax.set_ylabel('Loop position [kb]')
+                ax.set_xlabel('Loop size [kb]')
+                ax.set_title('Savgol smoothing of integer pixel values')
+                plt.gcf().show()
+
+                # plot subpixel localisation and savgol
+                loopPosition_subpix_savgol = savgol_filter(x_3pt_smooth, window_length=n_savgol, polyorder=1)
+                loopSize_subpix_savgol = savgol_filter(y_3pt_smooth, window_length=n_savgol, polyorder=1)
+                fig = plt.figure(figsize=(10, 6))
+                grid = plt.GridSpec(2, 4, wspace=0.0, hspace=0.0)
+                ax = fig.add_subplot(grid[0,0:1], xticklabels=[])
+                ax.plot(frames, x_3pt_smooth)
+                ax.plot(frames, loopPosition_subpix_savgol)
+                ax.set_ylabel('Loop position [kb]')
+                ax = fig.add_subplot(grid[1,0:1])
+                ax.plot(frames, y_3pt_smooth)
+                ax.plot(frames, loopSize_subpix_savgol)
+                ax.set_xlabel('Frames')
+                ax.set_ylabel('Loop size [kb]')
+                ax = fig.add_subplot(grid[:,2:])
+                ax.scatter(y_3pt_smooth, x_3pt_smooth, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+                kymograph.colorline(loopSize_subpix_savgol, loopPosition_subpix_savgol, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+                ax.set_ylabel('Loop position [kb]')
+                ax.set_xlabel('Loop size [kb]')
+                ax.set_title('Savgol smoothing of subpixel values')
+                plt.gcf().show()
+                
+                # plot subpixel localisation and butterworth
+                cutoff = 0.5      # desired cutoff frequency of the filter, Hz
+                loopPosition_subpix_butterworth = butter_lowpass_filter(x_3pt_smooth, cutoff, fs, order)
+                loopSize_subpix_butterworth = butter_lowpass_filter(y_3pt_smooth, cutoff, fs, order)
+                fig = plt.figure(figsize=(10, 6))
+                grid = plt.GridSpec(2, 4, wspace=0.0, hspace=0.0)
+                ax = fig.add_subplot(grid[0,0:1], xticklabels=[])
+                ax.plot(frames, x_3pt_smooth)
+                ax.plot(frames, loopPosition_subpix_butterworth)
+                ax.set_ylabel('Loop position [kb]')
+                ax = fig.add_subplot(grid[1,0:1])
+                ax.plot(frames, y_3pt_smooth)
+                ax.plot(frames, loopSize_subpix_butterworth)
+                ax.set_xlabel('Frames')
+                ax.set_ylabel('Loop size [kb]')
+                ax = fig.add_subplot(grid[:,2:])
+                ax.scatter(y_3pt_smooth, x_3pt_smooth, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+                kymograph.colorline(loopSize_subpix_butterworth, loopPosition_subpix_butterworth, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+                ax.set_ylabel('Loop position [kb]')
+                ax.set_xlabel('Loop size [kb]')
+                ax.set_title('0.5 Hz cutoff smoothing of subpixel values')
+                plt.gcf().show()
+
+                # plot subpixel localisation and butterworth
+                cutoff = 0.25      # desired cutoff frequency of the filter, Hz
+                loopPosition_subpix_butterworth = butter_lowpass_filter(x_3pt_smooth, cutoff, fs, order)
+                loopSize_subpix_butterworth = butter_lowpass_filter(y_3pt_smooth, cutoff, fs, order)
+                fig = plt.figure(figsize=(10, 6))
+                grid = plt.GridSpec(2, 4, wspace=0.0, hspace=0.0)
+                ax = fig.add_subplot(grid[0,0:1], xticklabels=[])
+                ax.plot(frames, x_3pt_smooth)
+                ax.plot(frames, loopPosition_subpix_butterworth)
+                ax.set_ylabel('Loop position [kb]')
+                ax = fig.add_subplot(grid[1,0:1])
+                ax.plot(frames, y_3pt_smooth)
+                ax.plot(frames, loopSize_subpix_butterworth)
+                ax.set_xlabel('Frames')
+                ax.set_ylabel('Loop size [kb]')
+                ax = fig.add_subplot(grid[:,2:])
+                ax.scatter(y_3pt_smooth, x_3pt_smooth, s=2, c=group_sel_col1["FrameNumber"].values, cmap=jetColormap)
+                kymograph.colorline(loopSize_subpix_butterworth, loopPosition_subpix_butterworth, z=None, cmap=jetColormap, linewidth=2, ax=ax)
+                ax.set_ylabel('Loop position [kb]')
+                ax.set_xlabel('Loop size [kb]')
+                ax.set_title('0.25 Hz cutoff smoothing of subpixel values')
+                plt.gcf().show()
+
 
         elif self.multipeak_dialog.plottype_combobox.currentText() == "TimeTraceCol1":
             print("plot TimeTrace")

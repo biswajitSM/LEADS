@@ -13,6 +13,8 @@ from skimage.io.collection import alphanumeric_key
 import pims
 import trackpy
 import matplotlib.pyplot as plt
+import matplotlib.collections as mcoll
+import matplotlib.path as mpath
 from . import io
 from .utils import figure_params
 plt.rcParams.update(figure_params.params_dict)
@@ -414,8 +416,11 @@ def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory
         df_peaks["y"] = df_peaks_sm["PeakPosition"]
     df_peaks["frame"] = df_peaks["FrameNumber"]
     if usePrecomputed is None:
+        trackpy.quiet(suppress=True)
+        print('Linking peaks... hang on!')
         t = trackpy.link(df_peaks, search_range=search_range,
                     memory=memory, pos_columns=['y', 'x'])
+        trackpy.quiet(suppress=False)
         t_filt = trackpy.filter_stubs(t, filter_length)
     else:
         t_filt = usePrecomputed
@@ -645,8 +650,44 @@ def clean_duplicate_maxima(dist, indexes):
             paired_indexes.append(tmp)
     return paired_indexes
 
-import matplotlib.collections as mcoll
-import matplotlib.path as mpath
+def qinterp_max(y, x=None, extras=False):
+    '''
+    Find the maximum point in an array, and if it's an interior point,
+    interpolate among it and its two nearest neighbors to predict
+    the interpolated maximum.
+    
+    Returns that interpolated maximum,
+    if extras=True, also returns the coefficients
+    and the index and value of the sample maximum.
+    source: https://www.embeddedrelated.com/showarticle/855.php
+    '''
+    if x is None:
+        x = np.arange(0, len(y))
+    imax = 0
+    ymax = -float('inf')
+    # run through the points to find the maximum
+    for i,y_i in enumerate(y):
+        if y_i > ymax:
+            imax = i
+            ymax = y_i
+    # no interpolation if at the ends
+    # print(i)
+    if imax == 0 or imax == i:
+        # print('conditions rue')
+        return ymax, x[imax]
+    # otherwise, y[imax] >= either of its neighbors,
+    # and we use quadratic interpolation:
+    # print(imax)
+    c = y[imax]
+    b = (y[imax+1]-y[imax-1])/2.0
+    a = (y[imax+1]+y[imax-1])/2.0 - c
+    yinterp = c - b*b/4.0/a
+    xinterp = (x[1]-x[0])*(-b/2.0/a) + x[1]
+    if extras:
+        return yinterp, (a,b,c), imax, ymax
+    else:
+        return yinterp, xinterp
+
 
 def colorline(
     x, y, z=None, cmap=plt.get_cmap('copper'), norm=plt.Normalize(0.0, 1.0),
