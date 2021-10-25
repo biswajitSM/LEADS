@@ -2685,6 +2685,7 @@ class Window(QtWidgets.QMainWindow):
     def merge_tracks_fun(self, tracks, df):
         tracks = tracks.replace(' ', '')
         tracks = sorted( list( set( [int(track) for track in tracks.split(',')] ) ) )
+        replot = False
         if len(tracks)>1:
             replot = True
             minTrackNo = tracks[0]
@@ -2910,7 +2911,7 @@ class Window(QtWidgets.QMainWindow):
             trace_col1_bg = trace_col1_bg[~np.isnan(trace_col1)]
             trace_col1 = trace_col1[~np.isnan(trace_col1)]
             
-            loopSize = trace_col1/(trace_col1+trace_col1_bg) * self.multipeak_dialog.DNAlength_spinbox.value() #trace_col1 - trace_col1_bg
+            loopSize = trace_col1#/(trace_col1+trace_col1_bg) * self.multipeak_dialog.DNAlength_spinbox.value() #trace_col1 - trace_col1_bg
             loopPosition = (x-self.dna_ends[0])/self.dna_ends[1] * self.multipeak_dialog.DNAlength_spinbox.value()#x
 
 
@@ -2956,7 +2957,7 @@ class Window(QtWidgets.QMainWindow):
             loopPosition_savgol = savgol_filter(loopPosition, window_length=n_savgol, polyorder=1)
             loopSize_savgol = savgol_filter(loopSize, window_length=n_savgol, polyorder=1)
             kymograph.colorline(loopSize_savgol, loopPosition_savgol, z=None, cmap=jetColormap, linewidth=2, ax=ax)
-            ax.set_xlabel('Loop size [kb]')
+            ax.set_xlabel('Loop size [a.u.]')
             ax.set_xlim([min(loopSize), max(loopSize)])
             ax.set_ylim([min(loopPosition), max(loopPosition)])
             s = 'window length '+str(n_savgol)+' frames'
@@ -3116,16 +3117,12 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(group_sel_col1["FrameNumber"], trace_col1, '-', color=(0.8, 0.8, 0.8), label="Peak")
             ax.plot(group_sel_col1["FrameNumber"], trace_col1_bg, '--', color=(0.8, 0.8, 0.8), label="Background")
             ax.plot(group_sel_col1["FrameNumber"], trace_col1-trace_col1_bg, 'k-', label="Subtracted")
-            # savgol filtering
-            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
-            if n_savgol>=len(trace_col1):
-                n_savgol = len(trace_col1)-2
-            if n_savgol%2 == 0:
-                n_savgol += 1
-            subtracted_smooth = savgol_filter(trace_col1-trace_col1_bg, window_length=n_savgol, polyorder=1)
+
+            sIntensity = int( np.ceil( np.max(trace_col1-trace_col1_bg)*0.5 ) )
+            subtracted_smooth = kymograph.bilateralFtr1D(trace_col1-trace_col1_bg, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
             ax.plot(group_sel_col1["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
             # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = trace_col1-trace_col1_bg
+            step_detect_data = subtracted_smooth#trace_col1-trace_col1_bg
             p2  = step_detect.mz_fwt(step_detect_data, n=2)
             p2 /= np.abs(p2).max()
             stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
@@ -3134,10 +3131,7 @@ class Window(QtWidgets.QMainWindow):
             minFrame = np.min( group_sel_col1["FrameNumber"].values )
             for ii in range(len(stepPositions)):
                 plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
-            # trace_col1 = 7 * np.average(self.kymo_left_loop, axis=1)
-            # trace_col1_bg = trace_col1# - np.average(group_sel_col1["PeakIntensity"].values)
-            # ax.plot(group_sel_col1["FrameNumber"], group_sel_col1["PeakIntensity"], label="Peak")
-            # ax.plot(trace_col1_bg, label="Background")
+
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
@@ -3159,16 +3153,12 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(group_sel_col2["FrameNumber"], trace_col2, '-', color=(0.8, 0.8, 0.8), label="Peak")
             ax.plot(group_sel_col2["FrameNumber"], trace_col2_bg, '--', color=(0.8, 0.8, 0.8), label="Background")
             ax.plot(group_sel_col2["FrameNumber"], trace_col2-trace_col2_bg, 'k-', label="Subtracted")
-            # savgol filtering
-            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
-            if n_savgol>=len(trace_col2):
-                n_savgol = len(trace_col2)-2
-            if n_savgol%2 == 0:
-                n_savgol += 1
-            subtracted_smooth = savgol_filter(trace_col2-trace_col2_bg, window_length=n_savgol, polyorder=1)
+
+            sIntensity = int( np.ceil( np.max(trace_col2-trace_col2_bg)*0.5 ) )
+            subtracted_smooth = kymograph.bilateralFtr1D(trace_col2-trace_col2_bg, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
             ax.plot(group_sel_col2["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
             # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = trace_col2-trace_col2_bg
+            step_detect_data = subtracted_smooth#trace_col2-trace_col2_bg
             p2  = step_detect.mz_fwt(step_detect_data, n=2)
             p2 /= np.abs(p2).max()
             stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
@@ -3177,41 +3167,24 @@ class Window(QtWidgets.QMainWindow):
             minFrame = np.min( group_sel_col2["FrameNumber"].values )
             for ii in range(len(stepPositions)):
                 plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
-            # trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
-            # trace_col2_bg = trace_col1# - np.average(group_sel_col2["PeakIntensity"].values)
-            # ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
-            # ax.plot(trace_col2_bg, label="Background")
+
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
             plt.gcf().show()
 
-
-            # _, ax = plt.subplots()
-            # trace_col2 = 7 * np.average(self.kymo_right_loop, axis=1)
-            # trace_col2_bg = trace_col2# - np.average(group_sel_col2["PeakIntensity"].values)
-            # ax.plot(group_sel_col2["FrameNumber"], group_sel_col2["PeakIntensity"], label="Peak")
-            # ax.plot(trace_col2_bg, label="Background")
-            # ax.set_xlabel("Frame Number")
-            # ax.set_ylabel("Intensity")
-            # ax.legend()
-            # plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "AvTimeTraceCol1":
             print("plot average TimeTrace")
             _, ax = plt.subplots()
-            trace_col1 = np.mean( self.kymo_left_loop, axis=1)    
+            trace_col1 = np.mean( self.kymo_left_loop, axis=1) * 1000
             FrameNumber = np.arange(1, len(trace_col1)+1)      
             ax.plot(FrameNumber, trace_col1, 'k-', label="Intensity")
-            # savgol filtering
-            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
-            if n_savgol>=len(trace_col1):
-                n_savgol = len(trace_col1)-2
-            if n_savgol%2 == 0:
-                n_savgol += 1
-            trace_col1_smooth = savgol_filter(trace_col1, window_length=n_savgol, polyorder=1)
-            ax.plot(FrameNumber, trace_col1_smooth, 'r-', label="Intensity smooth")
+
+            sIntensity = int( np.ceil( np.max(trace_col1)*0.5 ) )
+            subtracted_smooth = kymograph.bilateralFtr1D(trace_col1, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
+            ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
             # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = trace_col1
+            step_detect_data = subtracted_smooth #trace_col1
             p2  = step_detect.mz_fwt(step_detect_data, n=2)
             p2 /= np.abs(p2).max()
             stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
@@ -3227,19 +3200,16 @@ class Window(QtWidgets.QMainWindow):
         elif self.multipeak_dialog.plottype_combobox.currentText() == "AvTimeTraceCol2" and self.numColors == "2":
             print("plot average TimeTrace")
             _, ax = plt.subplots()
-            trace_col2 = np.mean( self.kymo_right_loop, axis=1)    
+            trace_col2 = np.mean( self.kymo_right_loop, axis=1) * 1000  
             FrameNumber = np.arange(1, len(trace_col2)+1)      
             ax.plot(FrameNumber, trace_col2, 'k-', label="Intensity")
-            # savgol filtering
-            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
-            if n_savgol>=len(trace_col2):
-                n_savgol = len(trace_col2)-2
-            if n_savgol%2 == 0:
-                n_savgol += 1
-            subtracted_smooth = savgol_filter(trace_col2, window_length=n_savgol, polyorder=1)
+s
+            sIntensity = int( np.ceil( np.max(trace_col2)*0.5 ) )
+            subtracted_smooth = kymograph.bilateralFtr1D(trace_col2, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
+
             ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
             # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = trace_col2
+            step_detect_data = subtracted_smooth#trace_col2
             p2  = step_detect.mz_fwt(step_detect_data, n=2)
             p2 /= np.abs(p2).max()
             stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
