@@ -3203,7 +3203,7 @@ class Window(QtWidgets.QMainWindow):
             trace_col2 = np.mean( self.kymo_right_loop, axis=1) * 1000  
             FrameNumber = np.arange(1, len(trace_col2)+1)      
             ax.plot(FrameNumber, trace_col2, 'k-', label="Intensity")
-s
+
             sIntensity = int( np.ceil( np.max(trace_col2)*0.5 ) )
             subtracted_smooth = kymograph.bilateralFtr1D(trace_col2, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
 
