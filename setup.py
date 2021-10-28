@@ -26,7 +26,7 @@ setuptools.setup(
         "scikit-image",
         "matplotlib",
         "PyQt5",
-        "napari",
+        "napari==0.4.7",
         "pyqtgraph",
         "opencv-python",
         "dask",
@@ -40,8 +40,7 @@ setuptools.setup(
         "tables",
         "qdarkstyle",
         "colorharmonies",
-        "XlsxWriter",
-        "re"
+        "XlsxWriter"
     ],
     dependency_links = ["git+https://github.com/pyqtgraph/pyqtgraph@master"]
 )

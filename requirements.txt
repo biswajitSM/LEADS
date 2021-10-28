@@ -5,7 +5,7 @@ scipy
 scikit-image
 matplotlib
 PyQt5
-napari
+napari==0.4.7
 pyqtgraph
 opencv-python
 dask
@@ -20,4 +20,3 @@ tables
 qdarkstyle
 colorharmonies
 XlsxWriter
-re
