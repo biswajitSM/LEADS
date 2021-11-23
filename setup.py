@@ -26,7 +26,7 @@ setuptools.setup(
         "scikit-image",
         "matplotlib==3.4.1",
         "PyQt5",
-        "napari==0.4.7",
+        "napari==0.4.8",
         "pyqtgraph",
         "opencv-python",
         "dask",
