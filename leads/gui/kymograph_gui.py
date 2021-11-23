@@ -3121,16 +3121,19 @@ class Window(QtWidgets.QMainWindow):
             sIntensity = int( np.ceil( np.max(trace_col1-trace_col1_bg)*0.5 ) )
             subtracted_smooth = kymograph.bilateralFtr1D(trace_col1-trace_col1_bg, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
             ax.plot(group_sel_col1["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
-            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = subtracted_smooth#trace_col1-trace_col1_bg
-            p2  = step_detect.mz_fwt(step_detect_data, n=2)
-            p2 /= np.abs(p2).max()
-            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
-            minVal = min(step_detect_data)
-            maxVal = max(step_detect_data)
-            minFrame = np.min( group_sel_col1["FrameNumber"].values )
-            for ii in range(len(stepPositions)):
-                plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
+            # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            # step_detect_data = subtracted_smooth#trace_col1-trace_col1_bg
+            # p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            # p2 /= np.abs(p2).max()
+            # try:
+            #     stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            #     minVal = min(step_detect_data)
+            #     maxVal = max(step_detect_data)
+            #     minFrame = np.min( group_sel_col1["FrameNumber"].values )
+            #     for ii in range(len(stepPositions)):
+            #         plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
+            # except:
+            #     pass
 
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
@@ -3157,17 +3160,19 @@ class Window(QtWidgets.QMainWindow):
             sIntensity = int( np.ceil( np.max(trace_col2-trace_col2_bg)*0.5 ) )
             subtracted_smooth = kymograph.bilateralFtr1D(trace_col2-trace_col2_bg, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
             ax.plot(group_sel_col2["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
-            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = subtracted_smooth#trace_col2-trace_col2_bg
-            p2  = step_detect.mz_fwt(step_detect_data, n=2)
-            p2 /= np.abs(p2).max()
-            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
-            minVal = min(step_detect_data)
-            maxVal = max(step_detect_data)
-            minFrame = np.min( group_sel_col2["FrameNumber"].values )
-            for ii in range(len(stepPositions)):
-                plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
-
+            # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            # step_detect_data = subtracted_smooth#trace_col2-trace_col2_bg
+            # p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            # p2 /= np.abs(p2).max()
+            # try:
+            #     stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            #     minVal = min(step_detect_data)
+            #     maxVal = max(step_detect_data)
+            #     minFrame = np.min( group_sel_col2["FrameNumber"].values )
+            #     for ii in range(len(stepPositions)):
+            #         plt.plot((stepPositions[ii]+minFrame, stepPositions[ii]+minFrame), (minVal, maxVal), 'r')
+            # except:
+            #     pass
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
@@ -3183,15 +3188,18 @@ class Window(QtWidgets.QMainWindow):
             sIntensity = int( np.ceil( np.max(trace_col1)*0.5 ) )
             subtracted_smooth = kymograph.bilateralFtr1D(trace_col1, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
             ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
-            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = subtracted_smooth #trace_col1
-            p2  = step_detect.mz_fwt(step_detect_data, n=2)
-            p2 /= np.abs(p2).max()
-            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
-            minVal = min(step_detect_data)
-            maxVal = max(step_detect_data)
-            for ii in range(len(stepPositions)):
-                plt.plot((stepPositions[ii], stepPositions[ii]), (minVal, maxVal), 'r')
+            # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            # step_detect_data = subtracted_smooth #trace_col1
+            # p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            # p2 /= np.abs(p2).max()
+            # try:
+            #     stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            #     minVal = min(step_detect_data)
+            #     maxVal = max(step_detect_data)
+            #     for ii in range(len(stepPositions)):
+            #         plt.plot((stepPositions[ii], stepPositions[ii]), (minVal, maxVal), 'r')
+            # except:
+            #     pass
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
@@ -3208,15 +3216,18 @@ class Window(QtWidgets.QMainWindow):
             subtracted_smooth = kymograph.bilateralFtr1D(trace_col2, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
 
             ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
-            # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            step_detect_data = subtracted_smooth#trace_col2
-            p2  = step_detect.mz_fwt(step_detect_data, n=2)
-            p2 /= np.abs(p2).max()
-            stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
-            minVal = min(step_detect_data)
-            maxVal = max(step_detect_data)
-            for ii in range(len(stepPositions)):
-                plt.plot((stepPositions[ii], stepPositions[ii]), (minVal, maxVal), 'r')
+            # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
+            # step_detect_data = subtracted_smooth#trace_col2
+            # p2  = step_detect.mz_fwt(step_detect_data, n=2)
+            # p2 /= np.abs(p2).max()
+            # try:
+            #     stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
+            #     minVal = min(step_detect_data)
+            #     maxVal = max(step_detect_data)
+            #     for ii in range(len(stepPositions)):
+            #         plt.plot((stepPositions[ii], stepPositions[ii]), (minVal, maxVal), 'r')
+            # except:
+            #     pass
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()

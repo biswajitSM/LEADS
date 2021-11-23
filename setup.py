@@ -24,7 +24,7 @@ setuptools.setup(
         "pandas",
         "scipy",
         "scikit-image",
-        "matplotlib",
+        "matplotlib==3.4.1",
         "PyQt5",
         "napari==0.4.7",
         "pyqtgraph",
