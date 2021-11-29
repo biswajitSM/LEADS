@@ -848,6 +848,111 @@ class ROIDialog(QtWidgets.QDialog):
         vbox.addWidget(control_groupbox)
         control_grid = QtWidgets.QGridLayout(control_groupbox)
 
+class ManagePropertiesDialog(QtWidgets.QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Add/Remove Properties")
+        self.resize(300, 400)
+        self.setModal(True)
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
+
+        self.layout = QtWidgets.QVBoxLayout(self)
+
+        self.add_button = QtWidgets.QPushButton('+')
+        
+        self.layout.addWidget(self.add_button)
+        self.scrollArea = QtWidgets.QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollAreaWidgetContents = QtWidgets.QWidget()
+        self.scrollLayout = QtWidgets.QFormLayout(self.scrollAreaWidgetContents)
+        self.scrollArea.setWidget(self.scrollAreaWidgetContents)
+        self.scrollArea.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.layout.addWidget(self.scrollArea)
+
+        self.load_property_widgets()
+
+        self.OK_button = QtWidgets.QPushButton('OK')
+        self.layout.addWidget(self.OK_button)
+
+        self.add_button.clicked.connect(self.add_property)
+        self.OK_button.clicked.connect(self.OK_button_callback)
+    
+    def load_property_widgets(self):
+        if self.scrollLayout.rowCount() > 0:
+            for i in reversed(range(self.scrollLayout.rowCount())):
+                self.scrollLayout.removeRow(i)
+
+        self.prop_widgets = []
+        for row_num, prop in enumerate(self.window.ui.manualproperties):
+            self.prop_widgets.append({
+                'MainWidget': QtWidgets.QWidget(),
+                'MainLayout': QtWidgets.QGridLayout(),
+                'LabelWidget': QtWidgets.QLineEdit(),
+                'TypeWidget': QtWidgets.QComboBox(),
+                'DeleteButton': QtWidgets.QPushButton('X')
+            })
+        for row_num, prop in enumerate(self.window.ui.manualproperties):
+            self.prop_widgets[row_num]['MainWidget'].setLayout(self.prop_widgets[row_num]['MainLayout'])
+            self.prop_widgets[row_num]['LabelWidget'].setText(prop['Label'])
+            self.prop_widgets[row_num]['TypeWidget'].addItems(['True/False', 'Value'])
+            self.prop_widgets[row_num]['DeleteButton'].setToolTip('Delete this property')
+
+
+            if prop['Type'] == 'text':
+                self.prop_widgets[row_num]['TypeWidget'].setCurrentText('Value')
+            elif prop['Type'] == 'checkbox':
+                self.prop_widgets[row_num]['TypeWidget'].setCurrentText('True/False')
+            else:
+                raise(Exception('Unknown value type entered in manual properties dialog...'))
+
+            self.prop_widgets[row_num]['MainLayout'].addWidget(self.prop_widgets[row_num]['LabelWidget'], 0, 0)
+            self.prop_widgets[row_num]['MainLayout'].addWidget(self.prop_widgets[row_num]['TypeWidget'], 0, 1)
+            self.prop_widgets[row_num]['MainLayout'].addWidget(self.prop_widgets[row_num]['DeleteButton'], 0, 2)
+            self.scrollLayout.addRow(self.prop_widgets[row_num]['MainWidget'])
+
+    def add_property(self):
+        num = len(self.window.ui.manualproperties)
+        self.window.ui.manualproperties.append({
+                'Label': 'Property'+str(num),
+                'Type': 'checkbox',
+                'Value': 0,
+                'Widget': None
+            })
+
+        self.load_property_widgets()
+        # Run suggested "Manual properties function???" to update the manual properties bar --> Maybe really only needed once you press the 'OK' button?
+
+    def remove_property(self):
+        # Remove property from self.window.ui.manualproperties
+        # load property widgets function
+        # Run suggested "Manual properties function???" to update the manual properties bar --> Maybe really only needed once you press the 'OK' button?
+    
+        pass
+
+    def OK_button_callback(self):
+        for i, pw in enumerate(self.prop_widgets):
+            self.window.ui.manualproperties[i]['Label'] = pw['LabelWidget'].text()
+            if pw['TypeWidget'].currentText() == 'Value':
+                self.window.ui.manualproperties[i]['Type'] = 'text'
+            elif pw['TypeWidget'].currentText() == 'True/False':
+                self.window.ui.manualproperties[i]['Type'] = 'checkbox'
+            else:
+                raise(Exception('Unknown value type entered in manual properties dialog...'))
+
+        self.window.ui.updateManualPropertiesBar()
+
+        self.close()
+
+    def closeEvent(self, event):
+        self.window.ui.updateManualPropertiesBar()
+        self.hide()
+        #TODO: Ask whether the user wants the settings to be saved
+        
+    def init(self):
+        self.show()
+
 class DoubleSlider(QtWidgets.QSlider):
 
     def __init__(self, *args, **kwargs):
@@ -905,6 +1010,35 @@ class MainWidget(QtWidgets.QWidget):
         sizePolicy.setHeightForWidth(self.dockarea.sizePolicy().hasHeightForWidth())
         self.dockarea.setSizePolicy(sizePolicy)
         self.dockarea.setBaseSize(QtCore.QSize(0, 2))
+
+        ## manual properties bar
+        self.manPropScroll = QtWidgets.QScrollArea(self)
+        self.manPropWidget = QtWidgets.QWidget()
+        self.manPropLayout = QtWidgets.QGridLayout(self.manPropWidget)
+        # self.manPropWidget.setLayout(self.manPropLayout)
+        self.manPropScroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.manPropScroll.setWidgetResizable(True)
+        self.manPropScroll.setWidget(self.manPropWidget)
+        self.layout.addWidget(self.manPropScroll)
+
+        ## manage manual properties
+        self.manPropButton = QtWidgets.QPushButton("Add/Remove Properties")
+        self.manPropLayout.addWidget(self.manPropButton, 0, 0)
+        self.manualproperties = [
+            {
+                'Label': 'Ignore',
+                'Type': 'checkbox',
+                'Value': 0,
+                'Widget': None
+            },
+            {
+                'Label': 'Comment',
+                'Type': 'text',
+                'Value': '',
+                'Widget': None
+            }]
+        self.updateManualPropertiesBar()
+
         ## bottom bar
         self.bottomwidget = QtWidgets.QWidget()
         self.layout.addWidget(self.bottomwidget)
@@ -1004,6 +1138,23 @@ class MainWidget(QtWidgets.QWidget):
         grid_colors.addWidget(self.swapColorsComboBox, 0, 1)
         grid_colors.addWidget(self.mergeColorsCheckBox, 1, 0)
 
+    def updateManualPropertiesBar(self):
+
+        for i, prop in enumerate(self.manualproperties):
+            if prop['Type'] == 'text':
+                prop['Widget'] =  QtWidgets.QGridLayout()
+                # prop['Widget'].setMaximumWidth(200)
+                self.manPropLayout.addLayout(prop['Widget'], 0, i+1)
+                prop['Widget'].addWidget(QtWidgets.QLabel(prop['Label'], alignment=QtCore.Qt.AlignRight), 0, 0)
+                textbox = QtWidgets.QLineEdit()
+                textbox.setMinimumWidth(100)
+                if prop['Label'] != 'Comment':
+                    textbox.setMaximumWidth(100)
+                prop['Widget'].addWidget(textbox, 0, 1)
+            elif prop['Type'] == 'checkbox':
+                prop['Widget'] = QtWidgets.QCheckBox(prop['Label'])
+                self.manPropLayout.addWidget(prop['Widget'], 0, i+1)
+                
 
 class Window(QtWidgets.QMainWindow):
     """ The main window """
@@ -1026,6 +1177,7 @@ class Window(QtWidgets.QMainWindow):
         self.file_dialog = FileDialog(self)
         self.roi_dialog = ROIDialog(self)
         self.supergauss_dialog = SuperGaussFittingDialog(self)
+        self.manual_properties_dialog = ManagePropertiesDialog(self)
         self.init_menu_bar()
         # load params
         self.load_parameters()
@@ -1130,6 +1282,8 @@ class Window(QtWidgets.QMainWindow):
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
         self.ui.findDNAendsBtn.clicked.connect(self.supergauss_dialog.init)
+        self.ui.manPropButton.clicked.connect(self.manual_properties_dialog.init)
+        
 
     def connect_signals(self):
         # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
