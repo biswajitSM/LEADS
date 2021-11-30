@@ -1627,7 +1627,7 @@ class Window(QtWidgets.QMainWindow):
         self.filepath_yaml = os.path.join(self.folderpath, self.filename_base + '_params.yaml')
         if os.path.isfile(self.filepath_yaml):
             with open(self.filepath_yaml) as f:
-                self.params_yaml = yaml.load(f)
+                self.params_yaml = yaml.safe_load(f)
         else:
             with open(self.filepath_yaml, 'w') as f:
                 self.params_yaml = {
@@ -1648,7 +1648,7 @@ class Window(QtWidgets.QMainWindow):
                                  "yaml (*.yaml)").openFileNameDialog()
         if os.path.isfile(filepath_yaml):
             with open(filepath_yaml) as f:
-                self.params_yaml = yaml.load(f)
+                self.params_yaml = yaml.safe_load(f)
         self.set_yaml_params()
 
     def save_yaml_as(self):

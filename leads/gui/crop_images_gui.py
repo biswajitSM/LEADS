@@ -27,7 +27,7 @@ from vispy.color import Colormap, ColorArray
 from scipy.stats import mode
 from scipy.signal import correlate2d
 from scipy.interpolate import interp1d
-from napari.layers.utils.text import TextManager
+# from napari.layers.utils.text import TextManager
 from napari.layers.utils._text_utils import format_text_properties
 from leads.kymograph import read_img_stack, median_bkg_substration
 
