@@ -25,6 +25,7 @@ import tqdm
 from . import crop_images_gui
 import pandas as pd
 import re
+from copy import deepcopy
 
 DEFAULTS = {
     "Number of colors" : "2",
@@ -891,13 +892,19 @@ class ManagePropertiesDialog(QtWidgets.QDialog):
                 'MainLayout': QtWidgets.QGridLayout(),
                 'LabelWidget': QtWidgets.QLineEdit(),
                 'TypeWidget': QtWidgets.QComboBox(),
-                'DeleteButton': QtWidgets.QPushButton('X')
+                'DeleteButton': QtWidgets.QPushButton('X'),
+                'Callback': lambda row_num=row_num: self.remove_property(row_num)
             })
+
         for row_num, prop in enumerate(self.window.ui.manualproperties):
             self.prop_widgets[row_num]['MainWidget'].setLayout(self.prop_widgets[row_num]['MainLayout'])
             self.prop_widgets[row_num]['LabelWidget'].setText(prop['Label'])
             self.prop_widgets[row_num]['TypeWidget'].addItems(['True/False', 'Value'])
             self.prop_widgets[row_num]['DeleteButton'].setToolTip('Delete this property')
+            # if row_num == 0:
+            self.prop_widgets[row_num]['DeleteButton'].clicked.connect(self.prop_widgets[row_num]['Callback'])
+            print('Button: ' + str(row_num))
+            print(self.prop_widgets[row_num]['Callback'])
 
 
             if prop['Type'] == 'text':
@@ -922,14 +929,13 @@ class ManagePropertiesDialog(QtWidgets.QDialog):
             })
 
         self.load_property_widgets()
-        # Run suggested "Manual properties function???" to update the manual properties bar --> Maybe really only needed once you press the 'OK' button?
+        
 
-    def remove_property(self):
-        # Remove property from self.window.ui.manualproperties
+    def remove_property(self, row):
+        print('Deleting row num '+str(row))
+        del self.window.ui.manualproperties[row]
         # load property widgets function
-        # Run suggested "Manual properties function???" to update the manual properties bar --> Maybe really only needed once you press the 'OK' button?
-    
-        pass
+        self.load_property_widgets()
 
     def OK_button_callback(self):
         for i, pw in enumerate(self.prop_widgets):
@@ -1014,7 +1020,7 @@ class MainWidget(QtWidgets.QWidget):
         ## manual properties bar
         self.manPropScroll = QtWidgets.QScrollArea(self)
         self.manPropWidget = QtWidgets.QWidget()
-        self.manPropLayout = QtWidgets.QGridLayout(self.manPropWidget)
+        self.manPropLayout = QtWidgets.QHBoxLayout(self.manPropWidget)
         # self.manPropWidget.setLayout(self.manPropLayout)
         self.manPropScroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.manPropScroll.setWidgetResizable(True)
@@ -1023,7 +1029,7 @@ class MainWidget(QtWidgets.QWidget):
 
         ## manage manual properties
         self.manPropButton = QtWidgets.QPushButton("Add/Remove Properties")
-        self.manPropLayout.addWidget(self.manPropButton, 0, 0)
+        self.manPropLayout.addWidget(self.manPropButton)
         self.manualproperties = [
             {
                 'Label': 'Ignore',
@@ -1137,14 +1143,33 @@ class MainWidget(QtWidgets.QWidget):
         grid_colors.addWidget(self.swapColorsBtn, 0, 0)
         grid_colors.addWidget(self.swapColorsComboBox, 0, 1)
         grid_colors.addWidget(self.mergeColorsCheckBox, 1, 0)
+    
+    def clear_manPropLayout(self, L = False):
+        if not L:
+            L = self.manPropLayout
+        if L is not None:
+            while L.count():
+                item = L.takeAt(0)
+                widget = item.widget()
+                if widget is not None and widget != self.manPropButton:
+                    widget.deleteLater()
+                else:
+                    self.clear_manPropLayout(item.layout())
 
     def updateManualPropertiesBar(self):
+        # Remove all existing property widgets
+        if self.manPropLayout.count() >1:
+            self.clear_manPropLayout()
 
+        self.manPropLayout.addWidget(self.manPropButton)
+        print(self.manPropButton)
+        print(self.manPropLayout.count())
+        # Add property widgets
         for i, prop in enumerate(self.manualproperties):
             if prop['Type'] == 'text':
                 prop['Widget'] =  QtWidgets.QGridLayout()
                 # prop['Widget'].setMaximumWidth(200)
-                self.manPropLayout.addLayout(prop['Widget'], 0, i+1)
+                self.manPropLayout.addLayout(prop['Widget'])
                 prop['Widget'].addWidget(QtWidgets.QLabel(prop['Label'], alignment=QtCore.Qt.AlignRight), 0, 0)
                 textbox = QtWidgets.QLineEdit()
                 textbox.setMinimumWidth(100)
@@ -1153,7 +1178,7 @@ class MainWidget(QtWidgets.QWidget):
                 prop['Widget'].addWidget(textbox, 0, 1)
             elif prop['Type'] == 'checkbox':
                 prop['Widget'] = QtWidgets.QCheckBox(prop['Label'])
-                self.manPropLayout.addWidget(prop['Widget'], 0, i+1)
+                self.manPropLayout.addWidget(prop['Widget'])
                 
 
 class Window(QtWidgets.QMainWindow):
