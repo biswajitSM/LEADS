@@ -18,6 +18,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 plt.rcParams.update(figure_params.params_dict)
 from scipy.signal import savgol_filter
+from scipy.interpolate import interp1d
 import xlsxwriter
 from skimage.io.collection import alphanumeric_key
 import h5py
@@ -1426,9 +1427,12 @@ class Window(QtWidgets.QMainWindow):
 
     def display_file(self):
         if self.currentFile<(len(self.filenames)):
-            try:
-                self.load_img_stack(filepath=self.filenames[self.currentFile])
-            except:
+            if os.path.isfile(self.filenames[self.currentFile]):
+                try:
+                    self.load_img_stack(filepath=self.filenames[self.currentFile])
+                except:
+                    self.load_img_stack(filepath=self.filenames[self.currentFile].replace('.tif', '_processed.tif'))
+            else:
                 self.load_img_stack(filepath=self.filenames[self.currentFile].replace('.tif', '_processed.tif'))
 
     def next_file(self):
@@ -2810,8 +2814,11 @@ class Window(QtWidgets.QMainWindow):
             plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDsavgol":
             print("plot MSD savgol")
-            _, ax = plt.subplots()
-            n_savgol=self.multipeak_dialog.moving_window_spinbox.value()
+            _, ax = plt.subplots(3,1, figsize=(6,8))
+            axLoopSize = ax[1]
+            axLoopSizeMSD = ax[2]
+            ax = ax[0]
+            n_savgol = self.multipeak_dialog.moving_window_spinbox.value()
             n = n_savgol
             if n_savgol%2 == 0:
                 n_savgol = n_savgol + 1
@@ -2855,11 +2862,64 @@ class Window(QtWidgets.QMainWindow):
                 ax_right.tick_params(axis='y', colors='darkorange')
                 ax_right.spines["right"].set_color('darkorange')
                 ax_right.legend(loc='center right', labelcolor='linecolor')
+
+                # plot loop Size vs MSD
+                MSD = msd_moving * self.pixelSize**2
+                left_peak_no = int(self.multipeak_dialog.leftpeak_num_combobox.currentText())
+            
+                df_gb = self.df_peaks_linked.groupby("particle")
+                group_sel = df_gb.get_group(left_peak_no)
+                group_sel = group_sel.reset_index(drop=True)
+                peak_analyzed_dict = analyze_maxpeak(group_sel, smooth_length=7,
+                        frame_width = self.dna_ends[1] - self.dna_ends[0],
+                        dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
+                df_peak_analyzed = peak_analyzed_dict["Max Peak"]
+                n_moving = self.multipeak_dialog.moving_window_spinbox.value()
+                if n_moving%2 == 0:
+                    n_moving = n_moving + 1
+                n_order = 2
+                # loop
+                loopSize = df_peak_analyzed["PeakIntensity"]
+                # loopSizeSavGol = savgol_filter(df_peak_analyzed["PeakIntensity"].values,  window_length=n_moving, polyorder=n_order)
+                framesLoopSize = df_peak_analyzed["FrameNumber"] * self.acquisitionTime
+                framesMSD = frames * self.acquisitionTime
+                minFrame = np.max([np.min(framesLoopSize), np.min(framesMSD)])+self.acquisitionTime
+                maxFrame = np.min([np.max(framesLoopSize), np.max(framesMSD)])-self.acquisitionTime
+                framesInt = np.arange(minFrame, maxFrame, self.acquisitionTime)
+                loopSizeInterpolator = interp1d(framesLoopSize, loopSize)
+                MSDInterpolator = interp1d(framesMSD, MSD)
+                loopSizeInt = loopSizeInterpolator(framesInt)
+                MSDInt = MSDInterpolator(framesInt)
+                loopSizeIntSavgol = savgol_filter(loopSizeInt,  window_length=n_moving, polyorder=n_order)
+                MSDIntSavgol = savgol_filter(MSDInt,  window_length=n_moving, polyorder=n_order)
+                axLoopSize.plot(framesLoopSize, loopSize, '.g')
+                axLoopSize.plot(framesInt, loopSizeIntSavgol, '-g')
+                # axLoopSizeMSD.plot(MSDInt, loopSizeInt, '.')
+                axLoopSizeMSD.plot(MSDIntSavgol[0], loopSizeIntSavgol[0], '.')
+                jetColormap = plt.get_cmap('jet')
+                kymograph.colorline(MSDIntSavgol, loopSizeIntSavgol, z=None, cmap=jetColormap, linewidth=2, ax=axLoopSizeMSD)
+
+                from scipy.stats import spearmanr
+                corr, pval = spearmanr(MSDIntSavgol, loopSizeIntSavgol)
+                string = r"$\rho_{Spear}$ = "+"{:.2f}".format(corr)+'\n'+r"$p=$"+"{:.2e}".format(pval)
+                axLoopSizeMSD.annotate(string, (np.max(MSDIntSavgol), np.max(loopSizeIntSavgol)), 
+                    horizontalalignment='right', verticalalignment='top')
+                axLoopSizeMSD.set_xlim(left=np.min(MSDIntSavgol)*0.95, right=np.max(MSDIntSavgol)*1.05)
+                axLoopSizeMSD.set_ylim(bottom=np.min(loopSizeIntSavgol)*0.95, top=np.max(loopSizeIntSavgol)*1.05)
+
             ax.set_xlabel("time/s")
+            axLoopSize.set_xlabel("time/s")
+            axLoopSizeMSD.set_xlabel(r"MSD(${\mu} m^2$)")
+
             ax.tick_params(axis='y', colors='darkslategrey')
             ax.spines["left"].set_color("darkslategrey")
+
             ax.set_ylabel(r"MSD(${\mu} m^2$)", color='darkslategrey')
+            axLoopSize.set_ylabel(r"Loop size [kbp]")
+            axLoopSizeMSD.set_ylabel(r"Loop size [kbp]")
+            
             ax.legend(labelcolor='linecolor')
+            plt.tight_layout()
             plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDlagtime":
             print("plot MSD")
