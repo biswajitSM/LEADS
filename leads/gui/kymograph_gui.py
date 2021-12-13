@@ -26,6 +26,7 @@ import tqdm
 from . import crop_images_gui
 import pandas as pd
 import re
+from copy import deepcopy, copy
 
 DEFAULTS = {
     "Number of colors" : "2",
@@ -849,6 +850,114 @@ class ROIDialog(QtWidgets.QDialog):
         vbox.addWidget(control_groupbox)
         control_grid = QtWidgets.QGridLayout(control_groupbox)
 
+class ManagePropertiesDialog(QtWidgets.QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Add/Remove Properties")
+        self.resize(300, 400)
+        self.setModal(True)
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
+
+        self.layout = QtWidgets.QVBoxLayout(self)
+
+        self.add_button = QtWidgets.QPushButton('+')
+        
+        self.layout.addWidget(self.add_button)
+        self.scrollArea = QtWidgets.QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollAreaWidgetContents = QtWidgets.QWidget()
+        self.scrollLayout = QtWidgets.QFormLayout(self.scrollAreaWidgetContents)
+        self.scrollArea.setWidget(self.scrollAreaWidgetContents)
+        self.scrollArea.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.layout.addWidget(self.scrollArea)
+
+        self.load_property_widgets()
+
+        self.OK_button = QtWidgets.QPushButton('OK')
+        self.OK_button.setAutoDefault(True)
+        self.layout.addWidget(self.OK_button)
+
+        self.add_button.clicked.connect(self.add_property)
+        self.OK_button.clicked.connect(self.OK_button_callback)
+    
+    def load_property_widgets(self):
+        if self.scrollLayout.rowCount() > 0:
+            for i in reversed(range(self.scrollLayout.rowCount())):
+                self.scrollLayout.removeRow(i)
+
+        self.prop_widgets = []
+        for row_num, prop in enumerate(self.window.ui.manualproperties):
+            self.prop_widgets.append({
+                'MainWidget': QtWidgets.QWidget(),
+                'MainLayout': QtWidgets.QGridLayout(),
+                'LabelWidget': QtWidgets.QLineEdit(),
+                'TypeWidget': QtWidgets.QComboBox(),
+                'DeleteButton': QtWidgets.QPushButton('X'),
+                'Callback': lambda row_num=row_num: self.remove_property(row_num)
+            })
+
+        for row_num, prop in enumerate(self.window.ui.manualproperties):
+            self.prop_widgets[row_num]['MainWidget'].setLayout(self.prop_widgets[row_num]['MainLayout'])
+            self.prop_widgets[row_num]['LabelWidget'].setText(prop['Label'])
+            self.prop_widgets[row_num]['TypeWidget'].addItems(['True/False', 'Value'])
+            self.prop_widgets[row_num]['DeleteButton'].setToolTip('Delete this property')
+            self.prop_widgets[row_num]['DeleteButton'].clicked.connect(self.prop_widgets[row_num]['Callback'])
+
+
+            if prop['Type'] == 'text':
+                self.prop_widgets[row_num]['TypeWidget'].setCurrentText('Value')
+            elif prop['Type'] == 'checkbox':
+                self.prop_widgets[row_num]['TypeWidget'].setCurrentText('True/False')
+            else:
+                raise(Exception('Unknown value type entered in manual properties dialog...'))
+
+            self.prop_widgets[row_num]['MainLayout'].addWidget(self.prop_widgets[row_num]['LabelWidget'], 0, 0)
+            self.prop_widgets[row_num]['MainLayout'].addWidget(self.prop_widgets[row_num]['TypeWidget'], 0, 1)
+            self.prop_widgets[row_num]['MainLayout'].addWidget(self.prop_widgets[row_num]['DeleteButton'], 0, 2)
+            self.scrollLayout.addRow(self.prop_widgets[row_num]['MainWidget'])
+
+    def add_property(self):
+        num = len(self.window.ui.manualproperties)
+        self.window.ui.manualproperties.append({
+                'Label': 'Property'+str(num),
+                'Type': 'checkbox',
+                'Value': 0,
+                'Widget': None
+            })
+
+        self.load_property_widgets()
+        
+
+    def remove_property(self, row):
+        print('Deleting row num '+str(row))
+        del self.window.ui.manualproperties[row]
+        # load property widgets function
+        self.load_property_widgets()
+
+    def OK_button_callback(self):
+        for i, pw in enumerate(self.prop_widgets):
+            self.window.ui.manualproperties[i]['Label'] = pw['LabelWidget'].text()
+            if pw['TypeWidget'].currentText() == 'Value':
+                self.window.ui.manualproperties[i]['Type'] = 'text'
+            elif pw['TypeWidget'].currentText() == 'True/False':
+                self.window.ui.manualproperties[i]['Type'] = 'checkbox'
+            else:
+                raise(Exception('Unknown value type entered in manual properties dialog...'))
+
+        self.window.ui.updateManualPropertiesBar()
+
+        self.close()
+
+    def closeEvent(self, event):
+        self.window.ui.updateManualPropertiesBar()
+        self.hide()
+        #TODO: Ask whether the user wants the settings to be saved
+        
+    def init(self):
+        self.show()
+
 class DoubleSlider(QtWidgets.QSlider):
 
     def __init__(self, *args, **kwargs):
@@ -906,6 +1015,37 @@ class MainWidget(QtWidgets.QWidget):
         sizePolicy.setHeightForWidth(self.dockarea.sizePolicy().hasHeightForWidth())
         self.dockarea.setSizePolicy(sizePolicy)
         self.dockarea.setBaseSize(QtCore.QSize(0, 2))
+
+        ## manual properties bar
+        self.manPropScroll = QtWidgets.QScrollArea(self)
+        self.manPropWidget = QtWidgets.QWidget()
+        self.manPropLayout = QtWidgets.QHBoxLayout(self.manPropWidget)
+        # self.manPropWidget.setLayout(self.manPropLayout)
+        self.manPropScroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.manPropScroll.setWidgetResizable(True)
+        self.manPropScroll.setWidget(self.manPropWidget)
+        self.layout.addWidget(self.manPropScroll)
+
+        ## manage manual properties
+        self.manPropButton = QtWidgets.QPushButton("Add/Remove Properties")
+        self.manPropLayout.addWidget(self.manPropButton)
+        self.generateExcelButton = QtWidgets.QPushButton('Generate Excel')
+        self.manPropLayout.addWidget(self.generateExcelButton)
+        self.manualproperties = [
+            {
+                'Label': 'Ignore',
+                'Type': 'checkbox',
+                'Value': 0,
+                'Widget': None
+            },
+            {
+                'Label': 'Comment',
+                'Type': 'text',
+                'Value': '',
+                'Widget': None
+            }]
+        self.updateManualPropertiesBar()
+
         ## bottom bar
         self.bottomwidget = QtWidgets.QWidget()
         self.layout.addWidget(self.bottomwidget)
@@ -1004,7 +1144,48 @@ class MainWidget(QtWidgets.QWidget):
         grid_colors.addWidget(self.swapColorsBtn, 0, 0)
         grid_colors.addWidget(self.swapColorsComboBox, 0, 1)
         grid_colors.addWidget(self.mergeColorsCheckBox, 1, 0)
+    
+    def clear_manPropLayout(self, L = False):
+        if not L:
+            L = self.manPropLayout
+        if L is not None:
+            # print('L: ' + str(L.count()))
+            while L.count():
+                item = L.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    if not (widget == self.manPropButton or widget == self.generateExcelButton):
+                        widget.deleteLater()
+                else:
+                    self.clear_manPropLayout(item.layout())
 
+    def updateManualPropertiesBar(self):
+        # Remove all existing property widgets
+        if self.manPropLayout.count() >2: #>2 because of the "Add/Remove Property" and "Generate Excel" buttons
+            self.clear_manPropLayout()
+        
+        self.manPropLayout.addWidget(self.manPropButton)
+        self.manPropLayout.addWidget(self.generateExcelButton)
+        print(self.manPropButton)
+        # Add property widgets
+        for i, prop in enumerate(self.manualproperties):
+            if prop['Type'] == 'text':
+                prop['Widget'] =  QtWidgets.QGridLayout()
+                # prop['Widget'].setMaximumWidth(200)
+                self.manPropLayout.addLayout(prop['Widget'])
+                prop['Widget'].addWidget(QtWidgets.QLabel(prop['Label'], alignment=QtCore.Qt.AlignRight), 0, 0)
+                textbox = QtWidgets.QLineEdit()
+                textbox.setMinimumWidth(100)
+                if prop['Label'] != 'Comment':
+                    textbox.setMaximumWidth(100)
+                prop['Widget'].addWidget(textbox, 0, 1)
+                prop['Textbox'] = textbox
+                prop['Textbox'].setText(prop['Value'])
+            elif prop['Type'] == 'checkbox':
+                prop['Widget'] = QtWidgets.QCheckBox(prop['Label'])
+                self.manPropLayout.addWidget(prop['Widget'])
+                prop['Widget'].setChecked(bool(prop['Value']))
+                
 
 class Window(QtWidgets.QMainWindow):
     """ The main window """
@@ -1027,6 +1208,7 @@ class Window(QtWidgets.QMainWindow):
         self.file_dialog = FileDialog(self)
         self.roi_dialog = ROIDialog(self)
         self.supergauss_dialog = SuperGaussFittingDialog(self)
+        self.manual_properties_dialog = ManagePropertiesDialog(self)
         self.init_menu_bar()
         # load params
         self.load_parameters()
@@ -1131,6 +1313,8 @@ class Window(QtWidgets.QMainWindow):
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
         self.ui.findDNAendsBtn.clicked.connect(self.supergauss_dialog.init)
+        self.ui.manPropButton.clicked.connect(self.manual_properties_dialog.init)
+        self.ui.generateExcelButton.clicked.connect(self.generate_overview_excel_properties)
 
     def connect_signals(self):
         # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
@@ -1513,10 +1697,11 @@ class Window(QtWidgets.QMainWindow):
     def generate_overview_excel(self):
         if not hasattr(self, 'filenames'):
             return
-        xlxsName = os.path.join(self.folderpath, str(int(time.time()*1e7))+'_'+os.path.basename(os.path.dirname(self.folderpath))+'_overview.xlsx')
-        workbook = xlsxwriter.Workbook(xlxsName)
+        self.xlxsName = os.path.join(self.folderpath, str(int(time.time()*1e7))+'_'+os.path.basename(os.path.dirname(self.folderpath))+'_overview.xlsx')
+        workbook = xlsxwriter.Workbook(self.xlxsName)
         worksheet = workbook.add_worksheet()
-        keywords = ['#', 'Folderpath', 'Name', 'Comments']
+        manual_props_list = [p['Label'] for p in self.ui.manualproperties]
+        keywords = ['#', 'Folderpath', 'Name'] + manual_props_list
         bold = workbook.add_format({'bold': True})
         row = 0
         for col in range(len(keywords)):
@@ -1530,14 +1715,50 @@ class Window(QtWidgets.QMainWindow):
             worksheet.write(row, 0, count)
             worksheet.write(row, 2, os.path.basename(filename))
             worksheet.write(row, 1, os.path.dirname(filename))
+            
+            hdf5_file = filename.replace('.tif', '_analysis.hdf5')
+            if os.path.isfile(hdf5_file) == True:
+                with h5py.File(hdf5_file, 'r') as h5_analysis:
+                    if 'manual_properties' in h5_analysis.keys():
+                        for prop in h5_analysis['manual_properties']:
+                            p = h5_analysis['manual_properties'][prop]
+                            label = p['Label'][()].decode() # hdf5 files store as byte strings so we use decode...
+                            index = int(p['Index'][()])
+                            value = p['Value'][()]
+                            if type(value) == type(b''):
+                                value = value.decode()
+                            var_type = p['Type'][()].decode()
+                            
+                            if label in manual_props_list:
+                                worksheet.write(row, 3 + manual_props_list.index(label), value)
+                
+
         worksheet.freeze_panes(1, 0) # fix the first row
         workbook.close()
         try:
-            subprocess.Popen(r'explorer /select,"'+xlxsName.replace('/', '\\')+'"')
+            subprocess.Popen(r'explorer /select,"'+self.xlxsName.replace('/', '\\')+'"')
         except:
             pass
 
+    def generate_overview_excel_properties(self):
+        # print(self.filenames)
+        continue_excel = True
+        for f in self.filenames:
+            filename = f.replace('.tif', '_analysis.hdf5')
+            if os.path.isfile(filename) == False:
+                continue_excel = False
+                print('No file exists')
+                break
+            else:
+                print(filename)
+        if continue_excel == False:
+            qm = QtWidgets.QMessageBox()
+            ret = qm.question(self,'Excel generation warning', "Not all cropped ROIs have associated hdf5 files, would you still like to generate an Excel?", qm.Yes | qm.No)
 
+            if ret == qm.Yes:
+                self.generate_overview_excel()
+        else:
+            self.generate_overview_excel()
 
     def load_img_stack(self, filepath=None):
         folder_open = False
@@ -1571,6 +1792,8 @@ class Window(QtWidgets.QMainWindow):
             pass
         # connect back the dependent signals
         self.multipeak_dialog.connect_signals()
+
+        self.load_manual_properties()
 
     def set_img_stack(self):
         print("\nLoading and processing the image ...")
@@ -1631,7 +1854,7 @@ class Window(QtWidgets.QMainWindow):
         self.filepath_yaml = os.path.join(self.folderpath, self.filename_base + '_params.yaml')
         if os.path.isfile(self.filepath_yaml):
             with open(self.filepath_yaml) as f:
-                self.params_yaml = yaml.load(f)
+                self.params_yaml = yaml.safe_load(f)
         else:
             with open(self.filepath_yaml, 'w') as f:
                 self.params_yaml = {
@@ -1652,7 +1875,7 @@ class Window(QtWidgets.QMainWindow):
                                  "yaml (*.yaml)").openFileNameDialog()
         if os.path.isfile(filepath_yaml):
             with open(filepath_yaml) as f:
-                self.params_yaml = yaml.load(f)
+                self.params_yaml = yaml.safe_load(f)
         self.set_yaml_params()
 
     def save_yaml_as(self):
@@ -3294,6 +3517,15 @@ class Window(QtWidgets.QMainWindow):
             plt.gcf().show()
 
     def save_hdf5(self, filepath_hdf5):
+        # Update self.ui.manualproperties
+        for prop in self.ui.manualproperties:
+            if prop['Type'] == 'checkbox':
+                prop['Value'] = prop['Widget'].isChecked()
+            elif prop['Type'] == 'text':
+                prop['Value'] = prop['Textbox'].text()
+            else:
+                raise(Exception('Property type not recognized'))
+
         with h5py.File(filepath_hdf5, 'w') as h5_analysis:
             # save parameters
             params_group = h5_analysis.create_group("parameters")
@@ -3333,6 +3565,66 @@ class Window(QtWidgets.QMainWindow):
                 h5_analysis["Left Linked Peaks Analyzed"] = self.linkedpeaks_analyzed.to_records()
             if self.df_cols_linked is not None and len(self.df_cols_linked.index)>0:
                 h5_analysis["Two Colors Linked"] = self.df_cols_linked.to_records()
+            
+            # Save manual properties
+            # Copy all manual properties except the Widget, which cannot be saved to hdf5 files (and is not required to be saved...)
+            props = []
+            man_props = h5_analysis.create_group('manual_properties')
+            for index, p in enumerate(self.ui.manualproperties):
+                property = man_props.create_group(p['Label'])
+                for key, value in p.items():
+                    if key not in ['Widget', 'Textbox']:
+                        property[key] = value
+                if 'Index' not in property.keys() :
+                    property['Index'] = index ## TODO: Fix this!!
+            print(man_props)
+
+
+    def load_manual_properties(self):
+        '''
+        Loads the manual properties set in the current hdf5 file. 
+        The loaded properties are inserted the self.ui.manualproperties variable which contains all 
+        current manual properties, their types and values.
+        '''
+        filepath_hdf5 = os.path.join(self.folderpath, self.filename_base + '_analysis.hdf5')
+        if os.path.isfile(filepath_hdf5):
+            h5_man_props = []
+            # First clear out the manual property values
+            for i, pp in enumerate(self.ui.manualproperties):
+                if pp['Type'] == 'checkbox':
+                    pp['Value'] = 0
+                elif pp['Type'] == 'text':
+                    pp['Value'] = ''
+            
+            # Then read the saved manual properties and fill in when given
+            with h5py.File(filepath_hdf5, 'r') as h5_analysis_load:
+                man_props = h5_analysis_load['manual_properties']
+                if 'manual_properties' in list(h5_analysis_load.keys()):
+                    for i, prop in enumerate(man_props.keys()):
+                        p = h5_analysis_load['manual_properties'][prop]
+                        label = p['Label'][()].decode() # hdf5 files store as byte strings so we use decode...
+                        if 'Index' in p.keys():
+                            index = int(p['Index'][()])
+                        else:
+                            index = i
+                        value = p['Value'][()]
+                        if type(value) == type(b''):
+                            value = value.decode()
+                        var_type = p['Type'][()].decode()
+                        for i, pp in enumerate(self.ui.manualproperties):
+                            if label == pp['Label']:
+                                self.ui.manualproperties[i] = deepcopy({
+                                    'Label': deepcopy(label),
+                                    'Type' : deepcopy(var_type),
+                                    'Value': deepcopy(value),
+                                    'Widget': None,
+                                    'Index': deepcopy(index)
+                                })            
+            self.ui.updateManualPropertiesBar()
+        else:
+            print(filepath_hdf5 + ' :(')
+            print('No hdf5 file found, proceed as normal')
+        
 
     def save_section(self):
         prev_state = self.ui.RealTimeKymoCheckBox.isChecked()
