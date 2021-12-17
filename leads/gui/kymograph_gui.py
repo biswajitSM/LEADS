@@ -6,7 +6,7 @@ import pyqtgraph.dockarea as pg_da
 import pyqtgraph.exporters
 from tifffile import imwrite
 from ..kymograph import (read_img_stack,
-                median_bkg_substration, peakfinder_savgol,
+                median_bkg_substration, applySparseSIM, peakfinder_savgol,
                 analyze_maxpeak, loop_sm_dist)
 from .. import kymograph
 from .. import io
@@ -181,6 +181,125 @@ class ParametersDialog(QtWidgets.QDialog):
 
     def on_roi_change(self):
         self.window.set_roi_width()
+
+class SparseSIMDialog(QtWidgets.QDialog):
+    """ The dialog showing parameters for Sparse SIM """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.window = parent
+        self.setWindowTitle("Parameters")
+        self.resize(300, 0)
+        self.setModal(False)
+        self.backup_saved = False
+
+
+        vbox = QtWidgets.QVBoxLayout(self)
+        general_groupbox = QtWidgets.QGroupBox("General")
+        vbox.addWidget(general_groupbox)
+        general_grid = QtWidgets.QGridLayout(general_groupbox)
+
+        # parameters for sparseSIM:
+        # sigma, sparse_iter = 100, fidelity = 150, sparsity = 10, tcontinuity = 0.5,
+                         # background = 1, deconv_iter = 7, deconv_type = 1
+
+        # PSF width sigma
+        general_grid.addWidget(QtWidgets.QLabel("PSF width:"), 0, 0)
+        self.sigma_spinbox = QtWidgets.QSpinBox()
+        self.sigma_spinbox.setRange(0, int(1e3))
+        self.sigma_spinbox.setSuffix(" pixel(s)")
+        self.sigma_spinbox.setValue(3)
+        self.sigma_spinbox.setKeyboardTracking(False)
+        self.sigma_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.sigma_spinbox, 0, 1)
+
+        # number of iterations
+        general_grid.addWidget(QtWidgets.QLabel("# iterations:"), 1, 0)
+        self.numIter_spinbox = QtWidgets.QSpinBox()
+        self.numIter_spinbox.setRange(0, int(1e3))
+        self.numIter_spinbox.setSuffix("")
+        self.numIter_spinbox.setValue(100)
+        self.numIter_spinbox.setKeyboardTracking(False)
+        self.numIter_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.numIter_spinbox, 1, 1)
+
+        # fidelity parameter
+        general_grid.addWidget(QtWidgets.QLabel("Fidelity:"), 2, 0)
+        self.fidelity_spinbox = QtWidgets.QSpinBox()
+        self.fidelity_spinbox.setRange(0, int(1e5))
+        self.fidelity_spinbox.setSuffix("")
+        self.fidelity_spinbox.setValue(150)
+        self.fidelity_spinbox.setKeyboardTracking(False)
+        self.fidelity_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.fidelity_spinbox, 2, 1)
+
+        # sparsity parameter
+        general_grid.addWidget(QtWidgets.QLabel("Sparsity:"), 3, 0)
+        self.sparsity_spinbox = QtWidgets.QSpinBox()
+        self.sparsity_spinbox.setRange(0, int(1e5))
+        self.sparsity_spinbox.setSuffix("")
+        self.sparsity_spinbox.setValue(10)
+        self.sparsity_spinbox.setKeyboardTracking(False)
+        self.sparsity_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.sparsity_spinbox, 3, 1)
+
+        # tcontinuity parameter
+        general_grid.addWidget(QtWidgets.QLabel("Time continuity:"), 4, 0)
+        self.tcontinuity_spinbox = QtWidgets.QDoubleSpinBox()
+        self.tcontinuity_spinbox.setRange(0, int(1e5))
+        self.tcontinuity_spinbox.setSuffix("")
+        self.tcontinuity_spinbox.setSingleStep(0.1)
+        self.tcontinuity_spinbox.setValue(0.5)
+        self.tcontinuity_spinbox.setKeyboardTracking(False)
+        self.tcontinuity_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.tcontinuity_spinbox, 4, 1)
+
+        # background parameter
+        general_grid.addWidget(QtWidgets.QLabel("Fidelity:"), 5, 0)
+        self.background_combobox = QtWidgets.QComboBox()        
+        self.background_combobox.addItems(["No background"])
+        self.background_combobox.addItems(["Weak background (HI)"])
+        self.background_combobox.addItems(["Strong background (HI)"])
+        self.background_combobox.addItems(["Weak background (LI)"])
+        self.background_combobox.addItems(["With background (LI)"])
+        self.background_combobox.addItems(["Strong background (LI)"])
+        self.background_combobox.currentIndexChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.background_combobox, 5, 1)
+
+        # deconv_iter parameter
+        general_grid.addWidget(QtWidgets.QLabel("Deconvolution iterations:"), 6, 0)
+        self.deconv_iter_spinbox = QtWidgets.QSpinBox()
+        self.deconv_iter_spinbox.setRange(0, int(1e5))
+        self.deconv_iter_spinbox.setSuffix("")
+        self.deconv_iter_spinbox.setValue(7)
+        self.deconv_iter_spinbox.setKeyboardTracking(False)
+        self.deconv_iter_spinbox.valueChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.deconv_iter_spinbox, 6, 1)
+
+        # deconv_type parameter
+        general_grid.addWidget(QtWidgets.QLabel("Deconvolution type:"), 7, 0)
+        self.deconv_type_combobox = QtWidgets.QComboBox()        
+        self.deconv_type_combobox.addItems(["LandWeber deconvolution"])
+        self.deconv_type_combobox.addItems(["Richardson-Lucy deconvolution"])
+        self.deconv_type_combobox.addItems(["No deconvolution"])
+        self.deconv_type_combobox.currentIndexChanged.connect(self.on_paramter_change)
+        general_grid.addWidget(self.deconv_type_combobox, 7, 1)
+
+    def on_paramter_change(self):
+        if not self.backup_saved:
+            # before playing with the img_arrays, let us save a backup copy. otherwise we keep changing the changed arrays
+            if self.window.numColors == "3":
+                np.save(os.path.join(self.window.folderpath, 'imgarr_left.npy'), self.window.imgarr_left)
+                np.save(os.path.join(self.window.folderpath, 'imgarr_right.npy'), self.window.imgarr_right)
+                np.save(os.path.join(self.window.folderpath, 'imgarr_col3.npy'), self.window.imgarr_col3)
+            elif self.window.numColors == "2":
+                np.save(os.path.join(self.window.folderpath, 'imgarr_left.npy'), self.window.imgarr_left)
+                np.save(os.path.join(self.window.folderpath, 'imgarr_right.npy'), self.window.imgarr_right)
+            elif self.window.numColors == "1":
+                np.save(os.path.join(self.window.folderpath, 'imgarr_left.npy'), self.window.imgarr_left)
+            self.backup_saved = True
+        self.window.get_processed_image(preview=True)
+        self.window.set_img_stack()
 
 class MultiPeakDialog(QtWidgets.QDialog):
     """ The dialog showing Multipeak analysis """
@@ -1079,7 +1198,7 @@ class MainWidget(QtWidgets.QWidget):
         self.processImageCheckBox.setChecked(True)
         grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
         self.processImageComboBox = QtWidgets.QComboBox()
-        self.processImageComboBox.addItems(["Median", "N2V"])
+        self.processImageComboBox.addItems(["Median", "N2V", "Sparse-SIM"])
         grid_btn1.addWidget(self.processImageComboBox, 1, 1)
         # Kymograph
         grid_kymo = QtWidgets.QGridLayout()
@@ -1207,6 +1326,7 @@ class Window(QtWidgets.QMainWindow):
         self.multipeak_dialog = MultiPeakDialog(self)
         self.file_dialog = FileDialog(self)
         self.roi_dialog = ROIDialog(self)
+        self.sparseSIM_dialog = SparseSIMDialog(self)
         self.supergauss_dialog = SuperGaussFittingDialog(self)
         self.manual_properties_dialog = ManagePropertiesDialog(self)
         self.init_menu_bar()
@@ -1280,6 +1400,9 @@ class Window(QtWidgets.QMainWindow):
         roi_action = analyze_menu.addAction("ROI Analysis / Control")
         roi_action.setShortcut("Ctrl+R")
         roi_action.triggered.connect(self.roi_dialog.show)
+        sparseSIM_action = analyze_menu.addAction("Sparse SIM parameters")
+        sparseSIM_action.triggered.connect(self.sparseSIM_dialog.show)
+        
         """ Image """
         image_menu = menu_bar.addMenu("Image")
         normalize_img_action = image_menu.addAction("Normalize Images")
@@ -1455,6 +1578,13 @@ class Window(QtWidgets.QMainWindow):
         self.imv11.view.invertY(False)
         self.imv22.view.invertY(False)
         self.imv23.view.invertY(False)
+
+        self.infline_loopkymo_top_col2 = pg.InfiniteLine(movable=False, pos=0, angle=0, pen=(3, 9), label='left={value:0.0f}',
+            labelOpts={'position':0.05, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
+        self.infline_loopkymo_bottom_col2 = pg.InfiniteLine(movable=False, pos=40, angle=0, pen=(3, 9), label='right={value:0.0f}',
+            labelOpts={'position':0.05, 'color': (200,200,100), 'fill': (200,200,200,25), 'movable': True})
+        self.imv23.addItem(self.infline_loopkymo_top_col2)
+        self.imv23.addItem(self.infline_loopkymo_bottom_col2)
 
         self.d0_right = pg_da.Dock("d0right-single molecule")
         self.d0_right.addWidget(self.imv01)
@@ -1762,6 +1892,7 @@ class Window(QtWidgets.QMainWindow):
 
     def load_img_stack(self, filepath=None):
         folder_open = False
+        self.sparseSIM_dialog.backup_saved = False
         if filepath is None or (not filepath):
             filepath = io.FileDialog(self.folderpath, "Open a tif file stack",
                                     "Tif file (*.tif)").openFileNameDialog()
@@ -1953,8 +2084,8 @@ class Window(QtWidgets.QMainWindow):
             self.image_meta = read_img_stack(self.filepath)
             self.set_img_stack()
 
-    def get_processed_image(self):
-        if self.ui.processImageComboBox.currentText() == "Median":
+    def get_processed_image(self, preview=False):
+        if self.ui.processImageComboBox.currentText() == "Median" and not preview:
             fpath_processed = os.path.join(self.folderpath, self.filename_base + '_processed.tif')
             if os.path.isfile(fpath_processed):
                 self.image_meta = read_img_stack(fpath_processed)
@@ -1985,6 +2116,7 @@ class Window(QtWidgets.QMainWindow):
                             metadata={'axis': 'TCYX', 'channels': self.numColors,
                             'mode': 'composite',})
                 self.image_meta = read_img_stack(fpath_processed)
+
         elif self.ui.processImageComboBox.currentText() == "N2V":
             fpath_processed = os.path.join(self.folderpath, self.filename_base + '_N2V_processed.tif')
             if os.path.isfile(fpath_processed):
@@ -1992,6 +2124,100 @@ class Window(QtWidgets.QMainWindow):
             else:
                 self.image_meta = read_img_stack(self.filepath)
                 print("N2V processed file doesn't exist")
+
+        elif self.ui.processImageComboBox.currentText() == "Sparse-SIM" or preview:
+            if preview:
+                fpath_processed = os.path.join(self.folderpath, self.filename_base + '_SparseSIM_processed_preview.tif')
+            else:
+                fpath_processed = os.path.join(self.folderpath, self.filename_base + '_SparseSIM_processed.tif')
+            if os.path.isfile(fpath_processed) and not preview: # if preview is on, we are changing parameters, so re-compute
+                self.image_meta = read_img_stack(fpath_processed)
+            else:
+                # obtain sparseSIM parameters
+                sigma = self.sparseSIM_dialog.sigma_spinbox.value()
+                numIter = self.sparseSIM_dialog.numIter_spinbox.value()
+                fidelity = self.sparseSIM_dialog.fidelity_spinbox.value()
+                sparsity = self.sparseSIM_dialog.sparsity_spinbox.value()
+                tcontinuity = self.sparseSIM_dialog.tcontinuity_spinbox.value()
+                background = self.sparseSIM_dialog.background_combobox.currentText()
+                deconv_iter = self.sparseSIM_dialog.deconv_iter_spinbox.value()
+                deconv_type = self.sparseSIM_dialog.deconv_type_combobox.currentText()
+                if deconv_type=='No deconvolution':
+                    deconv_type = 0
+                elif deconv_type=='LandWeber deconvolution':
+                    deconv_type = 1
+                elif deconv_type=='Richardson-Lucy deconvolution':
+                    deconv_type = 2
+
+                if background=="No background":
+                    background = 0
+                elif background=="Weak background (HI)":
+                    background = 1
+                elif background=="Strong background (HI)":
+                    background = 2
+                elif background=="Weak background (LI)":
+                    background = 3
+                elif background=="With background (LI)":
+                    background = 4
+                elif background=="Strong background (LI)":
+                    background = 5
+                
+                sparseSIMparameters = {
+                    "sigma": sigma,
+                    "numIter": numIter,
+                    "fidelity": fidelity,
+                    "sparsity": sparsity,
+                    "tcontinuity": tcontinuity,
+                    "background": background,
+                    "deconv_iter": deconv_iter,
+                    "deconv_type": deconv_type
+                }
+
+                if self.numColors == "3":
+                    if preview:
+                        imgarr_left = np.load(os.path.join(self.folderpath, 'imgarr_left.npy'))
+                        imgarr_right = np.load(os.path.join(self.folderpath, 'imgarr_right.npy'))
+                        imgarr_col3 = np.load(os.path.join(self.folderpath, 'imgarr_col3.npy'))
+                        self.imgarr_left = applySparseSIM(imgarr_left, params=sparseSIMparameters, preview=preview)
+                        self.imgarr_right = applySparseSIM(imgarr_right, params=sparseSIMparameters, preview=preview)
+                        self.imgarr_col3 = applySparseSIM(imgarr_col3, params=sparseSIMparameters, preview=preview)
+                    else:
+                        self.imgarr_left = applySparseSIM(self.imgarr_left, params=sparseSIMparameters, preview=preview)
+                        self.imgarr_right = applySparseSIM(self.imgarr_right, params=sparseSIMparameters, preview=preview)
+                        self.imgarr_col3 = applySparseSIM(self.imgarr_col3, params=sparseSIMparameters, preview=preview)
+                    comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
+                                            self.imgarr_right[:,np.newaxis,:,:],
+                                            self.imgarr_col3[:,np.newaxis,:,:]),
+                                            axis=1)
+                    imwrite(fpath_processed, comb_arr, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                elif self.numColors == "2":
+                    if preview:
+                        imgarr_left = np.load(os.path.join(self.folderpath, 'imgarr_left.npy'))
+                        imgarr_right = np.load(os.path.join(self.folderpath, 'imgarr_right.npy'))
+                        self.imgarr_left = applySparseSIM(imgarr_left, params=sparseSIMparameters, preview=preview)
+                        self.imgarr_right = applySparseSIM(imgarr_right, params=sparseSIMparameters, preview=preview)
+                    else:
+                        self.imgarr_left = applySparseSIM(self.imgarr_left, params=sparseSIMparameters, preview=preview)
+                        self.imgarr_right = applySparseSIM(self.imgarr_right, params=sparseSIMparameters, preview=preview)
+                    comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
+                                            self.imgarr_right[:,np.newaxis,:,:]),
+                                            axis=1)
+                    imwrite(fpath_processed, comb_arr, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                elif self.numColors == "1":
+                    if preview:
+                        imgarr_left = np.load(os.path.join(self.folderpath, 'imgarr_left.npy'))
+                        self.imgarr_left = applySparseSIM(imgarr_left, params=sparseSIMparameters, preview=preview)
+                    else:
+                        self.imgarr_left = applySparseSIM(self.imgarr_left, params=sparseSIMparameters, preview=preview)
+                    
+                    imwrite(fpath_processed, self.imgarr_left, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                self.image_meta = read_img_stack(fpath_processed)
         return self.image_meta
 
     def update_kymo(self):
@@ -2304,6 +2530,7 @@ class Window(QtWidgets.QMainWindow):
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
             else:
                 self.imv22.setImage(self.kymo_right_noLoop)
+    
 
     def region_Loop_changed(self):
         minX, maxX = self.region3_Loop.getRegion()
@@ -2445,6 +2672,8 @@ class Window(QtWidgets.QMainWindow):
 
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
                 self.imv23.setImage(self.kymo_loop_comb, levelMode='rgba')
+                # self.imv23.addItem(self.infline_loopkymo_top)
+                # self.imv23.addItem(self.infline_loopkymo_bottom)
         else:
             # set back the imagedata
             self.imv01.setImage(self.imgarr_right, levelMode='mono')
@@ -2587,6 +2816,9 @@ class Window(QtWidgets.QMainWindow):
         self.dna_ends[1] = float(self.dna_infline_right.getXPos())
         self.infline_loopkymo_top.setPos(self.dna_ends[0])
         self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
+        self.infline_loopkymo_top_col2.setPos(self.dna_ends[0])
+        self.infline_loopkymo_bottom_col2.setPos(self.dna_ends[1])
+        
         min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
         max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
         self.peak_prominence = self.multipeak_dialog.prominence_spinbox.value()
@@ -2653,6 +2885,8 @@ class Window(QtWidgets.QMainWindow):
         self.dna_infline_right.setPos(self.dna_ends[1])
         self.infline_loopkymo_top.setPos(self.dna_ends[0])
         self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
+        self.infline_loopkymo_top_col2.setPos(self.dna_ends[0])
+        self.infline_loopkymo_bottom_col2.setPos(self.dna_ends[1])
 
     def detect_loops(self):
         if self.plot_loop_errbar is None:
@@ -2774,11 +3008,17 @@ class Window(QtWidgets.QMainWindow):
                 print(self.df_cols_linked)
             result["ax1"].axhline(self.dna_ends[0], color='g', alpha=0.5)
             result["ax1"].axhline(self.dna_ends[1], color='g', alpha=0.5)
+            result["ax2"].axhline(self.dna_ends[0], color='g', alpha=0.5)
+            result["ax2"].axhline(self.dna_ends[1], color='g', alpha=0.5)
+            result["ax3"].axhline(self.dna_ends[0], color='g', alpha=0.5)
+            result["ax3"].axhline(self.dna_ends[1], color='g', alpha=0.5)
+            result["ax4"].axhline(self.dna_ends[0], color='g', alpha=0.5)
+            result["ax4"].axhline(self.dna_ends[1], color='g', alpha=0.5)
 
-            result["ax1"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
-            result["ax2"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
-            result["ax3"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
-            result["ax4"].set_ylim(self.dna_ends[0]-2, self.dna_ends[1]+2)
+            result["ax1"].set_ylim(self.dna_ends[0]-5, self.dna_ends[1]+5)
+            result["ax2"].set_ylim(self.dna_ends[0]-5, self.dna_ends[1]+5)
+            result["ax3"].set_ylim(self.dna_ends[0]-5, self.dna_ends[1]+5)
+            result["ax4"].set_ylim(self.dna_ends[0]-5, self.dna_ends[1]+5)
         else:
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
@@ -3037,7 +3277,7 @@ class Window(QtWidgets.QMainWindow):
             plt.gcf().show()
         elif self.multipeak_dialog.plottype_combobox.currentText() == "MSDsavgol":
             print("plot MSD savgol")
-            _, ax = plt.subplots(3,1, figsize=(6,8))
+            _, ax = plt.subplots(3,1, figsize=(6,8), sharex=True)
             axLoopSize = ax[1]
             axLoopSizeMSD = ax[2]
             ax = ax[0]
@@ -3115,7 +3355,7 @@ class Window(QtWidgets.QMainWindow):
                 MSDInt = MSDInterpolator(framesInt)
                 loopSizeIntSavgol = savgol_filter(loopSizeInt,  window_length=n_moving, polyorder=n_order)
                 MSDIntSavgol = savgol_filter(MSDInt,  window_length=n_moving, polyorder=n_order)
-                axLoopSize.plot(framesLoopSize, loopSize, '.g')
+                axLoopSize.plot(framesLoopSize, loopSize, '.g', alpha=0.2)
                 axLoopSize.plot(framesInt, loopSizeIntSavgol, '-g')
                 # axLoopSizeMSD.plot(MSDInt, loopSizeInt, '.')
                 axLoopSizeMSD.plot(MSDIntSavgol[0], loopSizeIntSavgol[0], '.')

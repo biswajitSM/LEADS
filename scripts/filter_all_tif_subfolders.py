@@ -2,12 +2,13 @@ import os
 import time
 import numpy as np
 from tifffile import imwrite, imread
-from leads.kymograph import read_img_stack, median_bkg_substration
+from leads.kymograph import read_img_stack, median_bkg_substration, applySparseSIM
 from leads import io
 from PyQt5.QtWidgets import QApplication
 
 # _ = QApplication([])
 # directory = io.FileDialog(None, 'Please select a directory').openDirectoryDialog()
+applySparseSIM = True
 
 def get_file_list(directory, extension=".tif", exclude_ext="_processed.tif"):
     file_list = []
@@ -19,16 +20,23 @@ def get_file_list(directory, extension=".tif", exclude_ext="_processed.tif"):
     return file_list
 
 
-def process_directory(directory, rewrite=False):
+def process_directory(directory, rewrite=False, applySparseSIM=False):
     time_start = time.time()
     file_list = get_file_list(directory)
     file_list
     for tif_stack_path in file_list:
-        out_tif_stack_path = tif_stack_path[:-4]+"_processed.tif"
+        if applySparseSIM:
+            out_tif_stack_path = tif_stack_path[:-4]+"_SparseSIM_processed.tif"
+        else:
+            out_tif_stack_path = tif_stack_path[:-4]+"_processed.tif"
         if not os.path.isfile(out_tif_stack_path) or rewrite:
             print(out_tif_stack_path)
-            # process_tifstack(tif_stack_path)
-            median_tifstack(tif_stack_path)
+            # process_tifstack(tif_stack_path)            
+            if applySparseSIM:
+                sparseSIM_tifstack(tif_stack_path)
+            else:
+                median_tifstack(tif_stack_path)
+
     print(f"total time took for the directory to predict : {time.time() - time_start} secs\n")
     return
 
@@ -91,6 +99,40 @@ def median_tifstack(tif_stack_path):
         img_arr_processed = np.zeros_like(img_arr) #, dtype=np.float32
         for color in range(num_colors):
             img_arr_processed[:, color, :, :] = median_bkg_substration(img_arr[:, color, :, :])
+    elif ndim ==2:
+        print('Single image. Skipping '+fpath_processed)
+    try:
+        imwrite(fpath_processed, img_arr_processed, imagej=True,
+            metadata={'axis': 'TCYX', 'channels': num_colors,
+            'mode': 'composite',})
+    except:
+        pass
+
+def sparseSIM_tifstack(tif_stack_path):
+    '''
+    filters a tifstack file with dimension 3 or 4 using SparseSIM (https://doi.org/10.1038/s41587-021-01092-2);
+    and save the processed file with an extension '{filename}_SparseSIM_processed.tif'
+    '''
+    outputdir = os.path.dirname(tif_stack_path)
+    base_filename = os.path.basename(tif_stack_path)
+    fpath_processed = os.path.join(outputdir, base_filename[:-4]+"_SparseSIM_processed.tif")
+    try:        
+        img_arr = imread(tif_stack_path)
+    except:
+        print('Cant read '+tif_stack_path)
+        return
+
+
+    ndim = img_arr.ndim
+    if ndim == 3:
+        num_colors = 1
+        img_arr_processed = applySparseSIM(img_arr)
+    elif ndim == 4:
+        # make it work for any umber of colors e.g. 3
+        num_colors = img_arr.shape[1]
+        img_arr_processed = np.zeros_like(img_arr) #, dtype=np.float32
+        for color in range(num_colors):
+            img_arr_processed[:, color, :, :] = applySparseSIM(img_arr[:, color, :, :])
     elif ndim ==2:
         print('Single image. Skipping '+fpath_processed)
     try:

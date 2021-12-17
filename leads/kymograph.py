@@ -2,10 +2,11 @@ import os, glob
 import numpy as np
 from numba import jit
 import pandas as pd
-import h5py
+from tqdm import trange
+from .utils.sparseDeconv.sparse_recon import sparse_deconv
 from scipy.optimize import curve_fit
 from scipy.ndimage import median_filter, white_tophat, black_tophat, gaussian_filter1d
-from scipy.signal import find_peaks, savgol_filter, peak_prominences
+from scipy.signal import find_peaks, savgol_filter
 from scipy.spatial import cKDTree
 from scipy import interpolate
 import tifffile
@@ -14,7 +15,6 @@ import pims
 import trackpy
 import matplotlib.pyplot as plt
 import matplotlib.collections as mcoll
-import matplotlib.path as mpath
 from . import io
 from .utils import figure_params
 plt.rcParams.update(figure_params.params_dict)
@@ -65,6 +65,54 @@ def median_bkg_substration(txy_array, size_med=5, size_bgs=10, light_bg=False):
         else:
             img_med_bgs = white_tophat(img_med, size=size_bgs)
         array_processed[i, :, :] = img_med_bgs
+    return array_processed
+
+def applySparseSIM(txy_array, params=None, preview=False):
+    # apply sparseSIM (https://doi.org/10.1038/s41587-021-01092-2)
+    if params is None:
+        params = {
+            "sigma": 5,
+            "numIter": 100,
+            "fidelity": 150,
+            "sparsity": 10,
+            "tcontinuity": 0.5,
+            "background": 0,
+            "deconv_iter": 7,
+            "deconv_type": 1
+        }
+
+    array_processed = np.zeros_like(txy_array)
+    # get longer axis
+    maxShape = np.max(txy_array.shape[1:])
+    boundary = 0
+    if maxShape%2!=0:
+        maxShape += 1
+        boundary = 1
+    maxShapeAxis = np.argmax(txy_array.shape[1:])
+    minShape = np.min(txy_array.shape[1:])
+    paddedImg = np.zeros((maxShape, maxShape))
+    if preview:
+        numFrames = 5
+    else:
+        numFrames = txy_array.shape[0]
+    for i in trange(numFrames):
+        img = txy_array[i]
+        if maxShapeAxis==0:
+            paddedImg[:-boundary, 0:minShape] = img
+        elif maxShapeAxis==1:
+            paddedImg[0:minShape, :-boundary] = img
+            
+        img_recon = sparse_deconv.sparse_deconv(paddedImg, np.array([params["sigma"], params["sigma"]]), \
+                sparse_iter = params["numIter"], fidelity = params["fidelity"], \
+                sparsity = params["sparsity"], tcontinuity = params["tcontinuity"],
+                background = params["background"], deconv_iter = params["deconv_iter"], \
+                deconv_type = params["deconv_type"])
+
+        if maxShapeAxis==0:
+            img_recon = img_recon[:-boundary, 0:minShape]
+        elif maxShapeAxis==1:
+            img_recon = img_recon[0:minShape, :-boundary]
+        array_processed[i, :, :] = img_recon
     return array_processed
 
 
