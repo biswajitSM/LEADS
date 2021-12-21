@@ -32,15 +32,12 @@ from napari.layers.utils._text_utils import format_text_properties
 from leads.kymograph import read_img_stack, median_bkg_substration
 
 
-# ---------------------------------------------------------------------
-# ---------------------------------------------------------------------
 # Cropping and batch cropping are outsourced on another thread. We need a worker class for that
 # Step 1: Create a worker class
 class Worker(QObject):
     finished = pyqtSignal()
     progress = pyqtSignal(int)
 
-# ---------------------------------------------------------------------
     def runCrop(self, shape_layers, ROIlabels, numSeries, xShift, yShift, RotationAngle, 
         numColors, image_meta, frame_start, frame_end, defaultShape):
         
@@ -71,7 +68,6 @@ class Worker(QObject):
         print("Cropping finished")
         self.finished.emit()
 
-# ---------------------------------------------------------------------
     def runBatchCrop(self):
         '''
         Crops from all the subfolders with images and corresponding ROIs
@@ -167,7 +163,6 @@ class Worker(QObject):
         print('Batch cropping finished.')
         self.finished.emit()
 
-# ---------------------------------------------------------------
     def Batchcrop(self, dir, sub_dir, rect_shape, roi_file_list, roi_original_names, 
         ROIdescriptions, sort_directory, num_colors, sort_FOVs, nDir, numDirs, medianProcessing=False):
         # dir is the directory where ROIs are stored
@@ -401,7 +396,6 @@ class Worker(QObject):
                         except:
                             print('Couldnt median-process '+name_sorted[iRect]+'.tif')
 
-# ---------------------------------------------------------------
     def medianProcess(self, tif_stack_path):
         '''
         filters a tifstack file with dimension 3 or 4;
@@ -428,7 +422,6 @@ class Worker(QObject):
                 metadata={'axis': 'TCYX', 'channels': num_colors,
                 'mode': 'composite',})
 
-# ---------------------------------------------------------------
     def BatchLoadROIs(self, roi_file_list):
         roi_file_list_updated = []
         roi_original_names_updated = []
@@ -447,7 +440,6 @@ class Worker(QObject):
             rect_shape.append(roi_coord)
         return rect_shape, roi_original_names
 
-# ---------------------------------------------------------------
     def BatchgetROIDescrption(self, roi_file_list):
         # the format is something like xxxxxxxx_description.roi
         # find from the LAST underscore to the dot to get the description and convert to small letters
@@ -457,7 +449,6 @@ class Worker(QObject):
             descriptions.append( split_list[-1].split(".")[-2].lower() )          
         return descriptions
 
-# ---------------------------------------------------------------
     def BatchIdentifyRelevantDirectories(self, directory):
         
         # scan directory for folders
@@ -512,7 +503,6 @@ class Worker(QObject):
             
         return sub_dirs
 
-# ---------------------------------------------------------------
     def BatchFindAllSubdirectories(self, dirname, count=0):
         subfolders = [f.path for f in os.scandir(dirname) if f.is_dir()]
         for dirname in list(subfolders):
@@ -520,7 +510,6 @@ class Worker(QObject):
             subfolders.extend(self.BatchFindAllSubdirectories(dirname, count))
         return subfolders
 
-# ---------------------------------------------------------------------
     def LoadShiftYamlFile(self): # in class Worker
         if os.path.isfile(self.yamlFileName): # if it exists, load it. assume there is only one such file
             try:
@@ -536,7 +525,6 @@ class Worker(QObject):
         else: # if is doesnt exist, we create all structures from scratch                
             self.MakeShiftYamlFile() 
 
-# ---------------------------------------------------------------------
     def MakeShiftYamlFile(self): # in class Worker
         self.shift_yaml = {}
         self.shift_yaml["x"] = {}
@@ -550,7 +538,6 @@ class Worker(QObject):
             self.shift_yaml["y"]["col"+str(int(nColor))] = self.yShift[index][nColor]
             self.shift_yaml["angle"]["col"+str(int(nColor))] = self.RotationAngle[index][nColor]        
 
-# ---------------------------------------------------------------------
     def TIFisMultipage(self, tif_file_list):
         if type(tif_file_list) is not list:
             tif_file_list = [tif_file_list]
@@ -571,8 +558,7 @@ class Worker(QObject):
                 isMultipage.append(False)
         return isMultipage
 
-# ---------------------------------------------------------------------
-# ---------------------------------------------------------------------
+
 class LineProfileWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
@@ -587,7 +573,6 @@ class LineProfileWindow(QtWidgets.QMainWindow):
         for n in range(10): # take max 10 lines
             self.data_line.append(self.graphWidget.plot([0], [0]))
 
-# ---------------------------------------------------------------------
     def update_plot_data(self, profiles, colors):
 
         x = list(range(len(profiles[0])))
@@ -603,8 +588,7 @@ class LineProfileWindow(QtWidgets.QMainWindow):
         for p in range(len(profiles), len(self.data_line)):
             self.data_line[p].setData([0], [0])
 
-# ---------------------------------------------------------------------
-# ---------------------------------------------------------------------
+
 class BatchProcessingDialog(QtWidgets.QDialog):
     """ The dialog allowing the user to configure paths for batch processing """
     def __init__(self, parent=None):
@@ -694,7 +678,6 @@ class BatchProcessingDialog(QtWidgets.QDialog):
         self.OKCancelButtonBox.rejected.connect(self.reject)
         QtCore.QMetaObject.connectSlotsByName(self)
 
-# ---------------------------------------------------------------------
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("Dialog", "Dialog"))
@@ -704,20 +687,17 @@ class BatchProcessingDialog(QtWidgets.QDialog):
         for nPath in range(2):            
             self.BrowseButton[nPath].setText(_translate("Dialog", "Browse"))
 
-# ---------------------------------------------------------------------
     def connect_signals_init(self):
         for nPath in range(2):
             self.BrowseButton[nPath].clicked.connect(lambda _, nPath=nPath: self.BrowseDirectory(nPath=nPath))
             self.PathLineEdit[nPath].textChanged.connect(lambda _, nPath=nPath: self.updatePath(nPath=nPath))
 
-# ---------------------------------------------------------------------
     def toggleMedianFilteringForBatchProcessing(self):
         if self.MedianFilterCheckBox.isChecked():
             self.medianProcessing = True
         else:
             self.medianProcessing = False
 
-# ---------------------------------------------------------------------
     def BrowseDirectory(self, nPath):      
         settings = io.load_user_settings()
         try:
@@ -755,7 +735,6 @@ class BatchProcessingDialog(QtWidgets.QDialog):
         # update self.PathLineEdit's to display the path
         self.PathLineEdit[nPath].setText(folderpath)
 
-# ---------------------------------------------------------------------
     def updatePath(self, nPath):
         filepath = self.PathLineEdit[nPath].text()
         if filepath is None:
@@ -779,12 +758,10 @@ class BatchProcessingDialog(QtWidgets.QDialog):
             self.BatchCropPath = folderpath
         elif nPath == 1:
             self.BatchSavePath = folderpath
-        
-# ---------------------------------------------------------------------
-# ---------------------------------------------------------------------
+
+
 class MultiImageSeriesDialog(QtWidgets.QDialog):
     """ The dialog allowing the user to add multiple image series """
-# ---------------------------------------------------------------------
     def __init__(self, parent=None):
         super().__init__(parent)
         self.window = parent
@@ -873,7 +850,6 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
         self.OKCancelButtonBox.rejected.connect(self.reject)
         QtCore.QMetaObject.connectSlotsByName(self)
 
-# ---------------------------------------------------------------------
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("Dialog", "Dialog"))
@@ -883,14 +859,12 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
             self.BrowseButton[nSeries].setText(_translate("Dialog", "Browse"))
             self.DescriptionLabel[nSeries].setText(_translate("Dialog", "label:"))
 
-# ---------------------------------------------------------------------
     def connect_signals_init(self):
         for nSeries in range(self.numSeries):
             self.BrowseButton[nSeries].clicked.connect(lambda _, nSeries=nSeries: self.BrowseDirectory(nSeries=nSeries))
             self.PathLineEdit[nSeries].textChanged.connect(lambda _, nSeries=nSeries: self.updatePath(nSeries=nSeries))
             self.DescriptionLineEdit[nSeries].textChanged.connect(lambda _, nSeries=nSeries: self.updateLabel(nSeries=nSeries))
 
-# ---------------------------------------------------------------------
     def updatePath(self, nSeries):
         filepath = self.PathLineEdit[nSeries].text()
         if filepath is None:
@@ -913,11 +887,9 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
         io.save_user_settings(settings)
         self.MultiImageSeries_folderpath[nSeries] = folderpath
 
-# ---------------------------------------------------------------------
     def updateLabel(self, nSeries):
         self.MultiImageSeries_description[nSeries] = self.DescriptionLineEdit[nSeries].text()
 
-# ---------------------------------------------------------------------
     def BrowseDirectory(self, nSeries):
         settings = io.load_user_settings()
         try:
@@ -945,7 +917,6 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
         # update self.PathLineEdit's to display the path
         self.PathLineEdit[nSeries].setText(self.MultiImageSeries_folderpath[nSeries])
         
-# ---------------------------------------------------------------------
     def getValues(self):
         # If we accept the inputs as they are, remove all empty paths and their labels (if there are any)    
         filter_list = [element!='' for element in self.MultiImageSeries_folderpath]
@@ -963,12 +934,12 @@ class MultiImageSeriesDialog(QtWidgets.QDialog):
         io.save_user_settings(settings)
         self.accept()
         
-# ---------------------------------------------------------------------
-# ---------------------------------------------------------------------
+
 # when clicking a spinbox button, pyqt thinks that the duration of a click is
 # long enough to execute the pressed button more than once. Result: The counter jumps
 # by 2 instead of the desired 1. Workaround: The class CustomStyle sets a very long
 # auto-repeat to avoid this. Source: https://stackoverflow.com/questions/40746350/why-qspinbox-jumps-twice-the-step-value
+
 class CustomStyle(QtWidgets.QProxyStyle):
     def styleHint(self, hint, option=None, widget=None, returnData=None):
         if hint == QtWidgets.QStyle.SH_SpinBox_KeyPressAutoRepeatRate:
@@ -982,10 +953,8 @@ class CustomStyle(QtWidgets.QProxyStyle):
         else:
             return super().styleHint(hint, option, widget, returnData)
 
-# ---------------------------------------------------------------------
-# ---------------------------------------------------------------------
+
 class NapariTabs(QtWidgets.QWidget):
-# ---------------------------------------------------------------------
     def __init__(self, viewer):
         super().__init__()
         self.ui = crop_images_ui.Ui_Form()
@@ -1170,7 +1139,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.ui.xShiftSpinBox.blockSignals(False)
             self.ui.yShiftSpinBox.blockSignals(False)
             
-# ---------------------------------------------------------------------
     def toggleImageLayerDraggingToggleSettings(self):
         if self.ui.DragImageLayerCheckBox.isChecked():
             # remove all shape layers from the selection since translation only works on image layers
@@ -1187,7 +1155,6 @@ class NapariTabs(QtWidgets.QWidget):
         else:
             self.viewer.window.qt_viewer.view.camera.interactive = True
 
-# ---------------------------------------------------------------------
     def UpdateXYShiftRotationAngleUponSwitchingLayer(self):
         # at startup, we dont have any layers yet. in this case, do nothing
         if (not self.viewer.layers) or (not hasattr(self, 'numLayers') or (not self.viewer.layers.selection.active)) or hasattr(self, 'xshift_estimate'):
@@ -1242,7 +1209,6 @@ class NapariTabs(QtWidgets.QWidget):
             pass
 
 
-# ---------------------------------------------------------------------
     def ConstructStatusBar(self, value, maxVal, labelStr=''):
         self.maxVal = int( maxVal )
         self.numDigits = int( np.floor(np.log10(maxVal)) )
@@ -1257,14 +1223,12 @@ class NapariTabs(QtWidgets.QWidget):
                 progressStr = progressStr.replace('Progress:', labelStr+':')
             self.ui.StatusBarLabel.setText(progressStr)
        
-# ---------------------------------------------------------------------
     def switchCorrectChromaticShiftFlag(self):
         if self.ui.CorrectChromaticShiftCheckBox.isChecked():
             self.CorrectChromaticShift = True
         else:
             self.CorrectChromaticShift = False
 
-# ---------------------------------------------------------------------
     def EstimateShift(self):
         # get selected layers
         selected = []
@@ -1340,7 +1304,6 @@ class NapariTabs(QtWidgets.QWidget):
         self.viewer.layers.selection.active = self.viewer.layers[int(selected[0])]
         self.UpdateXYShiftRotationAngleUponSwitchingLayer()
 
-# ---------------------------------------------------------------------
     def fftXCorr2(self, x, y):
         x = np.fft.fft2(x)
         y = np.fft.fft2(y)
@@ -1360,7 +1323,6 @@ class NapariTabs(QtWidgets.QWidget):
         return np.abs(corr)
 
 
-# ---------------------------------------------------------------------
     def OpenPathExternally(self):
         if not self.viewer.layers.selection.active:
             return
@@ -1380,13 +1342,11 @@ class NapariTabs(QtWidgets.QWidget):
         else:
             subprocess.Popen(["xdg-open", path])
 
-# ---------------------------------------------------------------------
     def updateSlider(self, dummy):
         # if line profiles are shown, also update those
         if self.LPwin.isVisible():
             self.profile_line()
 
-# ---------------------------------------------------------------------
     def SwitchFOV(self):
         nFOV = self.ui.FOVSpinBox.value()
         if nFOV < 0:
@@ -1465,7 +1425,6 @@ class NapariTabs(QtWidgets.QWidget):
         # now call loadImgSeq with this set of paths
         self.loadImgSeq(path_in=paths)
         
-# ---------------------------------------------------------------------
     def SearchFOVs(self):
         # check if we already have one or several paths given. If not, do nothing
         if not hasattr(self, 'numSeries'):
@@ -1499,7 +1458,6 @@ class NapariTabs(QtWidgets.QWidget):
         self.ui.FOVCountLabel.setText("/"+str(int(self.MaxNumFOV-1)))
         self.ui.FOVSpinBox.setMaximum(self.MaxNumFOV-1)         
 
-# ---------------------------------------------------------------------
     def UpdateText(self):
         # loop through all shape layers, give each shape in the layer the same label
         isShapeLayer = self.FindAllShapeLayers()
@@ -1536,7 +1494,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.viewer.layers[name].mode = 'select'
 
 
-# ---------------------------------------------------------------------
     def ObtainLayerParameters(self):
     # specify the display parameters for the text
         self.text_kwargs = {
@@ -1549,7 +1506,6 @@ class NapariTabs(QtWidgets.QWidget):
         self.edge_width = 5
         self.opacity = 0.2
 
-# ---------------------------------------------------------------------
     def ShiftRotateImage(self):
         # see first if we have an input
         if hasattr(self, 'xshift_estimate'):
@@ -1688,7 +1644,6 @@ class NapariTabs(QtWidgets.QWidget):
             delattr(self, 'xshift_estimate')
             delattr(self, 'yshift_estimate')
 
-# ---------------------------------------------------------------------
     def LoadShiftYamlFile(self):
         if os.path.isfile(self.yamlFileName): # if it exists, load it. assume there is only one such file
             try:
@@ -1704,7 +1659,6 @@ class NapariTabs(QtWidgets.QWidget):
         else: # if is doesnt exist, we create all structures from scratch                
             self.MakeShiftYamlFile() 
 
-# ---------------------------------------------------------------------
     def MakeShiftYamlFile(self):
         self.shift_yaml = {}
         self.shift_yaml["x"] = {}
@@ -1718,7 +1672,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.shift_yaml["y"]["col"+str(int(nColor))] = self.yShift[index][nColor]
             self.shift_yaml["angle"]["col"+str(int(nColor))] = self.RotationAngle[index][nColor]        
 
-# ---------------------------------------------------------------------
     def GetCurrentDisplaySettings(self):
         self.currentTime  = self.viewer.dims.point[0]
         self.currentLayer = self.viewer.layers.selection.active.name
@@ -1769,7 +1722,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.currentContrastRanges[nLayer] = self.viewer.layers[nLayer].contrast_limits_range
             self.currentContrast[nLayer]       = self.viewer.layers[nLayer].contrast_limits
 
-# ---------------------------------------------------------------------
     def applyDisplaySettings(self):
         # first add back all shape layers
         for nLayer in range(len(self.shapeLayerData)):
@@ -1800,7 +1752,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.viewer.layers[nLayer].visible               = self.visibility[nLayer]
         del self.visibility
 
-# ---------------------------------------------------------------------
     def getRelatedSelectedLayer(self, displayWarning=True):
         for layer in self.viewer.layers.selection:
             layerName = layer.name
@@ -1815,13 +1766,11 @@ class NapariTabs(QtWidgets.QWidget):
             return
         self.series2treat = int( np.floor(layers2treat[0] / self.numColors) )
 
-# ---------------------------------------------------------------------
     def removePrefix(self, text, prefix):
         if text.startswith(prefix):
             return text[len(prefix):]
         return text
 
-# ---------------------------------------------------------------------
     def toggleAllLayers(self, mode):
         if mode == 'hide':
             SetVisibility = False
@@ -1834,7 +1783,6 @@ class NapariTabs(QtWidgets.QWidget):
         if SetVisibility:
             self.fixContrast()
         
-# ---------------------------------------------------------------------
     def toggleChannelVisibility(self):
         self.ChannelVisbility = self.ui.ToggleChannelVisbility.value()
         if self.ChannelVisbility > self.numColors:
@@ -1851,7 +1799,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.viewer.layers[nLayer].visible = True
         self.fixContrast()
 
-# ---------------------------------------------------------------------
     def callBatchProcessing(self):
         d = BatchProcessingDialog()
         if d.exec_(): # will return true only if dialog is accepted (pressed 'ok')
@@ -1864,7 +1811,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.medianProcessing = d.medianProcessing
             self.batchCropFromDirectory()
 
-# ---------------------------------------------------------------------
     def callMultiImageSeries(self):
         dialog = MultiImageSeriesDialog()
         self.MultiImageSeriesFlag = False # default
@@ -1881,7 +1827,6 @@ class NapariTabs(QtWidgets.QWidget):
             if self.numLayers == self.numColors:
                 self.toggleAllLayers('show') # if there is only one series
 
-# ---------------------------------------------------------------------
     def callLoadImgSeq(self):
         self.MultiImageSeriesFlag = False
         if hasattr(self, 'RotationAngle'):
@@ -1890,14 +1835,12 @@ class NapariTabs(QtWidgets.QWidget):
             delattr(self, 'yShift')
         self.loadImgSeq(buttonPressed=True)
 
-# ---------------------------------------------------------------------
     def fixContrast(self):
         for nLayer in range(self.numLayers): # the last entry in layers is the ROI
             if hasattr(self.viewer.layers[nLayer], 'nshapes'): continue # shape layers dont have a contrast setting
             self.viewer.layers[nLayer].contrast_limits_range = self.viewer.layers[nLayer].contrast_limits_range
             self.viewer.layers[nLayer].contrast_limits       = self.viewer.layers[nLayer].contrast_limits
                     
-# ---------------------------------------------------------------------
     def createColormaps(self):        
         # there are only a specific number of colors given. In case we'd need more
         # we interpolate the colormap
@@ -1948,7 +1891,6 @@ class NapariTabs(QtWidgets.QWidget):
                 self.cmap[count] = Colormap(carray, controls)
                 count += 1
 
-# ---------------------------------------------------------------------
     def loadImgSeq(self, path_in="", omitROIlayer=False, buttonPressed=False):
         if (not hasattr(self, 'image_meta')) and (not buttonPressed):
             return # no images were opened yet
@@ -2185,7 +2127,6 @@ class NapariTabs(QtWidgets.QWidget):
                 self.profile_line()
                 yield
 
-# ---------------------------------------------------------------------
     def profile_line(self):
         # first get the line
         try:
@@ -2223,7 +2164,6 @@ class NapariTabs(QtWidgets.QWidget):
         if not self.LPwin.isVisible():
             self.LPwin.show()
 
-# ---------------------------------------------------------------------
     def applyShiftsFromYaml(self):
         for nSeries in range(self.numSeries):
             for nColor in range(self.numColors):
@@ -2232,7 +2172,6 @@ class NapariTabs(QtWidgets.QWidget):
                     translationVector = np.array( [0, self.yShift[nSeries][nColor], self.xShift[nSeries][nColor]] ) # [z, y, x]
                     self.viewer.layers[nLayer].translate = translationVector
 
-# ---------------------------------------------------------------------
     def callCrop(self):
         # for each of the image series, get the frame_start and frame_end
         # in case the image series has less frames than frame_end set in the 
@@ -2293,7 +2232,6 @@ class NapariTabs(QtWidgets.QWidget):
             lambda: self.ui.cropSelectedBtn.setEnabled(True)
         )
 
-# ---------------------------------------------------------------------
     def getROIDescrption(self, roi_file):
         # the format is something like xxxxxxxx_descrip_ti_on.roi
         # find from the underscore to the dot to get the description and convert to small letters    
@@ -2315,7 +2253,6 @@ class NapariTabs(QtWidgets.QWidget):
             label = merged_list.split(".")[-2].lower()
         return label
 
-# ---------------------------------------------------------------------
     def countLayerNames(self, label):
         if len(label)==0:
             label = 'ROI'
@@ -2325,12 +2262,10 @@ class NapariTabs(QtWidgets.QWidget):
                 ROIlayercount += 1
         return ROIlayercount
 
-# ---------------------------------------------------------------------
     def setDefaultFrameNum(self):
         self.ui.frameStartSbox.setProperty("value", 0)
         self.ui.frameEndBox.setProperty("value", -1)
 
-# ---------------------------------------------------------------------
     def changeNumColors(self):
         self.numColors = int( self.ui.numColorsCbox.currentText() )
         if hasattr(self, 'MultiImageSeriesFlag'):            
@@ -2338,7 +2273,6 @@ class NapariTabs(QtWidgets.QWidget):
                 self.use_current_image_path = True
             self.loadImgSeq()
 
-# ---------------------------------------------------------------------
     def loadImageJROIs(self):
         if self.current_image_path is None:            
             self.current_image_path = self.image_meta[0]['folderpath']
@@ -2383,7 +2317,6 @@ class NapariTabs(QtWidgets.QWidget):
 
         self.UpdateText()
 
-# ---------------------------------------------------------------------
     def FindAllShapeLayers(self):
         numLayers = len(self.viewer.layers)
         isShapeLayer = []
@@ -2393,7 +2326,6 @@ class NapariTabs(QtWidgets.QWidget):
                     isShapeLayer.append(nLayer)
         return isShapeLayer
 
-# ---------------------------------------------------------------------
     def saveImageJROIs(self):
         # get all shape layers
         isShapeLayer = self.FindAllShapeLayers()
@@ -2459,7 +2391,6 @@ class NapariTabs(QtWidgets.QWidget):
                             yaml.dump(dict(self.shift_yaml), shift_file, default_flow_style=False)
         print('ROIs saved.')
 
-# ---------------------------------------------------------------------
     def toggleBckgSubtraction(self):
         if not hasattr(self, 'image_meta'):
             self.use_current_image_path = False
@@ -2467,7 +2398,6 @@ class NapariTabs(QtWidgets.QWidget):
             self.use_current_image_path = True
         self.loadImgSeq()      
 
-# ---------------------------------------------------------------------
     def closeEvent(self, event):
         settings = io.load_user_settings()
         if self.folderpath is not None:
@@ -2475,7 +2405,6 @@ class NapariTabs(QtWidgets.QWidget):
         io.save_user_settings(settings)
         QtWidgets.qApp.closeAllWindows()
 
-# ---------------------------------------------------------------------
     def loadUserSettings(self):
         settings = io.load_user_settings()
         try:
@@ -2484,7 +2413,6 @@ class NapariTabs(QtWidgets.QWidget):
             print(e)
             pass
 
-# ---------------------------------------------------------------------
     def batchCropFromDirectory(self):
         # Step 2: Create a QThread object
         self.thread = QThread()
@@ -2511,7 +2439,6 @@ class NapariTabs(QtWidgets.QWidget):
             lambda: self.ui.BatchProcessBtn.setEnabled(True)
         )
 
-# ---------------------------------------------------------------------
 def main():       
     viewer = napari.Viewer(title="LEADS: Cropping routine")
     ui = NapariTabs(viewer)
