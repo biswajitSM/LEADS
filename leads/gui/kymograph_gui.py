@@ -1478,6 +1478,7 @@ class Window(QtWidgets.QMainWindow):
         self.df_peaks_linked = None
         self.linkedpeaks_analyzed = None
         self.df_cols_linked = None
+        self.reload_kymo_gui = False
 
     def add_col1_imvs(self):
         self.imv00 = pg.ImageView(name='color 1')
@@ -2468,24 +2469,11 @@ class Window(QtWidgets.QMainWindow):
         # self.imv00.ui.histogram.
 
     def change_num_colors(self):
+        self.reload_kymo_gui = True
         self.numColors = self.ui.numColorsComboBox.currentText()
-        if self.numColors == "1":
-            self.remove_all_widgets()
-            self.add_col1_imvs()
-            self.connect_signals()
-        elif self.numColors == "2":
-            self.remove_all_widgets()
-            self.add_col1_imvs()
-            self.add_col2_imvs()
-            self.connect_signals()
-        elif self.numColors == "3":
-            self.remove_all_widgets()
-            self.add_col1_imvs()
-            self.add_col2_imvs()
-            self.add_col3_imvs()
-            self.connect_signals()
-        self.scalebar_img = None
-        self.defaultDockState = self.dockarea.saveState()
+        DEFAULTS["Number of colors"] = self.numColors
+        self.close()
+        main()
         
     def region_noLoop_changed(self):
         minX, maxX = self.region3_noLoop.getRegion()
@@ -2529,8 +2517,7 @@ class Window(QtWidgets.QMainWindow):
 
                 self.imv22.setImage(kymo_noLoop_comb, levelMode='rgba')
             else:
-                self.imv22.setImage(self.kymo_right_noLoop)
-    
+                self.imv22.setImage(self.kymo_right_noLoop)   
 
     def region_Loop_changed(self):
         minX, maxX = self.region3_Loop.getRegion()
@@ -4020,6 +4007,7 @@ class Window(QtWidgets.QMainWindow):
         print("DONE:Changing the frames.")
 
     def closeEvent(self, event):
+        self.reload_kymo_gui = False
         settings = io.load_user_settings()
         if self.folderpath is not None:
             settings["kymograph"]["PWD"] = self.folderpath
@@ -4049,13 +4037,14 @@ class Window(QtWidgets.QMainWindow):
 
 
 def main():
-    app = QtWidgets.QApplication(sys.argv)
     win = Window()
-    app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
     win.show()
+
+
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+    app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+    win = main()
     sys.exit(app.exec_())
     if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
         QtWidgets.QApplication.instance().exec_()
-
-if __name__ == '__main__':
-    main()
