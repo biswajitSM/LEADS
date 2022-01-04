@@ -2336,7 +2336,7 @@ class Window(QtWidgets.QMainWindow):
         frame_imv00 = self.imv00.currentIndex
         self.imv00_text.setText(str(np.round(frame_imv00 * self.acquisitionTime, 1)) + ' s')
         self.infline_left.setValue(frame_imv00)
-        if self.numColors:
+        if int(self.numColors) > 1:
             self.imv01.setCurrentIndex(frame_imv00)
             self.imv01_text.setText(str(np.round(frame_imv00 * self.acquisitionTime, 1)) + ' s')
 
@@ -2803,8 +2803,9 @@ class Window(QtWidgets.QMainWindow):
         self.dna_ends[1] = float(self.dna_infline_right.getXPos())
         self.infline_loopkymo_top.setPos(self.dna_ends[0])
         self.infline_loopkymo_bottom.setPos(self.dna_ends[1])
-        self.infline_loopkymo_top_col2.setPos(self.dna_ends[0])
-        self.infline_loopkymo_bottom_col2.setPos(self.dna_ends[1])
+        if int(self.numColors) > 1:
+            self.infline_loopkymo_top_col2.setPos(self.dna_ends[0])
+            self.infline_loopkymo_bottom_col2.setPos(self.dna_ends[1])
         
         min_peak_width = self.multipeak_dialog.minwidth_spinbox.value()
         max_peak_width = self.multipeak_dialog.maxwidth_spinbox.value()
