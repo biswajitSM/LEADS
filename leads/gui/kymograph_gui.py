@@ -1198,7 +1198,7 @@ class MainWidget(QtWidgets.QWidget):
         self.processImageCheckBox.setChecked(True)
         grid_btn1.addWidget(self.processImageCheckBox, 1, 0)
         self.processImageComboBox = QtWidgets.QComboBox()
-        self.processImageComboBox.addItems(["Median", "N2V", "Sparse-SIM"])
+        self.processImageComboBox.addItems(["Median", "Bckg", "N2V", "Sparse-SIM"])
         grid_btn1.addWidget(self.processImageComboBox, 1, 1)
         # Kymograph
         grid_kymo = QtWidgets.QGridLayout()
@@ -2118,6 +2118,38 @@ class Window(QtWidgets.QMainWindow):
                             'mode': 'composite',})
                 self.image_meta = read_img_stack(fpath_processed)
 
+            elif self.ui.processImageComboBox.currentText() == "Bckg" and not preview:
+            fpath_processed = os.path.join(self.folderpath, self.filename_base + '_bckgprocessed.tif')
+            if os.path.isfile(fpath_processed):
+                self.image_meta = read_img_stack(fpath_processed)
+            else:
+                if self.numColors == "3":
+                    self.imgarr_left = median_bkg_substration(self.imgarr_left, onlyBackground=True)
+                    self.imgarr_right = median_bkg_substration(self.imgarr_right, onlyBackground=True)
+                    self.imgarr_col3 = median_bkg_substration(self.imgarr_col3, onlyBackground=True)
+                    comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
+                                            self.imgarr_right[:,np.newaxis,:,:],
+                                            self.imgarr_col3[:,np.newaxis,:,:]),
+                                            axis=1)
+                    imwrite(fpath_processed, comb_arr, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                elif self.numColors == "2":
+                    self.imgarr_left = median_bkg_substration(self.imgarr_left, onlyBackground=True)
+                    self.imgarr_right = median_bkg_substration(self.imgarr_right, onlyBackground=True)
+                    comb_arr = np.concatenate((self.imgarr_left[:,np.newaxis,:,:],
+                                            self.imgarr_right[:,np.newaxis,:,:]),
+                                            axis=1)
+                    imwrite(fpath_processed, comb_arr, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                elif self.numColors == "1":
+                    self.imgarr_left = median_bkg_substration(self.imgarr_left, onlyBackground=True)
+                    imwrite(fpath_processed, self.imgarr_left, imagej=True,
+                            metadata={'axis': 'TCYX', 'channels': self.numColors,
+                            'mode': 'composite',})
+                self.image_meta = read_img_stack(fpath_processed)
+
         elif self.ui.processImageComboBox.currentText() == "N2V":
             fpath_processed = os.path.join(self.folderpath, self.filename_base + '_N2V_processed.tif')
             if os.path.isfile(fpath_processed):
@@ -2955,7 +2987,7 @@ class Window(QtWidgets.QMainWindow):
                     self.all_peaks_dict["All Peaks"], self.all_smpeaks_dict["All Peaks"],
                     acqTime=self.acquisitionTime, search_range=self.search_range_link, memory=self.memory_link,
                     filter_length=self.filter_length_link, plotting=True, 
-                    usePrecomputed=usePrecomputed, usePrecomputedsm=usePrecomputedsm)
+                    DNA_ends=self.dna_ends, usePrecomputed=usePrecomputed, usePrecomputedsm=usePrecomputedsm)
             self.df_peaks_linked = result['df_peaks_linked']
             self.df_peaks_linked_sm = result['df_peaks_linked_sm']
             df_gb = self.df_peaks_linked.groupby("particle")
@@ -3011,7 +3043,8 @@ class Window(QtWidgets.QMainWindow):
             self.df_peaks_linked = kymograph.link_peaks(
                     self.all_peaks_dict["All Peaks"],
                     search_range=self.search_range_link, memory=self.memory_link,
-                    filter_length=self.filter_length_link, plotting=False, usePrecomputed=usePrecomputed)
+                    filter_length=self.filter_length_link, plotting=False, 
+                    DNA_ends=self.dna_ends, usePrecomputed=usePrecomputed)
             fig = plt.figure(figsize=(10, 4))
             gs = fig.add_gridspec(1, 4)
             axis = fig.add_subplot(gs[0, :-1])

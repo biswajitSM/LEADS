@@ -55,11 +55,14 @@ def read_img_seq(num_colors=2):
     return image_meta
 
 
-def median_bkg_substration(txy_array, size_med=5, size_bgs=10, light_bg=False):
+def median_bkg_substration(txy_array, size_med=5, size_bgs=10, light_bg=False, onlyBackground=False):
     array_processed = np.zeros_like(txy_array)
     for i in range(txy_array.shape[0]):
         img = txy_array[i]
-        img_med = median_filter(img, size=size_med)
+        if onlyBackground:
+            img_med = img
+        else:
+            img_med = median_filter(img, size=size_med)
         if light_bg:
             img_med_bgs = black_tophat(img_med, size=size_bgs)
         else:
@@ -539,7 +542,7 @@ def loop_sm_dist(maxpeak_dict, smpeak_dict, plotting=False, smooth_length=11):
     return loop_sm_dict
 
 def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory=5, filter_length=10,
-               plotting=True, axis=None, usePrecomputed=None):
+               plotting=True, axis=None, DNA_ends=None, usePrecomputed=None):
     xLabelIsFrames = False
     if acqTime is None:
         acqTime = 1
@@ -586,7 +589,9 @@ def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory
         for name in gb_names:
             gp_sel = peaks_linked_gb.get_group(name)
             axis.plot(gp_sel["frame"]*acqTime, gp_sel["x"], label=str(name), alpha=0.8)
-            axis.text(gp_sel["frame"].values[0]*acqTime, np.average(gp_sel["x"].values[:10]), str(name))
+            relPosition = (np.average(gp_sel["x"].values) - np.min(DNA_ends)) / (np.max(DNA_ends)-np.min(DNA_ends))
+            track_name_and_relPosition = str(name) + ": " + "{:.2f}".format(relPosition)
+            axis.text(gp_sel["frame"].values[0]*acqTime, np.average(gp_sel["x"].values[:10]), track_name_and_relPosition)
         plt.gcf().show()
     peaks_linked = peaks_linked.reset_index(drop=True)
     return peaks_linked
@@ -594,7 +599,7 @@ def link_peaks(df_peaks, acqTime=None, df_peaks_sm=None, search_range=10, memory
 
 def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
             search_range=10, memory=5, filter_length=10,
-            plotting=True, usePrecomputed=None, usePrecomputedsm=None):
+            plotting=True, DNA_ends=None, usePrecomputed=None, usePrecomputedsm=None):
     # set axes and figsize
     fig = plt.figure(figsize=(10, 10))
     gs = fig.add_gridspec(4, 4)
@@ -621,11 +626,11 @@ def link_and_plot_two_color(df_peaks, df_peaks_sm, acqTime=None,
     # link and plot data to it
     df_peaks_linked = link_peaks(df_peaks, acqTime=acqTime, search_range=search_range,
                           memory=memory, filter_length=filter_length,
-                          plotting=plotting, axis=ax1, usePrecomputed=usePrecomputed)
+                          plotting=plotting, axis=ax1, DNA_ends=DNA_ends, usePrecomputed=usePrecomputed)
     ax1_r.hist(df_peaks["PeakPosition"], orientation='horizontal')
     df_peaks_linked_sm = link_peaks(df_peaks_sm, acqTime=acqTime, search_range=search_range,
                           memory=memory, filter_length=filter_length,
-                          plotting=plotting, axis=ax2, usePrecomputed=usePrecomputedsm)
+                          plotting=plotting, axis=ax2, DNA_ends=DNA_ends, usePrecomputed=usePrecomputedsm)
     ax2_r.hist(df_peaks_sm["PeakPosition"], orientation='horizontal')
     ax3_r.hist(df_peaks["PeakPosition"], histtype='step', orientation='horizontal')
     ax3_r.hist(df_peaks_sm["PeakPosition"], histtype='step', orientation='horizontal')
