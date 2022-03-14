@@ -34,13 +34,14 @@ DEFAULTS = {
     }
 DEFAULT_PARAMETERS = {
     "Acquisition Time" : 100, # in millisecond
-    "Pixel Size" : 115, # in nanometer
-    "ROI Width" : 11,
+    "Pixel Size" : 119, # in nanometer
+    "ROI Width" : 9,
     "Peak Prominence" : 0.25,
     "DNA Length" : 48.5, # in kilo bases
-    "DNA Contour Length" : 16, # in micrometer
-    "DNA Persistence Length": 45, # in nanometer
-    "DNA Puncta Diameter" : 9,
+    "DNA Contour Length" : 17.66, # in micrometer
+    "SxO concentration": 100, # in nM
+    "DNA Persistence Length": 35.1, # in nanometer, for [SxO]=100 nM
+    "DNA Puncta Diameter" : 5,
     "Search Range" : 10,
     "Memory" : 5,
     "Filter Length": 10,
@@ -120,17 +121,6 @@ class FileDialog(QtWidgets.QDialog):
         self.GenerateRoadblockExcelButton.setAutoDefault(False)
         self.GenerateRoadblockExcelButton.clicked.connect(self.window.generate_overview_excel)
         general_grid.addWidget(self.GenerateRoadblockExcelButton, 3, 2)   
-
-        # self.pix_spinbox.setRange(0, int(1e3))
-        # self.pix_spinbox.setSuffix(" nm")
-        # self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
-        # self.pix_spinbox.setKeyboardTracking(False)
-
-        # self.pix_spinbox = QtWidgets.QSpinBox()
-        # self.pix_spinbox.setRange(0, int(1e3))
-        # self.pix_spinbox.setSuffix(" nm")
-        # self.pix_spinbox.setValue(DEFAULT_PARAMETERS["Pixel Size"])
-        # self.pix_spinbox.setKeyboardTracking(False)
         
 class ParametersDialog(QtWidgets.QDialog):
     """ The dialog showing parameters """
@@ -401,6 +391,14 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.maxwidth_spinbox.setKeyboardTracking(False)
         general_grid.addWidget(QtWidgets.QLabel("Max Peak Width:"), 6, 2)
         general_grid.addWidget(self.maxwidth_spinbox, 6, 3)
+        # SxO concentration
+        self.SxOconc_spinbox = QtWidgets.QSpinBox()
+        self.SxOconc_spinbox.setRange(0, int(1e3))
+        self.SxOconc_spinbox.setValue(100)
+        self.SxOconc_spinbox.setSuffix(" nM")
+        self.SxOconc_spinbox.setKeyboardTracking(False)
+        general_grid.addWidget(QtWidgets.QLabel("SxO conc.:"), 7, 0)
+        general_grid.addWidget(self.SxOconc_spinbox, 7, 1)
         ## Single molecule peak detection parameters
         singlemolecule_groupbox = QtWidgets.QGroupBox("Single Molecule Parameters")
         vbox.addWidget(singlemolecule_groupbox)
@@ -522,7 +520,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         # include Force
         self.force_checkbox = QtWidgets.QCheckBox("Include Force")
         self.force_combobox = QtWidgets.QComboBox()
-        self.force_combobox.addItems(["Interpolation", "Analytical"])
+        self.force_combobox.addItems(["Analytical", "Interpolation"])
         plot_grid.addWidget(self.force_checkbox, 2, 0)
         plot_grid.addWidget(self.force_combobox, 2, 1)
         # choose and plot types
@@ -551,6 +549,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.smoothlength_spinbox.valueChanged.connect(self.on_smoothlength_spinbox_changed)
         self.peakthreshold_checkbox.stateChanged.connect(self.on_threshold_all_peaks_changed)
         self.peakthreshold_spinbox.valueChanged.connect(self.on_threshold_all_peaks_changed)
+        self.SxOconc_spinbox.valueChanged.connect(self.on_SxOconc_spinbox_changed)
         self.smol_prominence_spinbox.valueChanged.connect(self.on_smol_prominence_spinbox_changed)
         self.smol_prominence_slider.sliderReleased.connect(self.on_smol_prominence_slider_changed)
         self.smol_preview_checkbox.stateChanged.connect(self.on_smol_prominence_spinbox_changed)
@@ -568,6 +567,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.minwidth_spinbox.valueChanged.disconnect()
         self.maxwidth_spinbox.valueChanged.disconnect()
         self.DNAlength_spinbox.valueChanged.disconnect()
+        self.SxOconc_spinbox.valueChanged.disconnect()
         self.DNApuncta_spinbox.valueChanged.disconnect()
         self.smoothlength_spinbox.valueChanged.disconnect()
         self.smol_prominence_spinbox.valueChanged.disconnect()
@@ -580,6 +580,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         self.plottype_pushbutton.clicked.disconnect()
 
     def on_prominence_spinbox_changed(self):
+        self.window.compute_contour_length() # if DNA length is changed, the contour length also changes
         value = self.prominence_spinbox.value()
         self.prominence_slider.setValue(value)
         self.window.params_change_loop_detection()
@@ -600,6 +601,10 @@ class MultiPeakDialog(QtWidgets.QDialog):
     def on_threshold_all_peaks_changed(self):
         self.window.params_change_loop_detection()
         self.window.params_change_smol_detection()
+
+    def on_SxOconc_spinbox_changed(self):
+        self.window.compute_contour_length()
+        self.window.compute_persistence_length()
 
     def on_smol_prominence_spinbox_changed(self):
         value = self.smol_prominence_spinbox.value()
@@ -631,6 +636,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
         settings["kymograph"]["MultiPeak"]["smoothlength"] = self.smoothlength_spinbox.value()
         settings["kymograph"]["MultiPeak"]["minwidth"] = self.minwidth_spinbox.value()
         settings["kymograph"]["MultiPeak"]["maxwidth"] = self.maxwidth_spinbox.value()
+        settings["kymograph"]["MultiPeak"]["SxOconcentration"] = self.SxOconc_spinbox.value()
         settings["kymograph"]["MultiPeak"]["smol_prominence"] = self.smol_prominence_spinbox.value()
         settings["kymograph"]["MultiPeak"]["smol_preview"] = self.smol_preview_checkbox.isChecked()
         settings["kymograph"]["MultiPeak"]["searchrange"] = self.searchrange_spinbox.value()
@@ -660,6 +666,7 @@ class MultiPeakDialog(QtWidgets.QDialog):
             self.smoothlength_spinbox.setValue(settings["kymograph"]["MultiPeak"]["smoothlength"])
             self.minwidth_spinbox.setValue(settings["kymograph"]["MultiPeak"]["minwidth"])
             self.maxwidth_spinbox.setValue(settings["kymograph"]["MultiPeak"]["maxwidth"])
+            self.SxOconc_spinbox.setValue(settings["kymograph"]["MultiPeak"]["SxOconcentration"])
             self.smol_prominence_spinbox.setValue(settings["kymograph"]["MultiPeak"]["smol_prominence"])
             self.smol_prominence_slider.setValue(settings["kymograph"]["MultiPeak"]["smol_prominence"])
             self.smol_preview_checkbox.setChecked(settings["kymograph"]["MultiPeak"]["smol_preview"])
@@ -704,7 +711,7 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
         hLayoutSuperGauss = QtWidgets.QHBoxLayout(superGaussGroupBox)
 
         self.doSuperGaussFitCheckBox = QtWidgets.QCheckBox("Fit supergauss?")
-        self.doSuperGaussFitCheckBox.setChecked(True)
+        self.doSuperGaussFitCheckBox.setChecked(False)
         self.doSuperGaussFitCheckBox.setStyleSheet("color: red")
         hLayoutSuperGauss.addWidget(self.doSuperGaussFitCheckBox)
 
@@ -731,7 +738,7 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
 
         self.superGaussFractionMaxSpinBox = QtWidgets.QDoubleSpinBox()        
         self.superGaussFractionMaxSpinBox.setRange(0.001, 1)
-        self.superGaussFractionMaxSpinBox.setValue(0.999)
+        self.superGaussFractionMaxSpinBox.setValue(0.98)
         self.superGaussFractionMaxSpinBox.setSingleStep(0.001)
         self.superGaussFractionMaxSpinBox.setDecimals(3)
         self.superGaussFractionMaxSpinBox.setKeyboardTracking(False)
@@ -748,6 +755,7 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
 
         self.doPeakPeelingCheckBox = QtWidgets.QCheckBox("Peak peeling?")
         self.doPeakPeelingCheckBox.setStyleSheet("color: green")
+        self.doPeakPeelingCheckBox.setChecked(True)
         hLayoutPeakPeeling.addWidget(self.doPeakPeelingCheckBox)
 
         self.PeakPeelingNoPeaksLabel = QtWidgets.QLabel("Max Peak No.:")
@@ -764,7 +772,7 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
 
         self.PeakPeelingPSFSpinBox = QtWidgets.QSpinBox()        
         self.PeakPeelingPSFSpinBox.setRange(1, 10000)
-        self.PeakPeelingPSFSpinBox.setValue(400)
+        self.PeakPeelingPSFSpinBox.setValue(300)
         self.PeakPeelingPSFSpinBox.setSingleStep(10)
         self.PeakPeelingPSFSpinBox.setKeyboardTracking(False)
         hLayoutPeakPeeling.addWidget(self.PeakPeelingPSFSpinBox)
@@ -1327,7 +1335,6 @@ class Window(QtWidgets.QMainWindow):
         self.file_dialog = FileDialog(self)
         self.roi_dialog = ROIDialog(self)
         self.sparseSIM_dialog = SparseSIMDialog(self)
-        self.supergauss_dialog = SuperGaussFittingDialog(self)
         self.manual_properties_dialog = ManagePropertiesDialog(self)
         self.init_menu_bar()
         # load params
@@ -1435,9 +1442,13 @@ class Window(QtWidgets.QMainWindow):
         self.ui.frameEndSpinBox.valueChanged.connect(self.frames_changed)
         self.ui.RealTimeKymoCheckBox.stateChanged.connect(self.realtime_kymo)
         self.ui.updateKymoBtn.clicked.connect(self.update_kymo)
-        self.ui.findDNAendsBtn.clicked.connect(self.supergauss_dialog.init)
+        self.ui.findDNAendsBtn.clicked.connect(self.freshly_initialize_supergauss_dialog)
         self.ui.manPropButton.clicked.connect(self.manual_properties_dialog.init)
         self.ui.generateExcelButton.clicked.connect(self.generate_overview_excel_properties)
+
+    def freshly_initialize_supergauss_dialog(self):
+        self.supergauss_dialog = SuperGaussFittingDialog(self)
+        self.supergauss_dialog.init()
 
     def connect_signals(self):
         # self.roirect_left.sigRegionChanged.connect(self.roi_changed)
@@ -2118,7 +2129,7 @@ class Window(QtWidgets.QMainWindow):
                             'mode': 'composite',})
                 self.image_meta = read_img_stack(fpath_processed)
 
-            elif self.ui.processImageComboBox.currentText() == "Bckg" and not preview:
+        elif self.ui.processImageComboBox.currentText() == "Bckg" and not preview:
             fpath_processed = os.path.join(self.folderpath, self.filename_base + '_bckgprocessed.tif')
             if os.path.isfile(fpath_processed):
                 self.image_meta = read_img_stack(fpath_processed)
@@ -2899,8 +2910,25 @@ class Window(QtWidgets.QMainWindow):
             self.plotSmolPosData.setData(self.all_smpeaks_dict["All Peaks"]["FrameNumber"],
                                      self.all_smpeaks_dict["All Peaks"]["PeakPosition"])
 
-    def dna_ends_changed(self):
-        self.dna_ends = self.supergauss_dialog.dna_ends
+    def compute_contour_length(self):
+        SXO_nM = [0, 10, 50, 100, 200, 500]
+        Lc_correction_factor = [1, 1.0258, 1.0523, 1.0649, 1.0948, 1.3829] # for non-coilable DNA
+        SxOconc = self.multipeak_dialog.SxOconc_spinbox.value()
+        DNAlength_kb = self.multipeak_dialog.DNAlength_spinbox.value()
+        correction_factor = np.interp(SxOconc, SXO_nM, Lc_correction_factor)
+        DNAcontourlength = DNAlength_kb * 0.342 * correction_factor
+        self.multipeak_dialog.DNAcontourlength_spinbox.setValue(DNAcontourlength)
+
+    def compute_persistence_length(self):
+        SXO_nM = [0, 10, 50, 100, 200, 500]
+        Lp = [46.1, 41.9, 36, 35.1, 37.1, 37.2] # for non-coilable DNA
+        SxOconc = self.multipeak_dialog.SxOconc_spinbox.value()
+        Lp_interp = np.interp(SxOconc, SXO_nM, Lp)
+        self.multipeak_dialog.DNApersistencelength_spinbox.setValue(Lp_interp)
+
+    def dna_ends_changed(self, fromSuperGaussWindow=True):
+        if fromSuperGaussWindow: # if it came from the clicking on 'Detect loops', self.dna_ends is already populated
+            self.dna_ends = self.supergauss_dialog.dna_ends
         self.dna_infline_left.setPos(self.dna_ends[0])
         self.dna_infline_right.setPos(self.dna_ends[1])
         self.infline_loopkymo_top.setPos(self.dna_ends[0])
@@ -2952,7 +2980,7 @@ class Window(QtWidgets.QMainWindow):
             self.imv31.clear()
             self.plotSmolPosData.clear()
             self.max_smpeak_dict = analyze_maxpeak(self.all_smpeaks_dict['Max Peak'], smooth_length=7,
-                    frame_width = self.loop_region_right-self.loop_region_left,
+                    frame_width = self.dna_ends[1] - self.dna_ends[0],
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,
                     )
             max_loop_sm_dict = loop_sm_dist(self.max_peak_dict, self.max_smpeak_dict, smooth_length=21)
@@ -2968,6 +2996,14 @@ class Window(QtWidgets.QMainWindow):
             self.plot_loop_vs_sm.setYRange(self.loop_region_left-5, self.loop_region_right+5)
             self.plot_loop_vs_sm_linetop.setValue(self.loop_region_left)
             self.plot_loop_vs_sm_linebottom.setValue(self.loop_region_right)
+
+        # also by default try to find the DNA ends by peak peeling with default parameters
+        self.dna_ends = kymograph.find_ends_peakPeeling(noLoop_avg, noPeaks=10, \
+                PSF=300/(self.pixelSize*1e3), amplitude=0.9, \
+                    residue=0.1, plotting=False)
+        if self.dna_ends is not None:
+            self.dna_ends_changed(fromSuperGaussWindow=False)
+
 
     def matplot_all_peaks(self, usePrecomputed=None, usePrecomputedsm=None):
         plt.rcParams["savefig.directory"] = self.filepath # default saving dir is the path of the current file
@@ -3006,10 +3042,10 @@ class Window(QtWidgets.QMainWindow):
                 dna_contour_len = self.multipeak_dialog.DNAcontourlength_spinbox.value()
                 self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
                         frame_width=self.dna_ends[1] - self.dna_ends[0],
-                        dna_length=self.dna_length_kb, dna_length_um=dna_contour_len,
+                        dna_length=self.dna_length_kb, 
                         pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
                         # interpolation=interpolation_bool,
-                        )
+                        SxOconc=self.multipeak_dialog.SxOconc_spinbox.value())
                 delta_frames = self.multipeak_dialog.max_frame_diff_spinbox.value()
                 delta_pixels = self.multipeak_dialog.max_pix_diff_spinbox.value()
                 delta_colocalized = self.multipeak_dialog.min_coloc_diff_spinbox.value()
@@ -3111,7 +3147,7 @@ class Window(QtWidgets.QMainWindow):
             group_sel = df_gb.get_group(right_peak_no)
             group_sel = group_sel.reset_index(drop=True)
             peak_analyzed_dict_sm = analyze_maxpeak(group_sel, smooth_length=7,
-                    frame_width = self.loop_region_right - self.loop_region_left,
+                    frame_width = self.dna_ends[1] - self.dna_ends[0],
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             sel_loop_sm_dict = loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=n_moving)
             ax.plot(sel_loop_sm_dict["FrameNumber"] * self.acquisitionTime,
@@ -3121,13 +3157,13 @@ class Window(QtWidgets.QMainWindow):
             if self.multipeak_dialog.force_combobox.currentText() == "Interpolation":
                 interpolation_bool = True
             else: interpolation_bool = False
-            dna_contour_len = self.multipeak_dialog.DNAcontourlength_spinbox.value()
             persistence_length = self.multipeak_dialog.DNApersistencelength_spinbox.value()
             self.linkedpeaks_analyzed = kymograph.analyze_multipeak(self.df_peaks_linked,
-                    frame_width=self.loop_region_right - self.loop_region_left,
-                    dna_length=self.dna_length_kb, dna_length_um=dna_contour_len,
+                    frame_width=self.dna_ends[1] - self.dna_ends[0],
+                    dna_length=self.dna_length_kb, 
                     pix_width=self.dna_puncta_size, pix_size=self.pixelSize,
-                    interpolation=interpolation_bool, dna_persistence_length=persistence_length)
+                    interpolation=interpolation_bool, dna_persistence_length=persistence_length, 
+                    SxOconc=self.multipeak_dialog.SxOconc_spinbox.value())
             df_gb = self.linkedpeaks_analyzed.groupby("particle")
             group_sel = df_gb.get_group(left_peak_no)
             group_sel = group_sel.reset_index(drop=True)
@@ -3258,7 +3294,7 @@ class Window(QtWidgets.QMainWindow):
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
             peak_analyzed_dict = kymograph.analyze_maxpeak(group_sel_col1, smooth_length=7,
-                    frame_width = self.loop_region_right - self.loop_region_left,
+                    frame_width = self.dna_ends[1] - self.dna_ends[0],
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, msd_moving, 'g', label='color_1')
             if self.numColors == "2" or self.numColors == "3":
@@ -3266,7 +3302,7 @@ class Window(QtWidgets.QMainWindow):
                 frames = group_sel_col2['FrameNumber'].values[ind:-ind]
                 ax.plot(frames* self.acquisitionTime, msd_moving, 'm', label='MSD particle')
                 peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
-                    frame_width = self.loop_region_right - self.loop_region_left,
+                    frame_width = self.dna_ends[1] - self.dna_ends[0],
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
                 sel_loop_sm_dict = kymograph.loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=7)
                 pos_diff_kb = sel_loop_sm_dict['PositionDiff_kb']
@@ -3314,7 +3350,7 @@ class Window(QtWidgets.QMainWindow):
             msd_moving = kymograph.msd_moving(group_sel_col1['x'].values, n=n)
             frames = group_sel_col1['FrameNumber'].values[ind:-ind]
             peak_analyzed_dict = kymograph.analyze_maxpeak(group_sel_col1, smooth_length=7,
-                    frame_width = self.loop_region_right - self.loop_region_left,
+                    frame_width = self.dna_ends[1] - self.dna_ends[0],
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
             # ax.plot(frames, savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order), 'g', label='color_1')
             if self.numColors == "2" or self.numColors == "3":
@@ -3327,7 +3363,7 @@ class Window(QtWidgets.QMainWindow):
                         savgol_filter(msd_moving, window_length=n_savgol, polyorder=n_order) * self.pixelSize**2, #converted to µm²
                         color='darkslategrey', label='')
                 peak_analyzed_dict_sm = kymograph.analyze_maxpeak(group_sel_col2, smooth_length=7,
-                    frame_width = self.loop_region_right - self.loop_region_left,
+                    frame_width = self.dna_ends[1] - self.dna_ends[0],
                     dna_length=self.dna_length_kb, pix_width=self.dna_puncta_size,)
                 sel_loop_sm_dict = kymograph.loop_sm_dist(peak_analyzed_dict, peak_analyzed_dict_sm, smooth_length=7)
                 pos_diff_kb = sel_loop_sm_dict['PositionDiff_kb']
@@ -3662,9 +3698,11 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(group_sel_col1["FrameNumber"], trace_col1_bg, '--', color=(0.8, 0.8, 0.8), label="Background")
             ax.plot(group_sel_col1["FrameNumber"], trace_col1-trace_col1_bg, 'k-', label="Subtracted")
 
-            sIntensity = int( np.ceil( np.max(trace_col1-trace_col1_bg)*0.5 ) )
-            subtracted_smooth = kymograph.bilateralFtr1D(trace_col1-trace_col1_bg, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
-            ax.plot(group_sel_col1["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
+            # sIntensity = int( np.ceil( np.max(trace_col1-trace_col1_bg)*0.35 ) )
+            # sSpatial = int( len(trace_col1)/5 )
+            # if sSpatial==0: sSpatial = int( len(trace_col1)/2 )
+            # subtracted_smooth = kymograph.bilateralFtr1D(trace_col1-trace_col1_bg, sSpatial = sSpatial, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
+            # ax.plot(group_sel_col1["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
             # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
             # step_detect_data = subtracted_smooth#trace_col1-trace_col1_bg
             # p2  = step_detect.mz_fwt(step_detect_data, n=2)
@@ -3701,9 +3739,11 @@ class Window(QtWidgets.QMainWindow):
             ax.plot(group_sel_col2["FrameNumber"], trace_col2_bg, '--', color=(0.8, 0.8, 0.8), label="Background")
             ax.plot(group_sel_col2["FrameNumber"], trace_col2-trace_col2_bg, 'k-', label="Subtracted")
 
-            sIntensity = int( np.ceil( np.max(trace_col2-trace_col2_bg)*0.5 ) )
-            subtracted_smooth = kymograph.bilateralFtr1D(trace_col2-trace_col2_bg, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
-            ax.plot(group_sel_col2["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
+            # sIntensity = int( np.ceil( np.max(trace_col2-trace_col2_bg)*0.35 ) )
+            # sSpatial = int( len(trace_col2)/5 )
+            # if sSpatial==0: sSpatial = int( len(trace_col2)/2 )
+            # subtracted_smooth = kymograph.bilateralFtr1D(trace_col2-trace_col2_bg, sSpatial = sSpatial, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
+            # ax.plot(group_sel_col2["FrameNumber"], subtracted_smooth, 'r-', label="Subtracted smooth")
             # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
             # step_detect_data = subtracted_smooth#trace_col2-trace_col2_bg
             # p2  = step_detect.mz_fwt(step_detect_data, n=2)
@@ -3729,21 +3769,12 @@ class Window(QtWidgets.QMainWindow):
             FrameNumber = np.arange(1, len(trace_col1)+1)      
             ax.plot(FrameNumber, trace_col1, 'k-', label="Intensity")
 
-            sIntensity = int( np.ceil( np.max(trace_col1)*0.5 ) )
-            subtracted_smooth = kymograph.bilateralFtr1D(trace_col1, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
-            ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
-            # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
-            # step_detect_data = subtracted_smooth #trace_col1
-            # p2  = step_detect.mz_fwt(step_detect_data, n=2)
-            # p2 /= np.abs(p2).max()
-            # try:
-            #     stepPositions = step_detect.find_steps(np.abs(p2), 0.5)
-            #     minVal = min(step_detect_data)
-            #     maxVal = max(step_detect_data)
-            #     for ii in range(len(stepPositions)):
-            #         plt.plot((stepPositions[ii], stepPositions[ii]), (minVal, maxVal), 'r')
-            # except:
-            #     pass
+            # sIntensity = int( np.ceil( np.max(trace_col1)*0.35 ) )
+            # sSpatial = int( len(trace_col1)/5 )
+            # if sSpatial==0: sSpatial = int( len(trace_col1)/2 )
+            # subtracted_smooth = kymograph.bilateralFtr1D(trace_col1, sSpatial = sSpatial, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
+            # ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
+
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Intensity")
             ax.legend()
@@ -3756,10 +3787,13 @@ class Window(QtWidgets.QMainWindow):
             FrameNumber = np.arange(1, len(trace_col2)+1)      
             ax.plot(FrameNumber, trace_col2, 'k-', label="Intensity")
 
-            sIntensity = int( np.ceil( np.max(trace_col2)*0.5 ) )
-            subtracted_smooth = kymograph.bilateralFtr1D(trace_col2, sSpatial = 51, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
+            # sIntensity = int( np.ceil( np.max(trace_col2)*0.5 ) )
+            # sIntensity = int( np.ceil( np.max(trace_col2)*0.35 ) )
+            # sSpatial = int( len(trace_col2)/5 )
+            # if sSpatial==0: sSpatial = int( len(trace_col2)/2 )
+            # subtracted_smooth = kymograph.bilateralFtr1D(trace_col2, sSpatial = sSpatial, sIntensity = sIntensity) # +/- pixels further than 3*sSpatial pixels will have approx 0 effect
 
-            ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
+            # ax.plot(FrameNumber, subtracted_smooth, 'r-', label="Intensity smooth")
             # # attempt to find steps. ref https://github.com/thomasbkahn/step-detect
             # step_detect_data = subtracted_smooth#trace_col2
             # p2  = step_detect.mz_fwt(step_detect_data, n=2)
