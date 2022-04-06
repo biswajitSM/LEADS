@@ -166,6 +166,13 @@ class ParametersDialog(QtWidgets.QDialog):
         self.aqt_spinbox.valueChanged.connect(self.on_paramter_change)
         general_grid.addWidget(self.aqt_spinbox, 2, 1)
 
+        # Default DNA end finding checkbox
+        general_grid.addWidget(QtWidgets.QLabel("By default find DNA ends?"), 3, 0)
+        self.DefaultFindDNAends_checkbox = QtWidgets.QCheckBox()
+        self.DefaultFindDNAends_checkbox.setChecked(True)
+        general_grid.addWidget(self.DefaultFindDNAends_checkbox, 3, 1)
+
+
     def on_paramter_change(self):
         self.window.set_scalebar()
 
@@ -2998,11 +3005,12 @@ class Window(QtWidgets.QMainWindow):
             self.plot_loop_vs_sm_linebottom.setValue(self.loop_region_right)
 
         # also by default try to find the DNA ends by peak peeling with default parameters
-        self.dna_ends = kymograph.find_ends_peakPeeling(noLoop_avg, noPeaks=10, \
-                PSF=300/(self.pixelSize*1e3), amplitude=0.9, \
-                    residue=0.1, plotting=False)
-        if self.dna_ends is not None:
-            self.dna_ends_changed(fromSuperGaussWindow=False)
+        if self.parameters_dialog.DefaultFindDNAends_checkbox.isChecked():
+            self.dna_ends = kymograph.find_ends_peakPeeling(noLoop_avg, noPeaks=10, \
+                    PSF=300/(self.pixelSize*1e3), amplitude=0.9, \
+                        residue=0.1, plotting=False)
+            if self.dna_ends is not None:
+                self.dna_ends_changed(fromSuperGaussWindow=False)
 
 
     def matplot_all_peaks(self, usePrecomputed=None, usePrecomputedsm=None):
