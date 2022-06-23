@@ -56,3 +56,13 @@ List of contributors:
 
 - Biswajit Pradhan (biswajitp145_at_gmail.com)
 - Roman Barth
+
+## Pubslihed articles based on this module
+
+[Condensin-driven loop extrusion on supercoiled DNA. *nature structural molecular biology*, 2022 (accepted)](https://doi.org/10.1101/2021.05.15.444164)
+
+[ParS-independent recruitment of the bacterial chromosome-partitioning protein ParB. *Science Advances*, 2022 (accepted)](https://doi.org/10.1101/2021.11.02.466941)
+
+[SMC complexes can traverse physical roadblocks bigger than their ring size, *bioRxiv*, 2021 (in press)](https://doi.org/10.1101/2021.07.15.452501)
+
+[The Smc5/6 complex is a DNA loop extruding motor. *bioRxiv*, 2022](https://doi.org/10.1101/2022.05.13.491800)
