@@ -34,15 +34,28 @@ And then install the leads program
 python setup.py install
 ```
 
-To save videos, install [ffmpeg](https://ffmpeg.org/download.html) and make sure you added it to your path (you can follow this [link](https://www.wikihow.com/Install-FFmpeg-on-Windows))
-
 ## Usage
 
-To open the gui of kymograph analysis from a terminal
-> python -m leads.gui.kymograph_gui
+### From a terminal or command prompt
 
-To open the gui for cropping large files in a folder
-> python -m leads.gui.crop_images_gui
+Activate environment in a terminal
+```sh
+conda activate leads-env
+```
+
+To open the gui of kymograph analysis
+```sh
+python -m leads.gui.kymograph_gui
+```
+
+To open the gui for cropping large number of image files in a folder
+```sh
+python -m leads.gui.crop_images_gui
+```
+
+### Alternative
+
+If you are in windows os, you can double click the bat script files [LEADS_kymoGUI.bat](./bat/LEADS_kymoGUI.bat) for the kymo program and [LEADS_cropGUI.bat](./bat/LEADS_cropGUI.bat) for the cropping program.
 
 ## Contributing
 
