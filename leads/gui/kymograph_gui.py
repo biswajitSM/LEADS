@@ -172,6 +172,18 @@ class ParametersDialog(QtWidgets.QDialog):
         self.DefaultFindDNAends_checkbox.setChecked(True)
         general_grid.addWidget(self.DefaultFindDNAends_checkbox, 3, 1)
 
+        # Save new analysis file or overwrite?
+        general_grid.addWidget(QtWidgets.QLabel("Save additional .hdf5 analysis files?"), 4, 0)
+        self.SaveNewAnalysisFile_checkbox = QtWidgets.QCheckBox()
+        self.SaveNewAnalysisFile_checkbox.setChecked(False)
+        general_grid.addWidget(self.SaveNewAnalysisFile_checkbox, 4, 1)
+
+        # give name to additional file
+        general_grid.addWidget(QtWidgets.QLabel("Additional .hdf5 suffix:"), 5, 0)
+        self.SaveNewAnalysisFile_lineedit = QtWidgets.QLineEdit()
+        self.SaveNewAnalysisFile_lineedit.setText('')
+        general_grid.addWidget(self.SaveNewAnalysisFile_lineedit, 5, 1)
+
 
     def on_paramter_change(self):
         self.window.set_scalebar()
@@ -828,6 +840,9 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
         layout.addWidget(statusPeakPeelingGroupBox)
         self.setLayout(layout)
 
+        # execute peak peeling as default method
+
+
     def init(self):
         try:
             non_loop_dna_avg = self.window.kymo_left_noLoop.mean(axis=0)
@@ -835,8 +850,9 @@ class SuperGaussFittingDialog(QtWidgets.QDialog):
             self.canvas.draw()
         except:
             pass
-        self.find_dna_ends_supergauss() # do it the first time with default parameters
-        # self.find_dna_ends_peakPeeling() # do it the first time with default parameters
+        # self.find_dna_ends_supergauss() # do it the first time with default parameters
+        self.doPeakPeelingCheckBox.isChecked()
+        self.find_dna_ends_peakPeeling() # do it the first time with default parameters
         self.show()
 
 
@@ -2054,7 +2070,22 @@ class Window(QtWidgets.QMainWindow):
     def save(self):
         self.save_yaml_params(self.filepath_yaml)
         print("Parameters saved to yaml file")
-        filepath_hdf5 = os.path.join(self.folderpath, self.filename_base + '_analysis.hdf5')
+        # check if we overwrite or save a new file
+        if self.parameters_dialog.SaveNewAnalysisFile_checkbox.isChecked():
+            suffix = self.parameters_dialog.SaveNewAnalysisFile_lineedit.text()
+            if len(suffix)>0: suffix = ('_'+suffix).replace('__','_')
+            existingAdditionalFiles = glob.glob(os.path.join(self.folderpath, self.filename_base+'*analysis_additionalFile'+suffix+'*'))
+            if len(existingAdditionalFiles)==0:
+                runningNumber = "{0:03}".format(1)
+            else:
+                # find position of '_additionalFile'
+                numbers = []
+                for file in existingAdditionalFiles:
+                    numbers.append( int(file.split('additionalFile'+suffix)[-1].split('.hdf5')[0].replace('_','')) )
+                runningNumber = "{0:03}".format(max(numbers)+1)
+            filepath_hdf5 = os.path.join(self.folderpath, self.filename_base + '_analysis_additionalFile'+suffix+runningNumber+'.hdf5')
+        else:
+            filepath_hdf5 = os.path.join(self.folderpath, self.filename_base + '_analysis.hdf5')
         self.save_hdf5(filepath_hdf5)
         print("output and metadata saved to hdf5 file")
 
@@ -2768,6 +2799,7 @@ class Window(QtWidgets.QMainWindow):
         legend.addItem(self.errdata_noLoop, 'dna with No loop')
 
         self.region_errbar = pg.LinearRegionItem(self.params_yaml['Region Errbar'])
+        print('set region errbar')
         self.plot_loop_errbar.addItem(self.region_errbar, ignoreBounds=True)
         self.dna_ends = [2, 60]
         self.dna_infline_left = pg.InfiniteLine(movable=True, pos=self.dna_ends[0], angle=90, pen=(3, 9), label='dna left end ={value:0.0f}',
