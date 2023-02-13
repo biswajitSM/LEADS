@@ -72,10 +72,12 @@ List of contributors:
 
 ## Pubslihed articles based on this module
 
-[Condensin-driven loop extrusion on supercoiled DNA. *nature structural molecular biology*, 2022 (accepted)](https://doi.org/10.1101/2021.05.15.444164)
+[SMC complexes can traverse physical roadblocks bigger than their ring size, *Cell Reports*, 2022](https://doi.org/10.1016/j.celrep.2022.111491)
 
-[ParS-independent recruitment of the bacterial chromosome-partitioning protein ParB. *Science Advances*, 2022 (accepted)](https://doi.org/10.1101/2021.11.02.466941)
+[Condensin-driven loop extrusion on supercoiled DNA. *nature structural molecular biology*, 2022](https://doi.org/10.1038/s41594-022-00802-x)
 
-[SMC complexes can traverse physical roadblocks bigger than their ring size, *bioRxiv*, 2021 (in press)](https://doi.org/10.1101/2021.07.15.452501)
+[ParS-independent recruitment of the bacterial chromosome-partitioning protein ParB. *Science Advances*, 2022](https://doi.org/10.1126/sciadv.abn3299)
 
-[The Smc5/6 complex is a DNA loop extruding motor. *bioRxiv*, 2022](https://doi.org/10.1101/2022.05.13.491800)
+[The Smc5/6 complex is a DNA loop extruding motor. *Nature*(under review), 2022](https://doi.org/10.1101/2022.05.13.491800)
+
+[Can pseudotopological models for SMC-driven DNA loop extrusion explain the traversal of physical roadblocks bigger than the SMC ring size? *bioRxiv*, 2023](https://doi.org/10.1101/2022.08.02.502451)
