@@ -28,6 +28,13 @@ import pandas as pd
 import re
 from copy import deepcopy, copy
 
+if hasattr(QtCore.Qt, 'AA_EnableHighDpiScaling'):
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+
+if hasattr(QtCore.Qt, 'AA_UseHighDpiPixmaps'):
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
+
+
 DEFAULTS = {
     "Number of colors" : "2",
     "ColorMap" : 'plasma',
